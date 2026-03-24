@@ -27,7 +27,7 @@ const swaggerSpec = swaggerJsdoc({
       },
     },
   },
-  apis: ['./src/routes/**/*.ts', './src/controllers/**/*.ts'],
+  apis: ['./src/docs/**/*.yaml'],
 })
 
 // ───────────────────────── Middleware ─────────────────────────
@@ -37,14 +37,14 @@ app.use(express.json())
 app.use(requestLogger)
 
 // ───────────────────────── Routes ─────────────────────────
-app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
-app.use('/api/auth', authRouter)
-app.use('/api/cron', cronRouter)
-app.use('/api/webhook', webhookRouter)
-app.use('/api/admin/orders', adminOrdersRouter)
-app.use('/api/admin/products', adminProductsRouter)
-app.use('/api/admin/codes', adminCodesRouter)
-app.use('/api/admin/dashboard', adminDashboardRouter)
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
+app.use('/auth', authRouter)
+app.use('/steam/cron', cronRouter)
+app.use('/steam/webhook', webhookRouter)
+app.use('/steam/admin/orders', adminOrdersRouter)
+app.use('/steam/admin/products', adminProductsRouter)
+app.use('/steam/admin/codes', adminCodesRouter)
+app.use('/steam/admin/dashboard', adminDashboardRouter)
 
 // ───────────────────────── Health ─────────────────────────
 app.get('/health', (_req, res) => {

@@ -1,13 +1,25 @@
 import { Request, Response, NextFunction } from 'express'
+import { ParsedQs } from 'qs'
 
-type AsyncController = (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => Promise<void>
+type ParamsDict = Record<string, string>
 
-export function asyncHandler(fn: AsyncController) {
-  return (req: Request, res: Response, next: NextFunction) => {
+export function asyncHandler<
+  P extends ParamsDict = ParamsDict,
+  ResBody = unknown,
+  ReqBody = unknown,
+  ReqQuery extends ParsedQs = ParsedQs,
+>(
+  fn: (
+    req: Request<P, ResBody, ReqBody, ReqQuery>,
+    res: Response,
+    next: NextFunction,
+  ) => Promise<void>,
+) {
+  return (
+    req: Request<P, ResBody, ReqBody, ReqQuery>,
+    res: Response,
+    next: NextFunction,
+  ) => {
     fn(req, res, next).catch(next)
   }
 }

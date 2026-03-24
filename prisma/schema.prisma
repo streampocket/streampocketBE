@@ -56,7 +56,6 @@ model SteamProduct {
   id              String        @id @default(uuid()) @db.Uuid
   name            String        @db.VarChar(255)  // 상품명 (네이버에서 가져옴)
   naverProductId  String        @unique @map("naver_product_id") @db.VarChar(100)  // 네이버 상품 ID (주문 매칭 키)
-  emailOptionName String        @map("email_option_name") @db.VarChar(100)         // 구매자 이메일을 받는 네이버 선택옵션명 (예: "받으실 이메일")
   description     String?       // 이메일 본문 - 상품 설명
   caution         String?       // 이메일 본문 - 이용 주의사항
   event           String?       // 이메일 본문 - 이벤트 (없으면 이메일에서 생략)

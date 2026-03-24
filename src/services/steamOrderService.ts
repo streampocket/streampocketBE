@@ -5,10 +5,9 @@ import {
   updateOrderItem,
 } from '../repositories/steamOrderRepository'
 import { findProductById } from '../repositories/steamProductRepository'
-import { findCodeById } from '../repositories/steamCodeRepository'
+import { findAccountById, markAccountAsSent } from '../repositories/steamAccountRepository'
 import { sendCodeEmail } from './steamEmailService'
 import { sendDiscordAlert } from '../lib/discord'
-import { markCodeAsSent } from '../repositories/steamCodeRepository'
 
 type ListOrdersInput = {
   status?: FulfillmentStatus
@@ -50,15 +49,15 @@ export async function retryOrder(id: string): Promise<void> {
     })
   }
 
-  if (!order.codeId) {
-    throw Object.assign(new Error('연결된 코드가 없습니다. 코드를 먼저 할당하세요.'), {
+  if (!order.accountId) {
+    throw Object.assign(new Error('연결된 계정이 없습니다. 계정을 먼저 할당하세요.'), {
       statusCode: 400,
     })
   }
 
-  const code = await findCodeById(order.codeId)
-  if (!code) {
-    throw Object.assign(new Error('연결된 코드를 찾을 수 없습니다.'), { statusCode: 404 })
+  const account = await findAccountById(order.accountId)
+  if (!account) {
+    throw Object.assign(new Error('연결된 계정을 찾을 수 없습니다.'), { statusCode: 404 })
   }
 
   const product = order.productId ? await findProductById(order.productId) : null
@@ -68,15 +67,16 @@ export async function retryOrder(id: string): Promise<void> {
     orderItemId: order.id,
     recipientEmail: order.buyerEmail,
     productName: order.productName,
-    codeValue: code.codeValue,
+    accountUsername: account.username,
+    accountPassword: account.password,
     description: product?.description ?? null,
     caution: product?.caution ?? null,
     event: product?.event ?? null,
     paidAt: order.paidAt ?? order.createdAt,
   })
 
-  // 코드 → sent, 주문 → completed
-  await markCodeAsSent(code.id)
+  // 계정 → sent, 주문 → completed
+  await markAccountAsSent(account.id)
   await updateOrderItem(order.id, {
     fulfillmentStatus: 'completed',
     errorMessage: undefined,

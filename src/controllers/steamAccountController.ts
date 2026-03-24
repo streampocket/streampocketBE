@@ -1,10 +1,17 @@
 import { Request, Response } from 'express'
 import { z } from 'zod'
-import { getCodes, bulkCreate, disable } from '../services/steamCodeService'
+import { getAccounts, bulkCreate, disable } from '../services/steamAccountService'
 
 const bulkCreateSchema = z.object({
   productId: z.string().uuid(),
-  codes: z.array(z.string().min(1)).min(1),
+  accounts: z
+    .array(
+      z.object({
+        username: z.string().min(1),
+        password: z.string().min(1),
+      }),
+    )
+    .min(1),
 })
 
 const listQuerySchema = z.object({
@@ -14,9 +21,9 @@ const listQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 })
 
-export async function getCodesHandler(req: Request, res: Response): Promise<void> {
+export async function getAccountsHandler(req: Request, res: Response): Promise<void> {
   const query = listQuerySchema.parse(req.query)
-  const result = await getCodes(query)
+  const result = await getAccounts(query)
   res.json({
     data: result.items,
     total: result.total,
@@ -26,17 +33,17 @@ export async function getCodesHandler(req: Request, res: Response): Promise<void
   })
 }
 
-export async function bulkCreateCodesHandler(req: Request, res: Response): Promise<void> {
+export async function bulkCreateAccountsHandler(req: Request, res: Response): Promise<void> {
   const body = bulkCreateSchema.parse(req.body)
   const result = await bulkCreate(body)
   res.status(201).json({ data: result })
 }
 
-export async function disableCodeHandler(
+export async function disableAccountHandler(
   req: Request<{ id: string }>,
   res: Response,
 ): Promise<void> {
   const { id } = req.params
-  const code = await disable(id)
-  res.json({ data: code })
+  const account = await disable(id)
+  res.json({ data: account })
 }

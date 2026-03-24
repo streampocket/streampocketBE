@@ -29,7 +29,7 @@ export async function getDashboardStats() {
         name: true,
         _count: {
           select: {
-            codes: { where: { status: 'available' } },
+            accounts: { where: { status: 'available' } },
           },
         },
       },
@@ -49,7 +49,7 @@ export async function getDashboardStats() {
     stock: stockByProduct.map((p) => ({
       productId: p.id,
       productName: p.name,
-      availableCodes: p._count.codes,
+      availableCodes: p._count.accounts,
     })),
   }
 }

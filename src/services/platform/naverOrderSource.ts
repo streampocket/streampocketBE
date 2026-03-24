@@ -28,8 +28,10 @@ type NewOrderResponse = {
 }
 
 type NaverProductItem = {
-  originProductNo: string
-  name: string
+  originProductNo: number
+  channelProducts?: Array<{
+    name: string
+  }>
 }
 
 type NaverProductListResponse = {
@@ -49,7 +51,13 @@ function extractBuyerEmail(inputOptions: NaverInputOption[] | undefined): string
 
 // 네이버 스마트스토어 상품 목록 조회
 export async function fetchNaverProducts(): Promise<{ productId: string; name: string }[]> {
-  const res = await naverApiRequest('/v2/products?sellerManagementCode=&page=1&pageSize=100')
+  const res = await naverApiRequest('/v1/products/search', {
+    method: 'POST',
+    body: JSON.stringify({
+      page: 1,
+      size: 100,
+    }),
+  })
 
   if (!res.ok) {
     const text = await res.text()
@@ -60,8 +68,8 @@ export async function fetchNaverProducts(): Promise<{ productId: string; name: s
   const contents = body.contents ?? []
 
   return contents.map((item) => ({
-    productId: item.originProductNo,
-    name: item.name,
+    productId: String(item.originProductNo),
+    name: item.channelProducts?.[0]?.name ?? `네이버 상품 ${item.originProductNo}`,
   }))
 }
 

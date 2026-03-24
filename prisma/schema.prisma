@@ -16,8 +16,8 @@ enum ProductStatus {
   inactive // 판매 중지
 }
 
-// 코드 상태
-enum CodeStatus {
+// 계정 상태
+enum AccountStatus {
   available // 사용 가능 (미발송)
   reserved  // 주문에 선점됨 (발송 전)
   sent      // 고객에게 발송 완료
@@ -63,25 +63,26 @@ model SteamProduct {
   createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  codes      SteamCode[]
+  accounts   SteamAccount[]
   orderItems SteamOrderItem[]
 
   @@map("steam_products")
 }
 
-// 스팀 코드 재고 (상품당 N개, 등록 순서대로 소진)
-model SteamCode {
-  id        String     @id @default(uuid()) @db.Uuid
-  productId String     @map("product_id") @db.Uuid
-  codeValue String     @map("code_value")           // 실제 스팀 코드값 (예: XXXXX-XXXXX-XXXXX)
-  status    CodeStatus @default(available)
-  createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz(6) // FIFO 소진 기준
+// 스팀 계정 재고 (상품당 N개, 등록 순서대로 소진)
+model SteamAccount {
+  id        String        @id @default(uuid()) @db.Uuid
+  productId String        @map("product_id") @db.Uuid
+  username  String                                    // 스팀 계정 아이디
+  password  String                                    // 스팀 계정 비밀번호
+  status    AccountStatus @default(available)
+  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz(6) // FIFO 소진 기준
 
   product    SteamProduct     @relation(fields: [productId], references: [id], onDelete: Restrict)
   orderItems SteamOrderItem[]
 
-  @@index([productId, status, createdAt]) // 사용 가능한 코드를 등록 순서대로 조회할 때 사용
-  @@map("steam_codes")
+  @@index([productId, status, createdAt]) // 사용 가능한 계정을 등록 순서대로 조회할 때 사용
+  @@map("steam_accounts")
 }
 
 // 주문 아이템 (네이버 상품주문 1건 = 1행, 풀필먼트 단위)
@@ -90,7 +91,7 @@ model SteamOrderItem {
   productOrderId    String            @unique @map("product_order_id") @db.VarChar(100) // 네이버 상품주문번호 (중복 처리 방지 키)
   naverOrderId      String            @map("naver_order_id") @db.VarChar(100)           // 네이버 주문번호 (묶음 주문 조회용)
   productId         String?           @map("product_id") @db.Uuid                       // 매칭된 상품 (매칭 실패 시 null)
-  codeId            String?           @map("code_id") @db.Uuid                          // 발송한 코드 (발송 전 null)
+  accountId         String?           @map("account_id") @db.Uuid                       // 발송한 계정 (발송 전 null)
   productName       String            @map("product_name") @db.VarChar(255)             // 주문 당시 상품명 (상품 삭제돼도 보존)
   buyerEmail        String?           @map("buyer_email") @db.VarChar(320)              // 구매자 이메일 (파싱 실패 시 null → manual_review)
   unitPrice         Int               @map("unit_price")                                // 결제금액 (네이버 API에서 가져옴)
@@ -100,13 +101,23 @@ model SteamOrderItem {
   createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  product   SteamProduct? @relation(fields: [productId], references: [id], onDelete: SetNull)
-  code      SteamCode?    @relation(fields: [codeId], references: [id], onDelete: SetNull)
+  product   SteamProduct?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  account   SteamAccount?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
   emailLogs EmailLog[]
 
   @@index([fulfillmentStatus, createdAt]) // 처리 대기 주문 조회
   @@index([naverOrderId])                 // 주문번호로 묶음 조회
   @@map("steam_order_items")
+}
+
+// 이메일 템플릿 (관리자 편집 가능, 단일 레코드)
+model EmailTemplate {
+  id           String   @id @default(uuid()) @db.Uuid
+  subject      String                         // 이메일 제목 (플레이스홀더 가능)
+  bodyTemplate String   @map("body_template") // 이메일 본문 (플레이스홀더 가능)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("email_templates")
 }
 
 // 이메일 발송 이력 (재시도 포함 모든 발송 시도 기록)

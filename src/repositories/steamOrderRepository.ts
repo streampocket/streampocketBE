@@ -13,7 +13,7 @@ type CreateOrderItemInput = {
 
 type UpdateOrderItemInput = {
   fulfillmentStatus?: FulfillmentStatus
-  codeId?: string
+  accountId?: string
   buyerEmail?: string
   productId?: string
   errorMessage?: string

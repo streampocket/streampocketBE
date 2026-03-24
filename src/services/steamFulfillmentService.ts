@@ -6,10 +6,10 @@ import {
 } from '../repositories/steamOrderRepository'
 import { findProductByNaverId } from '../repositories/steamProductRepository'
 import {
-  reserveNextAvailableCode,
-  countAvailableCodes,
-  markCodeAsSent,
-} from '../repositories/steamCodeRepository'
+  reserveNextAvailableAccount,
+  countAvailableAccounts,
+  markAccountAsSent,
+} from '../repositories/steamAccountRepository'
 import { sendCodeEmail } from './steamEmailService'
 import { IOrderSource, IncomingOrderItem } from './platform/IOrderSource'
 
@@ -63,9 +63,9 @@ export async function processOrder(
 
   await updateOrderItem(orderItem.id, { productId: product.id })
 
-  // 5. 코드 선점 (FIFO)
-  const code = await reserveNextAvailableCode(product.id)
-  if (!code) {
+  // 5. 계정 선점 (FIFO)
+  const account = await reserveNextAvailableAccount(product.id)
+  if (!account) {
     await updateOrderItem(orderItem.id, {
       fulfillmentStatus: 'failed',
       errorMessage: `재고 소진 — ${product.name}`,
@@ -77,10 +77,10 @@ export async function processOrder(
     return
   }
 
-  await updateOrderItem(orderItem.id, { codeId: code.id })
+  await updateOrderItem(orderItem.id, { accountId: account.id })
 
   // 재고 임계치 경고 (선점 후 잔여 재고 체크)
-  const remaining = await countAvailableCodes(product.id)
+  const remaining = await countAvailableAccounts(product.id)
   if (remaining <= LOW_STOCK_THRESHOLD) {
     await sendDiscordAlert(
       'stock',
@@ -120,7 +120,8 @@ export async function processOrder(
       orderItemId: orderItem.id,
       recipientEmail: item.buyerEmail,
       productName: item.productName,
-      codeValue: code.codeValue,
+      accountUsername: account.username,
+      accountPassword: account.password,
       description: product.description,
       caution: product.caution,
       event: product.event,
@@ -140,8 +141,8 @@ export async function processOrder(
     return
   }
 
-  // 9. 코드 → sent, 주문 → completed
-  await markCodeAsSent(code.id)
+  // 9. 계정 → sent, 주문 → completed
+  await markAccountAsSent(account.id)
   await updateOrderItem(orderItem.id, { fulfillmentStatus: 'completed' })
 
   await sendDiscordAlert(

@@ -5,12 +5,28 @@ type SendCodeEmailInput = {
   orderItemId: string
   recipientEmail: string
   productName: string
-  codeValue: string
+  accountUsername: string
+  accountPassword: string
   description: string | null
   caution: string | null
   event: string | null
   paidAt: Date
 }
+
+const FALLBACK_SUBJECT = '[구매 완료] {productName}'
+const FALLBACK_BODY = `구매일시: {purchaseDate}
+상품명: {productName}
+
+[스팀 계정 정보]
+아이디: {accountUsername}
+비밀번호: {accountPassword}
+
+[상품 설명]
+{description}
+
+[이용 주의사항]
+{caution}
+{eventSection}`
 
 function formatDate(date: Date): string {
   return date.toLocaleString('ko-KR', {
@@ -24,30 +40,40 @@ function formatDate(date: Date): string {
   })
 }
 
-function buildEmailBody(input: SendCodeEmailInput): string {
-  const lines = [
-    `구매일시: ${formatDate(input.paidAt)}`,
-    `상품명: ${input.productName}`,
-    `상품 코드: ${input.codeValue}`,
-    '',
-    '[상품 설명]',
-    input.description ?? '(없음)',
-    '',
-    '[이용 주의사항]',
-    input.caution ?? '(없음)',
-  ]
+function applyTemplate(template: string, vars: Record<string, string>): string {
+  return Object.entries(vars).reduce(
+    (result, [key, value]) => result.replaceAll(`{${key}}`, value),
+    template,
+  )
+}
 
-  if (input.event) {
-    lines.push('', '[이벤트]', input.event)
-  }
-
-  return lines.join('\n')
+async function getTemplate(): Promise<{ subject: string; bodyTemplate: string }> {
+  const template = await prisma.emailTemplate.findFirst()
+  return template ?? { subject: FALLBACK_SUBJECT, bodyTemplate: FALLBACK_BODY }
 }
 
 export async function sendCodeEmail(input: SendCodeEmailInput): Promise<void> {
   const fromAddress = process.env['MAIL_FROM_ADDRESS']
   const fromName = process.env['MAIL_FROM_NAME'] ?? '스트림포켓'
   if (!fromAddress) throw new Error('MAIL_FROM_ADDRESS 환경변수를 설정해 주세요.')
+
+  const { subject: subjectTemplate, bodyTemplate } = await getTemplate()
+
+  const eventSection =
+    input.event ? `\n[이벤트]\n${input.event}` : ''
+
+  const vars: Record<string, string> = {
+    purchaseDate: formatDate(input.paidAt),
+    productName: input.productName,
+    accountUsername: input.accountUsername,
+    accountPassword: input.accountPassword,
+    description: input.description ?? '(없음)',
+    caution: input.caution ?? '(없음)',
+    eventSection,
+  }
+
+  const subject = applyTemplate(subjectTemplate, vars)
+  const body = applyTemplate(bodyTemplate, vars)
 
   // 발송 이력 먼저 생성 (queued)
   const emailLog = await prisma.emailLog.create({
@@ -62,8 +88,8 @@ export async function sendCodeEmail(input: SendCodeEmailInput): Promise<void> {
     await resend.emails.send({
       from: `${fromName} <${fromAddress}>`,
       to: input.recipientEmail,
-      subject: `[구매 완료] ${input.productName}`,
-      text: buildEmailBody(input),
+      subject,
+      text: body,
     })
 
     await prisma.emailLog.update({

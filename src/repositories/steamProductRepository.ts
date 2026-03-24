@@ -17,22 +17,22 @@ type UpdateProductInput = {
   status?: ProductStatus
 }
 
-type ProductWithCodeCount = SteamProduct & {
-  _count: { codes: number }
+type ProductWithAccountCount = SteamProduct & {
+  _count: { accounts: number }
 }
 
-export async function findAllProducts(status?: ProductStatus): Promise<ProductWithCodeCount[]> {
+export async function findAllProducts(status?: ProductStatus): Promise<ProductWithAccountCount[]> {
   return prisma.steamProduct.findMany({
     where: status ? { status } : undefined,
-    include: { _count: { select: { codes: true } } },
+    include: { _count: { select: { accounts: true } } },
     orderBy: { createdAt: 'desc' },
   })
 }
 
-export async function findProductById(id: string): Promise<ProductWithCodeCount | null> {
+export async function findProductById(id: string): Promise<ProductWithAccountCount | null> {
   return prisma.steamProduct.findUnique({
     where: { id },
-    include: { _count: { select: { codes: true } } },
+    include: { _count: { select: { accounts: true } } },
   })
 }
 

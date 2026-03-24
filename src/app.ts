@@ -11,7 +11,8 @@ import { cronRouter } from './routes/cron'
 import { webhookRouter } from './routes/webhook'
 import { adminOrdersRouter } from './routes/admin/orders'
 import { adminProductsRouter } from './routes/admin/products'
-import { adminCodesRouter } from './routes/admin/codes'
+import { adminAccountsRouter } from './routes/admin/accounts'
+import { adminEmailTemplateRouter } from './routes/admin/email-template'
 import { adminDashboardRouter } from './routes/admin/dashboard'
 
 const app = express()
@@ -43,7 +44,8 @@ app.use('/steam/cron', cronRouter)
 app.use('/steam/webhook', webhookRouter)
 app.use('/steam/admin/orders', adminOrdersRouter)
 app.use('/steam/admin/products', adminProductsRouter)
-app.use('/steam/admin/codes', adminCodesRouter)
+app.use('/steam/admin/accounts', adminAccountsRouter)
+app.use('/steam/admin/email-template', adminEmailTemplateRouter)
 app.use('/steam/admin/dashboard', adminDashboardRouter)
 
 // ───────────────────────── Health ─────────────────────────

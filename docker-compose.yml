@@ -1,0 +1,36 @@
+services:
+  # PostgreSQL (로컬 개발용)
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: streampocket
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 백엔드 (로컬 개발: 소스 마운트 + 핫리로드)
+  be:
+    build:
+      context: .             # be/ 폴더 기준
+      target: builder        # devDependencies 포함된 빌드 스테이지 사용
+    ports:
+      - "4000:4000"
+    env_file: .env
+    volumes:
+      - ./src:/app/src       # 소스 변경 시 핫리로드
+      - ./prisma:/app/prisma
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: npm run dev
+
+volumes:
+  postgres_data:

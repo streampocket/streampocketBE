@@ -1,0 +1,16 @@
+import { IOrderSource, IncomingOrderItem } from './IOrderSource'
+
+export class OwnPlatformOrderSource implements IOrderSource {
+  async fetchNewOrders(): Promise<IncomingOrderItem[]> {
+    // TODO: 자체 플랫폼 웹훅 기반 주문 수집 구현 (추후)
+    return []
+  }
+
+  async confirmOrder(_productOrderId: string): Promise<void> {
+    // TODO: 자체 플랫폼 발주 확인 (추후)
+  }
+
+  async dispatchOrder(_productOrderId: string): Promise<void> {
+    // TODO: 자체 플랫폼 발송 처리 (추후)
+  }
+}

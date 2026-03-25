@@ -32,6 +32,12 @@ type ListOrdersResult = {
   total: number
 }
 
+type ExportOrdersInput = {
+  status?: FulfillmentStatus
+  from?: Date
+  to?: Date
+}
+
 type OrderItemWithRelations = SteamOrderItem & {
   emailLogs: {
     id: string
@@ -84,6 +90,21 @@ export async function findOrderById(id: string): Promise<OrderItemWithRelations 
       },
     },
   })
+}
+
+export async function exportOrders(input: ExportOrdersInput): Promise<SteamOrderItem[]> {
+  const where = {
+    ...(input.status ? { fulfillmentStatus: input.status } : {}),
+    ...(input.from || input.to
+      ? {
+          createdAt: {
+            ...(input.from ? { gte: input.from } : {}),
+            ...(input.to ? { lte: input.to } : {}),
+          },
+        }
+      : {}),
+  }
+  return prisma.steamOrderItem.findMany({ where, orderBy: { createdAt: 'desc' } })
 }
 
 export async function findOrderByProductOrderId(

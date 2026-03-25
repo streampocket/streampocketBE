@@ -1,6 +1,7 @@
 import { Request, Response } from 'express'
 import { z } from 'zod'
-import { getOrders, getOrderDetail, retryOrder } from '../services/steamOrderService'
+import { getOrders, getOrderDetail, retryOrder, exportOrdersForExcel } from '../services/steamOrderService'
+import { buildOrderExcelBuffer } from '../utils/excel'
 
 const listQuerySchema = z.object({
   status: z.enum(['pending', 'completed', 'manual_review', 'failed']).optional(),
@@ -35,6 +36,26 @@ export async function getOrderDetailHandler(
   const { id } = req.params
   const order = await getOrderDetail(id)
   res.json({ data: order })
+}
+
+const exportQuerySchema = z.object({
+  status: z.enum(['pending', 'completed', 'manual_review', 'failed']).optional(),
+  from: z.string().datetime({ offset: true }).optional(),
+  to: z.string().datetime({ offset: true }).optional(),
+})
+
+export async function exportOrdersHandler(req: Request, res: Response): Promise<void> {
+  const query = exportQuerySchema.parse(req.query)
+  const orders = await exportOrdersForExcel({
+    status: query.status,
+    from: query.from ? new Date(query.from) : undefined,
+    to: query.to ? new Date(query.to) : undefined,
+  })
+  const buffer = buildOrderExcelBuffer(orders)
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  res.setHeader('Content-Disposition', `attachment; filename="orders_${date}.xlsx"`)
+  res.send(buffer)
 }
 
 export async function retryOrderHandler(

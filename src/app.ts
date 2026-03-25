@@ -33,7 +33,13 @@ const swaggerSpec = swaggerJsdoc({
 
 // ───────────────────────── Middleware ─────────────────────────
 app.use(helmet())
-app.use(cors({ origin: process.env.FE_ORIGIN ?? 'http://localhost:3000', credentials: true }))
+app.use(
+  cors({
+    origin: process.env.FE_ORIGIN ?? 'http://localhost:3000',
+    credentials: true,
+    exposedHeaders: ['Content-Disposition'],
+  }),
+)
 app.use(express.json())
 app.use(requestLogger)
 

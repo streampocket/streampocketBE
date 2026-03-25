@@ -4,16 +4,10 @@ import { ProductStatus, SteamProduct } from '@prisma/client'
 type CreateProductInput = {
   name: string
   naverProductId: string
-  description?: string
-  caution?: string
-  event?: string
 }
 
 type UpdateProductInput = {
   name?: string
-  description?: string
-  caution?: string
-  event?: string
   status?: ProductStatus
 }
 

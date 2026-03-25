@@ -24,7 +24,13 @@ export async function processOrder(
   const existing = await findOrderByProductOrderId(item.productOrderId)
   if (existing) return
 
-  // 2. SteamOrderItem 생성 (pending)
+  // 2. 신규 주문 감지 즉시 Discord 알림
+  await sendDiscordAlert(
+    'order',
+    `🛒 새 주문 감지\n상품: ${item.productName}\n주문: ${item.productOrderId}`,
+  )
+
+  // 3. SteamOrderItem 생성 (pending)
   const orderItem = await createOrderItem({
     productOrderId: item.productOrderId,
     naverOrderId: item.externalOrderId,
@@ -34,7 +40,7 @@ export async function processOrder(
     paidAt: item.paidAt,
   })
 
-  // 3. 이메일 파싱 실패 → manual_review
+  // 4. 이메일 파싱 실패 → manual_review
   if (!item.buyerEmail) {
     await updateOrderItem(orderItem.id, {
       fulfillmentStatus: 'manual_review',
@@ -47,7 +53,7 @@ export async function processOrder(
     return
   }
 
-  // 4. 상품 매칭
+  // 5. 상품 매칭
   const product = await findProductByNaverId(item.naverProductId)
   if (!product) {
     await updateOrderItem(orderItem.id, {
@@ -63,7 +69,7 @@ export async function processOrder(
 
   await updateOrderItem(orderItem.id, { productId: product.id })
 
-  // 5. 계정 선점 (FIFO)
+  // 6. 계정 선점 (FIFO)
   const account = await reserveNextAvailableAccount(product.id)
   if (!account) {
     await updateOrderItem(orderItem.id, {
@@ -88,7 +94,7 @@ export async function processOrder(
     )
   }
 
-  // 6. 발주 확인
+  // 7. 발주 확인
   try {
     await orderSource.confirmOrder(item.productOrderId)
   } catch (err) {
@@ -101,7 +107,7 @@ export async function processOrder(
     return
   }
 
-  // 7. 발송 처리
+  // 8. 발송 처리
   try {
     await orderSource.dispatchOrder(item.productOrderId)
   } catch (err) {
@@ -114,7 +120,7 @@ export async function processOrder(
     return
   }
 
-  // 8. 이메일 발송
+  // 9. 이메일 발송
   try {
     await sendCodeEmail({
       orderItemId: orderItem.id,
@@ -122,9 +128,9 @@ export async function processOrder(
       productName: item.productName,
       accountUsername: account.username,
       accountPassword: account.password,
-      description: product.description,
-      caution: product.caution,
-      event: product.event,
+      accountEmail: account.email,
+      accountEmailPassword: account.emailPassword,
+      accountEmailSiteUrl: account.emailSiteUrl,
       paidAt: item.paidAt,
     })
   } catch (err) {
@@ -141,7 +147,7 @@ export async function processOrder(
     return
   }
 
-  // 9. 계정 → sent, 주문 → completed
+  // 10. 계정 → sent, 주문 → completed
   await markAccountAsSent(account.id)
   await updateOrderItem(orderItem.id, { fulfillmentStatus: 'completed' })
 

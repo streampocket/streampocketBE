@@ -1,6 +1,7 @@
 import { AccountStatus } from '@prisma/client'
 import {
   listAccounts,
+  exportAccounts,
   bulkCreateAccounts,
   disableAccount as disableAccountRepo,
   countAvailableAccounts,
@@ -14,13 +15,28 @@ type ListAccountsInput = {
   pageSize: number
 }
 
+type ExportAccountsInput = {
+  productId?: string
+  status?: AccountStatus
+}
+
 type BulkCreateInput = {
   productId: string
-  accounts: { username: string; password: string }[]
+  accounts: {
+    username: string
+    password: string
+    email: string
+    emailPassword: string
+    emailSiteUrl: string
+  }[]
 }
 
 export async function getAccounts(input: ListAccountsInput) {
   return listAccounts(input)
+}
+
+export async function exportAccountsForExcel(input: ExportAccountsInput) {
+  return exportAccounts(input)
 }
 
 export async function bulkCreate(input: BulkCreateInput) {

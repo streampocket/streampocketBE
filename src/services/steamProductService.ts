@@ -12,16 +12,10 @@ import { fetchNaverProducts } from './platform/naverOrderSource'
 type CreateProductInput = {
   name: string
   naverProductId: string
-  description?: string
-  caution?: string
-  event?: string
 }
 
 type UpdateProductInput = {
   name?: string
-  description?: string
-  caution?: string
-  event?: string
   status?: ProductStatus
 }
 

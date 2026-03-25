@@ -7,9 +7,9 @@ type SendCodeEmailInput = {
   productName: string
   accountUsername: string
   accountPassword: string
-  description: string | null
-  caution: string | null
-  event: string | null
+  accountEmail: string
+  accountEmailPassword: string
+  accountEmailSiteUrl: string
   paidAt: Date
 }
 
@@ -17,16 +17,12 @@ const FALLBACK_SUBJECT = '[구매 완료] {productName}'
 const FALLBACK_BODY = `구매일시: {purchaseDate}
 상품명: {productName}
 
-[스팀 계정 정보]
+[계정 정보]
 아이디: {accountUsername}
 비밀번호: {accountPassword}
-
-[상품 설명]
-{description}
-
-[이용 주의사항]
-{caution}
-{eventSection}`
+이메일: {accountEmail}
+이메일 비밀번호: {accountEmailPassword}
+이메일 사이트: {accountEmailSiteUrl}`
 
 function formatDate(date: Date): string {
   return date.toLocaleString('ko-KR', {
@@ -59,17 +55,14 @@ export async function sendCodeEmail(input: SendCodeEmailInput): Promise<void> {
 
   const { subject: subjectTemplate, bodyTemplate } = await getTemplate()
 
-  const eventSection =
-    input.event ? `\n[이벤트]\n${input.event}` : ''
-
   const vars: Record<string, string> = {
     purchaseDate: formatDate(input.paidAt),
     productName: input.productName,
     accountUsername: input.accountUsername,
     accountPassword: input.accountPassword,
-    description: input.description ?? '(없음)',
-    caution: input.caution ?? '(없음)',
-    eventSection,
+    accountEmail: input.accountEmail,
+    accountEmailPassword: input.accountEmailPassword,
+    accountEmailSiteUrl: input.accountEmailSiteUrl,
   }
 
   const subject = applyTemplate(subjectTemplate, vars)

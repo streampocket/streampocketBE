@@ -11,16 +11,10 @@ import {
 const createProductSchema = z.object({
   name: z.string().min(1),
   naverProductId: z.string().min(1),
-  description: z.string().optional(),
-  caution: z.string().optional(),
-  event: z.string().optional(),
 })
 
 const updateProductSchema = z.object({
   name: z.string().min(1).optional(),
-  description: z.string().optional(),
-  caution: z.string().optional(),
-  event: z.string().optional(),
   status: z.enum(['draft', 'active', 'inactive']).optional(),
 })
 

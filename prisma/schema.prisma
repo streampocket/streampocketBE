@@ -56,9 +56,6 @@ model SteamProduct {
   id              String        @id @default(uuid()) @db.Uuid
   name            String        @db.VarChar(255)  // 상품명 (네이버에서 가져옴)
   naverProductId  String        @unique @map("naver_product_id") @db.VarChar(100)  // 네이버 상품 ID (주문 매칭 키)
-  description     String?       // 이메일 본문 - 상품 설명
-  caution         String?       // 이메일 본문 - 이용 주의사항
-  event           String?       // 이메일 본문 - 이벤트 (없으면 이메일에서 생략)
   status          ProductStatus @default(draft)
   createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -71,12 +68,15 @@ model SteamProduct {
 
 // 스팀 계정 재고 (상품당 N개, 등록 순서대로 소진)
 model SteamAccount {
-  id        String        @id @default(uuid()) @db.Uuid
-  productId String        @map("product_id") @db.Uuid
-  username  String                                    // 스팀 계정 아이디
-  password  String                                    // 스팀 계정 비밀번호
-  status    AccountStatus @default(available)
-  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz(6) // FIFO 소진 기준
+  id             String        @id @default(uuid()) @db.Uuid
+  productId      String        @map("product_id") @db.Uuid
+  username       String                                          // 계정 아이디
+  password       String                                          // 계정 비밀번호
+  email          String        @map("email") @db.VarChar(320)   // 계정 이메일
+  emailPassword  String        @map("email_password")           // 이메일 비밀번호
+  emailSiteUrl   String        @map("email_site_url") @db.VarChar(2048) // 이메일 사이트 주소
+  status         AccountStatus @default(available)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6) // FIFO 소진 기준
 
   product    SteamProduct     @relation(fields: [productId], references: [id], onDelete: Restrict)
   orderItems SteamOrderItem[]

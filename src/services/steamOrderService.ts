@@ -1,6 +1,7 @@
 import { FulfillmentStatus } from '@prisma/client'
 import {
   listOrders,
+  exportOrders,
   findOrderById,
   updateOrderItem,
 } from '../repositories/steamOrderRepository'
@@ -17,8 +18,18 @@ type ListOrdersInput = {
   pageSize: number
 }
 
+type ExportOrdersInput = {
+  status?: FulfillmentStatus
+  from?: Date
+  to?: Date
+}
+
 export async function getOrders(input: ListOrdersInput) {
   return listOrders(input)
+}
+
+export async function exportOrdersForExcel(input: ExportOrdersInput) {
+  return exportOrders(input)
 }
 
 export async function getOrderDetail(id: string) {
@@ -69,9 +80,9 @@ export async function retryOrder(id: string): Promise<void> {
     productName: order.productName,
     accountUsername: account.username,
     accountPassword: account.password,
-    description: product?.description ?? null,
-    caution: product?.caution ?? null,
-    event: product?.event ?? null,
+    accountEmail: account.email,
+    accountEmailPassword: account.emailPassword,
+    accountEmailSiteUrl: account.emailSiteUrl,
     paidAt: order.paidAt ?? order.createdAt,
   })
 

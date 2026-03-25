@@ -1,6 +1,7 @@
 import { Request, Response } from 'express'
 import { z } from 'zod'
-import { getAccounts, bulkCreate, disable } from '../services/steamAccountService'
+import { getAccounts, bulkCreate, disable, exportAccountsForExcel } from '../services/steamAccountService'
+import { buildAccountExcelBuffer } from '../utils/excel'
 
 const bulkCreateSchema = z.object({
   productId: z.string().uuid(),
@@ -9,6 +10,9 @@ const bulkCreateSchema = z.object({
       z.object({
         username: z.string().min(1),
         password: z.string().min(1),
+        email: z.string().min(1),
+        emailPassword: z.string().min(1),
+        emailSiteUrl: z.string().min(1),
       }),
     )
     .min(1),
@@ -31,6 +35,36 @@ export async function getAccountsHandler(req: Request, res: Response): Promise<v
     pageSize: query.pageSize,
     totalPages: Math.ceil(result.total / query.pageSize),
   })
+}
+
+const exportAccountQuerySchema = z.object({
+  productId: z.string().uuid().optional(),
+  status: z.enum(['available', 'reserved', 'sent', 'disabled']).optional(),
+})
+
+export async function exportAccountsHandler(req: Request, res: Response): Promise<void> {
+  const query = exportAccountQuerySchema.parse(req.query)
+  const accounts = await exportAccountsForExcel({
+    productId: query.productId,
+    status: query.status,
+  })
+  const buffer = buildAccountExcelBuffer(
+    accounts.map((a) => ({
+      productName: a.product.name,
+      username: a.username,
+      password: a.password,
+      email: a.email,
+      emailPassword: a.emailPassword,
+      emailSiteUrl: a.emailSiteUrl,
+      status: a.status,
+      sentAt: a.sentAt,
+      createdAt: a.createdAt,
+    })),
+  )
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  res.setHeader('Content-Disposition', `attachment; filename="accounts_${date}.xlsx"`)
+  res.send(buffer)
 }
 
 export async function bulkCreateAccountsHandler(req: Request, res: Response): Promise<void> {

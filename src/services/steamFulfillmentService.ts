@@ -10,121 +10,147 @@ import {
   countAvailableAccounts,
   markAccountAsSent,
 } from '../repositories/steamAccountRepository'
-import { sendCodeEmail } from './steamEmailService'
 import { IOrderSource, IncomingOrderItem } from './platform/IOrderSource'
+import { isAlimtalkEnabled, sendOrderAlimtalk } from './alimtalkService'
 
 const LOW_STOCK_THRESHOLD = Number(process.env['LOW_STOCK_THRESHOLD'] ?? 2)
 
-// 단일 주문 아이템 풀필먼트 처리
+let isPollingInProgress = false
+
+export type OrderPollingTrigger = 'startup' | 'interval' | 'manual'
+
+export type OrderPollingResult = {
+  fetchedCount: number
+  processedCount: number
+  failedCount: number
+  skipped: boolean
+}
+
+function toErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+// 단일 주문 아이템을 풀필먼트 처리
 export async function processOrder(
   item: IncomingOrderItem,
   orderSource: IOrderSource,
 ): Promise<void> {
-  // 1. 멱등 체크 — 이미 처리된 주문이면 skip
   const existing = await findOrderByProductOrderId(item.productOrderId)
   if (existing) return
 
-  // 2. 신규 주문 감지 즉시 Discord 알림
   await sendDiscordAlert(
     'order',
-    `🛒 새 주문 감지\n상품: ${item.productName}\n주문: ${item.productOrderId}`,
+    `🆕 신규 주문 감지\n상품: ${item.productName}\n주문: ${item.productOrderId}`,
   )
 
-  // 3. SteamOrderItem 생성 (pending)
   const orderItem = await createOrderItem({
     productOrderId: item.productOrderId,
     naverOrderId: item.externalOrderId,
     productName: item.productName,
     unitPrice: item.unitPrice,
-    buyerEmail: item.buyerEmail ?? undefined,
+    receiverPhoneNumber: item.receiverPhoneNumber ?? undefined,
+    receiverName: item.receiverName ?? undefined,
     paidAt: item.paidAt,
   })
 
-  // 4. 이메일 파싱 실패 → manual_review
-  if (!item.buyerEmail) {
+  if (!item.receiverPhoneNumber) {
     await updateOrderItem(orderItem.id, {
       fulfillmentStatus: 'manual_review',
-      errorMessage: '구매자 이메일 파싱 실패 (inputOptions에서 이메일을 찾을 수 없음)',
+      errorMessage: '구매자 연락처 조회 실패',
     })
     await sendDiscordAlert(
       'error',
-      `⚠️ 이메일 파싱 실패 — 수동 처리 필요\n주문: ${item.productOrderId}\n상품: ${item.productName}`,
+      `⚠️ 구매자 연락처 조회 실패 — 수동 처리 필요\n주문: ${item.productOrderId}\n상품: ${item.productName}`,
     )
     return
   }
 
-  // 5. 상품 매칭
   const product = await findProductByNaverId(item.naverProductId)
   if (!product) {
     await updateOrderItem(orderItem.id, {
       fulfillmentStatus: 'manual_review',
-      errorMessage: `네이버 상품 ID(${item.naverProductId})에 매칭되는 상품 없음`,
+      errorMessage: `네이버 상품 ID(${item.naverProductId})와 매핑되는 상품 없음`,
     })
     await sendDiscordAlert(
       'error',
-      `⚠️ 상품 매칭 실패 — 수동 처리 필요\n주문: ${item.productOrderId}\n네이버 상품 ID: ${item.naverProductId}`,
+      `⚠️ 상품 매핑 실패 — 수동 처리 필요\n주문: ${item.productOrderId}\n네이버 상품 ID: ${item.naverProductId}`,
     )
     return
   }
 
   await updateOrderItem(orderItem.id, { productId: product.id })
 
-  // 6. 계정 선점 (FIFO)
   const account = await reserveNextAvailableAccount(product.id)
   if (!account) {
     await updateOrderItem(orderItem.id, {
       fulfillmentStatus: 'failed',
-      errorMessage: `재고 소진 — ${product.name}`,
+      errorMessage: `재고 부족: ${product.name}`,
     })
     await sendDiscordAlert(
       'stock',
-      `🚨 재고 소진 — 즉시 보충 필요\n상품: ${product.name}\n주문: ${item.productOrderId}`,
+      `🚨 재고 부족 — 즉시 보충 필요\n상품: ${product.name}\n주문: ${item.productOrderId}`,
     )
     return
   }
 
   await updateOrderItem(orderItem.id, { accountId: account.id })
 
-  // 재고 임계치 경고 (선점 후 잔여 재고 체크)
   const remaining = await countAvailableAccounts(product.id)
   if (remaining <= LOW_STOCK_THRESHOLD) {
     await sendDiscordAlert(
       'stock',
-      `⚠️ 재고 부족 경고\n상품: ${product.name}\n잔여 코드: ${remaining}개`,
+      `⚠️ 재고 부족 경고\n상품: ${product.name}\n남은 코드: ${remaining}개`,
     )
   }
 
-  // 7. 발주 확인
   try {
     await orderSource.confirmOrder(item.productOrderId)
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
+  } catch (error) {
+    const message = toErrorMessage(error)
     await updateOrderItem(orderItem.id, {
       fulfillmentStatus: 'failed',
       errorMessage: `발주 확인 실패: ${message}`,
     })
-    await sendDiscordAlert('error', `❌ 발주 확인 실패\n주문: ${item.productOrderId}\n오류: ${message}`)
+    await sendDiscordAlert(
+      'error',
+      `❌ 발주 확인 실패\n주문: ${item.productOrderId}\n오류: ${message}`,
+    )
     return
   }
 
-  // 8. 발송 처리
   try {
     await orderSource.dispatchOrder(item.productOrderId)
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
+  } catch (error) {
+    const message = toErrorMessage(error)
     await updateOrderItem(orderItem.id, {
       fulfillmentStatus: 'failed',
       errorMessage: `발송 처리 실패: ${message}`,
     })
-    await sendDiscordAlert('error', `❌ 발송 처리 실패\n주문: ${item.productOrderId}\n오류: ${message}`)
+    await sendDiscordAlert(
+      'error',
+      `❌ 발송 처리 실패\n주문: ${item.productOrderId}\n오류: ${message}`,
+    )
     return
   }
 
-  // 9. 이메일 발송
   try {
-    await sendCodeEmail({
+    const alimtalkEnabled = await isAlimtalkEnabled()
+    if (!alimtalkEnabled) {
+      await updateOrderItem(orderItem.id, {
+        fulfillmentStatus: 'manual_review',
+        errorMessage: '알림톡 발송이 비활성화되어 수동 처리로 전환됨',
+      })
+      await sendDiscordAlert(
+        'error',
+        `⚠️ 알림톡 발송 비활성화 — 수동 처리 필요\n주문: ${item.productOrderId}\n수신번호: ${item.receiverPhoneNumber}`,
+      )
+      return
+    }
+
+    await sendOrderAlimtalk({
       orderItemId: orderItem.id,
-      recipientEmail: item.buyerEmail,
+      recipientPhoneNumber: item.receiverPhoneNumber,
+      recipientName: item.receiverName,
       productName: item.productName,
       accountUsername: account.username,
       accountPassword: account.password,
@@ -133,41 +159,41 @@ export async function processOrder(
       accountEmailSiteUrl: account.emailSiteUrl,
       paidAt: item.paidAt,
     })
-  } catch (err) {
-    // 이메일 실패는 EmailLog에 기록됨 — 주문 자체는 manual_review로 전환
-    const message = err instanceof Error ? err.message : String(err)
+  } catch (error) {
+    const message = toErrorMessage(error)
     await updateOrderItem(orderItem.id, {
       fulfillmentStatus: 'manual_review',
-      errorMessage: `이메일 발송 실패: ${message}`,
+      errorMessage: `알림톡 발송 실패: ${message}`,
     })
     await sendDiscordAlert(
       'error',
-      `❌ 이메일 발송 실패 — 수동 재발송 필요\n주문: ${item.productOrderId}\n수신자: ${item.buyerEmail}`,
+      `❌ 알림톡 발송 실패 — 수동 재발송 필요\n주문: ${item.productOrderId}\n수신번호: ${item.receiverPhoneNumber}`,
     )
     return
   }
 
-  // 10. 계정 → sent, 주문 → completed
   await markAccountAsSent(account.id)
   await updateOrderItem(orderItem.id, { fulfillmentStatus: 'completed' })
 
   await sendDiscordAlert(
     'order',
-    `✅ 주문 처리 완료\n상품: ${item.productName}\n수신자: ${item.buyerEmail}`,
+    `✅ 주문 처리 완료 — 알림톡 발송 완료\n상품: ${item.productName}\n주문번호: ${item.productOrderId}\n수신번호: ${item.receiverPhoneNumber}`,
   )
 }
 
-// 크론 진입점 — 신규 주문 전체 처리
-export async function pollAndProcess(orderSource: IOrderSource): Promise<number> {
+// 변경된 주문 목록 전체 처리
+export async function pollAndProcess(orderSource: IOrderSource): Promise<OrderPollingResult> {
   const items = await orderSource.fetchNewOrders()
-  let processed = 0
+  let processedCount = 0
+  let failedCount = 0
 
   for (const item of items) {
     try {
       await processOrder(item, orderSource)
-      processed++
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
+      processedCount += 1
+    } catch (error) {
+      failedCount += 1
+      const message = toErrorMessage(error)
       await sendDiscordAlert(
         'error',
         `❌ 주문 처리 중 예외 발생\n주문: ${item.productOrderId}\n오류: ${message}`,
@@ -175,5 +201,46 @@ export async function pollAndProcess(orderSource: IOrderSource): Promise<number>
     }
   }
 
-  return processed
+  return {
+    fetchedCount: items.length,
+    processedCount,
+    failedCount,
+    skipped: false,
+  }
+}
+
+export async function runOrderPolling(
+  orderSource: IOrderSource,
+  trigger: OrderPollingTrigger,
+): Promise<OrderPollingResult> {
+  if (isPollingInProgress) {
+    console.log(`[ORDER_POLL] skip trigger=${trigger} reason=in_progress`)
+    return {
+      fetchedCount: 0,
+      processedCount: 0,
+      failedCount: 0,
+      skipped: true,
+    }
+  }
+
+  isPollingInProgress = true
+  const startedAt = Date.now()
+  console.log(`[ORDER_POLL] start trigger=${trigger}`)
+
+  try {
+    const result = await pollAndProcess(orderSource)
+    const durationMs = Date.now() - startedAt
+    console.log(
+      `[ORDER_POLL] done trigger=${trigger} fetched=${result.fetchedCount} processed=${result.processedCount} failed=${result.failedCount} duration_ms=${durationMs}`,
+    )
+    return result
+  } catch (error) {
+    const message = toErrorMessage(error)
+    const durationMs = Date.now() - startedAt
+    console.error(`[ORDER_POLL] failed trigger=${trigger} duration_ms=${durationMs}`, error)
+    await sendDiscordAlert('error', `❌ 주문 폴링 실패\n트리거: ${trigger}\n오류: ${message}`)
+    throw error
+  } finally {
+    isPollingInProgress = false
+  }
 }

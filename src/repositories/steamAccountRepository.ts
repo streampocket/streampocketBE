@@ -8,8 +8,10 @@ type ListAccountsInput = {
   pageSize: number
 }
 
+export type AccountWithProductName = Omit<SteamAccount, never> & { productName: string }
+
 type ListAccountsResult = {
-  items: SteamAccount[]
+  items: AccountWithProductName[]
   total: number
 }
 
@@ -44,15 +46,20 @@ export async function listAccounts(input: ListAccountsInput): Promise<ListAccoun
     ...(input.productId ? { productId: input.productId } : {}),
     ...(input.status ? { status: input.status } : {}),
   }
-  const [items, total] = await prisma.$transaction([
+  const [rawItems, total] = await prisma.$transaction([
     prisma.steamAccount.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       skip: (input.page - 1) * input.pageSize,
       take: input.pageSize,
+      include: { product: { select: { name: true } } },
     }),
     prisma.steamAccount.count({ where }),
   ])
+  const items = rawItems.map(({ product, ...account }) => ({
+    ...account,
+    productName: product.name,
+  }))
   return { items, total }
 }
 
@@ -134,4 +141,17 @@ export async function findAccountById(id: string): Promise<SteamAccount | null> 
 
 export async function disableAccount(id: string): Promise<SteamAccount> {
   return prisma.steamAccount.update({ where: { id }, data: { status: 'disabled' } })
+}
+
+// 상품 ID 목록에 속한 available/reserved 계정을 일괄 disabled 처리
+export async function bulkDisableByProductIds(productIds: string[]): Promise<number> {
+  if (productIds.length === 0) return 0
+  const result = await prisma.steamAccount.updateMany({
+    where: {
+      productId: { in: productIds },
+      status: { in: ['available', 'reserved'] },
+    },
+    data: { status: 'disabled' },
+  })
+  return result.count
 }

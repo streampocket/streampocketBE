@@ -1,11 +1,12 @@
 export type IncomingOrderItem = {
-  externalOrderId: string      // 플랫폼 주문번호 (네이버: orderId)
-  productOrderId: string       // 상품주문번호 (멱등성 키)
+  externalOrderId: string
+  productOrderId: string
   productName: string
-  naverProductId: string       // 상품 매칭에 사용
+  naverProductId: string
   unitPrice: number
   paidAt: Date
-  buyerEmail: string | null    // inputOptions 파싱 실패 시 null
+  receiverPhoneNumber: string | null
+  receiverName: string | null
   platform: 'NAVER' | 'OWN'
 }
 

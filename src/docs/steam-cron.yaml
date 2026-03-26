@@ -1,8 +1,8 @@
 paths:
   /steam/cron/poll:
     post:
-      summary: 네이버 주문 폴링 트리거 (외부 스케줄러 호출)
+      summary: 네이버 주문 폴링 수동 실행
       tags: [SteamCron]
       responses:
         '200':
-          description: 폴링 완료 (처리된 주문 수 반환)
+          description: 폴링 완료

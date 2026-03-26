@@ -46,3 +46,32 @@ export async function findAllNaverProductIds(): Promise<string[]> {
   const products = await prisma.steamProduct.findMany({ select: { naverProductId: true } })
   return products.map((p) => p.naverProductId)
 }
+
+// naverProductId 목록으로 실제 productId 목록 반환
+export async function findProductIdsByNaverIds(naverProductIds: string[]): Promise<string[]> {
+  if (naverProductIds.length === 0) return []
+  const products = await prisma.steamProduct.findMany({
+    where: { naverProductId: { in: naverProductIds } },
+    select: { id: true },
+  })
+  return products.map((p) => p.id)
+}
+
+// inactive가 아닌 상품(active/draft)의 naverProductId 목록 반환
+export async function findActiveNaverProductIds(): Promise<string[]> {
+  const products = await prisma.steamProduct.findMany({
+    where: { status: { not: 'inactive' } },
+    select: { naverProductId: true },
+  })
+  return products.map((p) => p.naverProductId)
+}
+
+// naverProductId 목록에 해당하는 상품을 일괄 inactive 처리
+export async function bulkInactivateByNaverIds(naverProductIds: string[]): Promise<number> {
+  if (naverProductIds.length === 0) return 0
+  const result = await prisma.steamProduct.updateMany({
+    where: { naverProductId: { in: naverProductIds } },
+    data: { status: 'inactive' },
+  })
+  return result.count
+}

@@ -1,12 +1,13 @@
 import { prisma } from '../lib/prisma'
-import { FulfillmentStatus, SteamOrderItem } from '@prisma/client'
+import { DeliveryChannel, DeliveryLogStatus, FulfillmentStatus, SteamOrderItem } from '@prisma/client'
 
 type CreateOrderItemInput = {
   productOrderId: string
   naverOrderId: string
   productName: string
   unitPrice: number
-  buyerEmail?: string
+  receiverPhoneNumber?: string
+  receiverName?: string
   productId?: string
   paidAt?: Date
 }
@@ -14,7 +15,8 @@ type CreateOrderItemInput = {
 type UpdateOrderItemInput = {
   fulfillmentStatus?: FulfillmentStatus
   accountId?: string
-  buyerEmail?: string
+  receiverPhoneNumber?: string
+  receiverName?: string
   productId?: string
   errorMessage?: string
 }
@@ -39,11 +41,13 @@ type ExportOrdersInput = {
 }
 
 type OrderItemWithRelations = SteamOrderItem & {
-  emailLogs: {
+  deliveryLogs: {
     id: string
-    recipientEmail: string
-    status: string
+    channel: DeliveryChannel
+    recipient: string
+    status: DeliveryLogStatus
     errorMessage: string | null
+    providerMessageId: string | null
     sentAt: Date | null
     createdAt: Date
   }[]
@@ -77,13 +81,15 @@ export async function findOrderById(id: string): Promise<OrderItemWithRelations 
   return prisma.steamOrderItem.findUnique({
     where: { id },
     include: {
-      emailLogs: {
+      deliveryLogs: {
         orderBy: { createdAt: 'asc' },
         select: {
           id: true,
-          recipientEmail: true,
+          channel: true,
+          recipient: true,
           status: true,
           errorMessage: true,
+          providerMessageId: true,
           sentAt: true,
           createdAt: true,
         },

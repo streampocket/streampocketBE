@@ -1,0 +1,8 @@
+paths:
+  /steam/cron/poll:
+    post:
+      summary: 네이버 주문 폴링 수동 실행
+      tags: [SteamCron]
+      responses:
+        '200':
+          description: 폴링 완료

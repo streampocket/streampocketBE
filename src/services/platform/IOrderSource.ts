@@ -2,7 +2,11 @@ export type IncomingOrderItem = {
   externalOrderId: string
   productOrderId: string
   productName: string
-  buyerEmail: string | null
+  naverProductId: string
+  unitPrice: number
+  paidAt: Date
+  receiverPhoneNumber: string | null
+  receiverName: string | null
   platform: 'NAVER' | 'OWN'
 }
 

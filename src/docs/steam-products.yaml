@@ -1,0 +1,114 @@
+paths:
+  /steam/admin/products:
+    get:
+      summary: 상품 목록 조회
+      tags: [SteamProducts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [draft, active, inactive]
+      responses:
+        '200':
+          description: 상품 목록
+        '401':
+          description: 인증 필요
+    post:
+      summary: 상품 등록
+      tags: [SteamProducts]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, naverProductId]
+              properties:
+                name:
+                  type: string
+                naverProductId:
+                  type: string
+                description:
+                  type: string
+                caution:
+                  type: string
+                event:
+                  type: string
+                status:
+                  type: string
+                  enum: [draft, active, inactive]
+      responses:
+        '201':
+          description: 등록 완료
+        '400':
+          description: 입력값 오류
+        '409':
+          description: naverProductId 중복
+
+  /steam/admin/products/sync:
+    post:
+      summary: 네이버 상품 자동 동기화
+      description: 네이버 스마트스토어 상품 목록을 조회하여 등록되지 않은 상품을 draft 상태로 자동 생성
+      tags: [SteamProducts]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 동기화 완료 (생성된 상품 수, 스킵 수 반환)
+
+  /steam/admin/products/{id}:
+    get:
+      summary: 상품 상세 조회
+      tags: [SteamProducts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 상품 상세 (코드 재고 수 포함)
+        '404':
+          description: 상품 없음
+    patch:
+      summary: 상품 수정
+      tags: [SteamProducts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                caution:
+                  type: string
+                event:
+                  type: string
+                status:
+                  type: string
+                  enum: [draft, active, inactive]
+      responses:
+        '200':
+          description: 수정 완료
+        '404':
+          description: 상품 없음

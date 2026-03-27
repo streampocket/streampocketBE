@@ -1,0 +1,76 @@
+paths:
+  /steam/admin/orders/export:
+    get:
+      summary: 주문 목록 엑셀 다운로드
+      tags: [SteamOrders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, completed, manual_review, failed]
+          description: 처리 상태 필터
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: date-time
+          description: 조회 시작일시 (ISO 8601, 예&#58; 2026-03-01T00:00:00+09:00)
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date-time
+          description: 조회 종료일시 (ISO 8601)
+      responses:
+        '200':
+          description: xlsx 파일 다운로드
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: attachment; filename="orders_20260325.xlsx"
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: 인증 실패
+
+  /steam/admin/accounts/export:
+    get:
+      summary: 계정 목록 엑셀 다운로드
+      tags: [SteamAccounts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: productId
+          schema:
+            type: string
+            format: uuid
+          description: 상품 ID 필터
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [available, reserved, sent, disabled]
+          description: 계정 상태 필터
+      responses:
+        '200':
+          description: xlsx 파일 다운로드
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: attachment; filename="accounts_20260325.xlsx"
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: 인증 실패

@@ -11,7 +11,8 @@ import { cronRouter } from './routes/cron'
 import { webhookRouter } from './routes/webhook'
 import { adminOrdersRouter } from './routes/admin/orders'
 import { adminProductsRouter } from './routes/admin/products'
-import { adminCodesRouter } from './routes/admin/codes'
+import { adminAccountsRouter } from './routes/admin/accounts'
+import { adminAlimtalkRouter } from './routes/admin/alimtalk'
 import { adminDashboardRouter } from './routes/admin/dashboard'
 
 const app = express()
@@ -27,24 +28,31 @@ const swaggerSpec = swaggerJsdoc({
       },
     },
   },
-  apis: ['./src/routes/**/*.ts', './src/controllers/**/*.ts'],
+  apis: ['./src/docs/**/*.yaml'],
 })
 
 // ───────────────────────── Middleware ─────────────────────────
 app.use(helmet())
-app.use(cors({ origin: process.env.FE_ORIGIN ?? 'http://localhost:3000', credentials: true }))
+app.use(
+  cors({
+    origin: process.env.FE_ORIGIN ?? 'http://localhost:3000',
+    credentials: true,
+    exposedHeaders: ['Content-Disposition'],
+  }),
+)
 app.use(express.json())
 app.use(requestLogger)
 
 // ───────────────────────── Routes ─────────────────────────
-app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
-app.use('/api/auth', authRouter)
-app.use('/api/cron', cronRouter)
-app.use('/api/webhook', webhookRouter)
-app.use('/api/admin/orders', adminOrdersRouter)
-app.use('/api/admin/products', adminProductsRouter)
-app.use('/api/admin/codes', adminCodesRouter)
-app.use('/api/admin/dashboard', adminDashboardRouter)
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
+app.use('/auth', authRouter)
+app.use('/steam/cron', cronRouter)
+app.use('/steam/webhook', webhookRouter)
+app.use('/steam/admin/orders', adminOrdersRouter)
+app.use('/steam/admin/products', adminProductsRouter)
+app.use('/steam/admin/accounts', adminAccountsRouter)
+app.use('/steam/admin/alimtalk', adminAlimtalkRouter)
+app.use('/steam/admin/dashboard', adminDashboardRouter)
 
 // ───────────────────────── Health ─────────────────────────
 app.get('/health', (_req, res) => {

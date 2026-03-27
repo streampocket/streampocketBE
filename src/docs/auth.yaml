@@ -1,0 +1,24 @@
+paths:
+  /auth/login:
+    post:
+      summary: 관리자 로그인
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  example: admin@example.com
+                password:
+                  type: string
+                  example: password123
+      responses:
+        '200':
+          description: 로그인 성공 (JWT 반환)
+        '401':
+          description: 인증 실패

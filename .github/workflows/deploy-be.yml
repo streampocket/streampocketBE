@@ -44,6 +44,7 @@ jobs:
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            set -e
             # ECR 로그인
             aws ecr get-login-password --region ap-northeast-2 | \
               docker login --username AWS --password-stdin 285034435997.dkr.ecr.ap-northeast-2.amazonaws.com

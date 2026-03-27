@@ -1,0 +1,70 @@
+name: 백엔드 배포
+
+on:
+  push:
+    branches: [main]
+
+env:
+  AWS_REGION: ap-northeast-2
+  ECR_REPOSITORY: streampocket-be
+  ECR_REGISTRY: 285034435997.dkr.ecr.ap-northeast-2.amazonaws.com
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: AWS 자격증명 설정
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: ECR 로그인
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Docker 이미지 빌드 및 ECR 푸시
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+      - name: EC2 배포
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # ECR 로그인
+            aws ecr get-login-password --region ap-northeast-2 | \
+              docker login --username AWS --password-stdin 285034435997.dkr.ecr.ap-northeast-2.amazonaws.com
+
+            # 새 이미지 pull
+            docker pull 285034435997.dkr.ecr.ap-northeast-2.amazonaws.com/streampocket-be:latest
+
+            # 기존 컨테이너 교체
+            docker stop streampocket-be 2>/dev/null || true
+            docker rm streampocket-be 2>/dev/null || true
+
+            docker run -d \
+              --name streampocket-be \
+              --restart unless-stopped \
+              -p 4000:4000 \
+              --env-file /app/.env \
+              285034435997.dkr.ecr.ap-northeast-2.amazonaws.com/streampocket-be:latest
+
+            # DB 마이그레이션
+            sleep 3
+            docker exec streampocket-be npx prisma migrate deploy
+
+            # 오래된 이미지 정리
+            docker image prune -f

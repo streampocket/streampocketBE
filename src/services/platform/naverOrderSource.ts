@@ -9,9 +9,11 @@ const lastChangedStatusSchema = z.object({
 })
 
 const lastChangedStatusesResponseSchema = z.object({
-  data: z.object({
-    lastChangeStatuses: z.array(lastChangedStatusSchema).default([]),
-  }),
+  data: z
+    .object({
+      lastChangeStatuses: z.array(lastChangedStatusSchema).default([]),
+    })
+    .optional(),
 })
 
 const queryOrderSchema = z.object({
@@ -153,7 +155,7 @@ async function fetchLastChangedStatuses(): Promise<NaverLastChangedStatus[]> {
   }
 
   const body = lastChangedStatusesResponseSchema.parse(await res.json())
-  return body.data.lastChangeStatuses
+  return body.data?.lastChangeStatuses ?? []
 }
 
 async function fetchProductOrderDetails(

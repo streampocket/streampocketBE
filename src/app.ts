@@ -33,9 +33,13 @@ const swaggerSpec = swaggerJsdoc({
 
 // ───────────────────────── Middleware ─────────────────────────
 app.use(helmet())
+const allowedOrigins = (process.env.FE_ORIGIN ?? 'http://localhost:3000')
+  .split(',')
+  .map((o) => o.trim())
+
 app.use(
   cors({
-    origin: process.env.FE_ORIGIN ?? 'http://localhost:3000',
+    origin: allowedOrigins.length === 1 ? allowedOrigins[0] : allowedOrigins,
     credentials: true,
     exposedHeaders: ['Content-Disposition'],
   }),

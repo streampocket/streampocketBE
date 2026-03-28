@@ -20,6 +20,7 @@ COPY prisma ./prisma
 RUN npx prisma generate
 
 COPY --from=builder /app/dist ./dist
+COPY src/docs ./src/docs
 
 EXPOSE 4000
 CMD ["node", "dist/server.js"]

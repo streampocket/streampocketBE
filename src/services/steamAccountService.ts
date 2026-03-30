@@ -44,7 +44,7 @@ export async function bulkCreate(input: BulkCreateInput) {
   if (!product) {
     throw Object.assign(new Error('상품을 찾을 수 없습니다.'), { statusCode: 404 })
   }
-  const count = await bulkCreateAccounts(input.productId, input.accounts)
+  const count = await bulkCreateAccounts(input.productId, input.accounts, product.name)
   const available = await countAvailableAccounts(input.productId)
   return { created: count, availableTotal: available }
 }

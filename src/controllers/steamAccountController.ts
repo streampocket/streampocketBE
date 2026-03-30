@@ -50,7 +50,7 @@ export async function exportAccountsHandler(req: Request, res: Response): Promis
   })
   const buffer = buildAccountExcelBuffer(
     accounts.map((a) => ({
-      productName: a.product.name,
+      productName: a.product.name ?? '삭제된 상품',
       username: a.username,
       password: a.password,
       email: a.email,

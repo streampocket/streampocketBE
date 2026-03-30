@@ -24,7 +24,8 @@ type UpdateProductInput = {
 }
 
 export async function getProducts(status?: ProductStatus) {
-  return findAllProducts(status)
+  const products = await findAllProducts(status)
+  return products.map(({ _count, ...rest }) => ({ ...rest, stockCount: _count.accounts }))
 }
 
 export async function getProductDetail(id: string) {
@@ -32,7 +33,8 @@ export async function getProductDetail(id: string) {
   if (!product) {
     throw Object.assign(new Error('상품을 찾을 수 없습니다.'), { statusCode: 404 })
   }
-  return product
+  const { _count, ...rest } = product
+  return { ...rest, stockCount: _count.accounts }
 }
 
 export async function createSteamProduct(input: CreateProductInput) {

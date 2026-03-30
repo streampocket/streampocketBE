@@ -133,6 +133,11 @@ export async function processOrder(
     return
   }
 
+  await sendDiscordAlert(
+    'order',
+    `✅ 주문 처리 완료 (네이버)\n상품: ${item.productName}\n주문번호: ${item.productOrderId}`,
+  )
+
   try {
     const alimtalkEnabled = await isAlimtalkEnabled()
     if (!alimtalkEnabled) {
@@ -177,7 +182,7 @@ export async function processOrder(
 
   await sendDiscordAlert(
     'order',
-    `✅ 주문 처리 완료 — 알림톡 발송 완료\n상품: ${item.productName}\n주문번호: ${item.productOrderId}\n수신번호: ${item.receiverPhoneNumber}`,
+    `✅ 알림톡 발송 성공\n주문: ${item.productOrderId}\n수신번호: ${item.receiverPhoneNumber}`,
   )
 }
 

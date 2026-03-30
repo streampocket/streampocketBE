@@ -5,6 +5,10 @@ import {
 } from '../repositories/alimtalkSettingsRepository'
 import { createDeliveryLog, updateDeliveryLog } from '../repositories/deliveryLogRepository'
 
+// ─────────────────────────────────────────
+// 타입 정의
+// ─────────────────────────────────────────
+
 type SendOrderAlimtalkInput = {
   orderItemId: string
   recipientPhoneNumber: string
@@ -25,6 +29,18 @@ type AligoTemplateView = {
   templateContent: string | null
   status: string | null
   inspectStatus: string | null
+  buttons: AligoTemplateButtonView[]
+}
+
+type AligoTemplateButtonView = {
+  ordering: string | null
+  name: string | null
+  linkType: string | null
+  linkTypeName: string | null
+  linkMo: string | null
+  linkPc: string | null
+  linkIos: string | null
+  linkAnd: string | null
 }
 
 export type AlimtalkSettingsView = {
@@ -53,6 +69,9 @@ type AligoSendResponse = {
   message?: string
   msg_id?: string
   mid?: string
+  info?: {
+    mid?: number | string
+  }
 }
 
 type EnvConfig = {
@@ -62,6 +81,10 @@ type EnvConfig = {
   templateCode: string
   sender: string
 }
+
+// ─────────────────────────────────────────
+// Zod 스키마
+// ─────────────────────────────────────────
 
 const aligoTemplateListResponseSchema = z.object({
   code: z.union([z.number(), z.string()]).optional(),
@@ -75,6 +98,20 @@ const aligoTemplateListResponseSchema = z.object({
         templtContent: z.string().optional(),
         status: z.string().optional(),
         inspStatus: z.string().optional(),
+        buttons: z
+          .array(
+            z.object({
+              ordering: z.string().optional(),
+              name: z.string().optional(),
+              linkType: z.string().optional(),
+              linkTypeName: z.string().optional(),
+              linkMo: z.string().optional(),
+              linkPc: z.string().optional(),
+              linkIos: z.string().optional(),
+              linkAnd: z.string().optional(),
+            }),
+          )
+          .optional(),
       }),
     )
     .optional(),
@@ -87,35 +124,59 @@ const aligoSendResponseSchema = z.object({
   mid: z.string().optional(),
 })
 
-const DEFAULT_ALIMTALK_TEMPLATE = `[{productName}]
+// ─────────────────────────────────────────
+// 템플릿 fallback 상수
+// Aligo API에서 템플릿을 가져오지 못할 경우에만 사용 (UG_5955 내용과 동일)
+// ─────────────────────────────────────────
 
-구매일시: {purchaseDate}
-상품명: {productName}
+const ALIMTALK_MESSAGE_TEMPLATE = `#{서비스명} 구매가 완료되었습니다.
+회원님의 계정 정보는 아래와 같습니다.
 
-[스팀 계정 정보]
-아이디: {accountUsername}
-비밀번호: {accountPassword}
-이메일: {accountEmail}
-이메일 비밀번호: {accountEmailPassword}
-이메일 사이트: {accountEmailSiteUrl}`
+- 아이디: #{아이디}
+- 임시 비밀번호: #{임시비밀번호}
+- 이메일: #{이메일}
+- 이메일 비밀번호: #{이메일비밀번호}
+- 이메일 플렛폼: #{이메일플렛폼}
 
-function formatDate(date: Date): string {
-  return date.toLocaleString('ko-KR', {
-    timeZone: 'Asia/Seoul',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
-}
+!주의사항!
+- 보안을 위해 로그인 후 비밀번호를 변경해 주세요.`
 
+// ─────────────────────────────────────────
+// 유틸 함수
+// ─────────────────────────────────────────
+
+// 템플릿 변수(#{key}) 치환
 function applyTemplate(template: string, vars: Record<string, string>): string {
   return Object.entries(vars).reduce((result, [key, value]) => {
-    return result.replaceAll(`{${key}}`, value).replaceAll(`#{${key}}`, value)
+    return result.replaceAll(`#{${key}}`, value).replaceAll(`{${key}}`, value)
   }, template)
 }
+
+// 변수값 정규화: CRLF → LF, 탭 → 공백, 앞뒤 공백 제거
+function normalizeTemplateVariable(value: string): string {
+  return value.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\t/g, ' ').trim()
+}
+
+// 메시지 본문 정규화: CRLF → LF, 중복 공백 제거
+function normalizeMessageBody(message: string): string {
+  return message
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(/\t/g, ' ').replace(/ {2,}/g, ' ').trimEnd())
+    .join('\n')
+}
+
+// 변수 맵 전체 정규화
+function normalizeTemplateVars(vars: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(vars).map(([key, value]) => [key, normalizeTemplateVariable(value)]),
+  )
+}
+
+// ─────────────────────────────────────────
+// 환경변수 / 설정
+// ─────────────────────────────────────────
 
 function getEnvConfig(): EnvConfig {
   return {
@@ -132,6 +193,10 @@ function isConfigured(config: EnvConfig): boolean {
     config.apiKey && config.userId && config.senderKey && config.templateCode && config.sender,
   )
 }
+
+// ─────────────────────────────────────────
+// Aligo API 공통 호출 헬퍼
+// ─────────────────────────────────────────
 
 async function callAligo(
   path: string,
@@ -153,6 +218,7 @@ async function callAligo(
   return json
 }
 
+// Aligo 응답 템플릿 객체 → 내부 타입 변환
 function mapTemplate(
   template:
     | {
@@ -162,6 +228,16 @@ function mapTemplate(
         templtContent?: string
         status?: string
         inspStatus?: string
+        buttons?: Array<{
+          ordering?: string
+          name?: string
+          linkType?: string
+          linkTypeName?: string
+          linkMo?: string
+          linkPc?: string
+          linkIos?: string
+          linkAnd?: string
+        }>
       }
     | null
     | undefined,
@@ -177,9 +253,20 @@ function mapTemplate(
     templateContent: template.templtContent ?? null,
     status: template.status ?? null,
     inspectStatus: template.inspStatus ?? null,
+    buttons: (template.buttons ?? []).map((button) => ({
+      ordering: button.ordering ?? null,
+      name: button.name ?? null,
+      linkType: button.linkType ?? null,
+      linkTypeName: button.linkTypeName ?? null,
+      linkMo: button.linkMo ?? null,
+      linkPc: button.linkPc ?? null,
+      linkIos: button.linkIos ?? null,
+      linkAnd: button.linkAnd ?? null,
+    })),
   }
 }
 
+// 알리고 템플릿 목록 조회 및 활성 템플릿 확인
 async function fetchTemplateInfo(config: EnvConfig): Promise<{
   providerConnected: boolean
   providerMessage: string
@@ -208,10 +295,14 @@ async function fetchTemplateInfo(config: EnvConfig): Promise<{
     const activeTemplate =
       templates.find((template) => template.templateCode === config.templateCode) ?? null
     const providerConnected = String(parsed.code ?? '') === '0'
+    const providerMessage = parsed.message ?? (providerConnected ? '정상 연결' : '알리고 응답 확인 필요')
+    const providerSummary = activeTemplate
+      ? `${providerMessage} (tpl_code=${config.templateCode}, template=${activeTemplate.templateName ?? '-'}, inspectStatus=${activeTemplate.inspectStatus ?? '-'}, buttons=${activeTemplate.buttons.length})`
+      : `${providerMessage} (tpl_code=${config.templateCode}, active template not found)`
 
     return {
       providerConnected,
-      providerMessage: parsed.message ?? (providerConnected ? '정상 연결' : '알리고 응답 확인 필요'),
+      providerMessage: providerSummary,
       activeTemplate,
       templates,
     }
@@ -225,34 +316,84 @@ async function fetchTemplateInfo(config: EnvConfig): Promise<{
   }
 }
 
-async function getMessageTemplate(config: EnvConfig): Promise<string> {
-  const provider = await fetchTemplateInfo(config)
-  return provider.activeTemplate?.templateContent ?? DEFAULT_ALIMTALK_TEMPLATE
+// 버튼 정보를 Aligo send API 파라미터 형식으로 직렬화
+function buildButtonPayload(template: AligoTemplateView): string | null {
+  if (template.buttons.length === 0) {
+    return null
+  }
+
+  return JSON.stringify({
+    button: template.buttons.map((button) => ({
+      name: button.name ?? '',
+      linkType: button.linkType ?? '',
+      ...(button.linkMo ? { linkMo: button.linkMo } : {}),
+      ...(button.linkPc ? { linkPc: button.linkPc } : {}),
+      ...(button.linkIos ? { linkIos: button.linkIos } : {}),
+      ...(button.linkAnd ? { linkAnd: button.linkAnd } : {}),
+    })),
+  })
 }
 
+// 알리고에서 활성 승인 템플릿을 가져오거나 실패 시 예외 발생
+async function getActiveTemplateOrThrow(config: EnvConfig): Promise<AligoTemplateView> {
+  const provider = await fetchTemplateInfo(config)
+  if (!provider.providerConnected) {
+    throw new Error(`알리고 템플릿 조회 실패: ${provider.providerMessage}`)
+  }
+
+  if (!provider.activeTemplate?.templateContent) {
+    throw new Error(`템플릿 코드 불일치: ${config.templateCode}에 해당하는 승인 템플릿을 찾지 못했습니다.`)
+  }
+
+  if (provider.activeTemplate.inspectStatus !== 'APR') {
+    throw new Error(
+      `승인되지 않은 템플릿입니다: tpl_code=${config.templateCode}, inspectStatus=${provider.activeTemplate.inspectStatus ?? 'unknown'}`,
+    )
+  }
+
+  console.info('[ALIMTALK] template ready', {
+    templateCode: config.templateCode,
+    templateName: provider.activeTemplate.templateName,
+    inspectStatus: provider.activeTemplate.inspectStatus,
+    messageLength: provider.activeTemplate.templateContent.length,
+    buttonCount: provider.activeTemplate.buttons.length,
+  })
+
+  return provider.activeTemplate
+}
+
+// 알리고 알림톡 단건 전송
 async function sendAlimtalkMessage(input: {
   recipientPhoneNumber: string
   recipientName: string | null
-  subject: string
+  subject?: string
   message: string
+  buttonJson?: string | null
 }): Promise<AligoSendResponse> {
   const config = getEnvConfig()
   if (!isConfigured(config)) {
     throw new Error('알리고 환경변수가 모두 설정되지 않았습니다.')
   }
 
+  const params: Record<string, string> = {
+    apikey: config.apiKey,
+    userid: config.userId,
+    senderkey: config.senderKey,
+    tpl_code: config.templateCode,
+    sender: config.sender,
+    receiver_1: input.recipientPhoneNumber,
+    recvname_1: normalizeTemplateVariable(input.recipientName ?? ''),
+    message_1: normalizeMessageBody(input.message),
+  }
+  if (input.subject) {
+    params['subject_1'] = input.subject
+  }
+  if (input.buttonJson) {
+    params['button_1'] = input.buttonJson
+  }
+
   const json = aligoSendResponseSchema.parse(
-    await callAligo('/akv10/alimtalk/send/', {
-      apikey: config.apiKey,
-      userid: config.userId,
-      senderkey: config.senderKey,
-      tpl_code: config.templateCode,
-      sender: config.sender,
-      receiver_1: input.recipientPhoneNumber,
-      recvname_1: input.recipientName ?? '',
-      subject_1: input.subject,
-      message_1: input.message,
-    }),
+    await callAligo('/akv10/alimtalk/send/', params),
   )
 
   if (String(json.code ?? '') !== '0') {
@@ -261,6 +402,10 @@ async function sendAlimtalkMessage(input: {
 
   return json
 }
+
+// ─────────────────────────────────────────
+// 설정 조회 / 업데이트 (관리자 API)
+// ─────────────────────────────────────────
 
 export async function getAlimtalkSettings(): Promise<AlimtalkSettingsView> {
   const settings = await getAlimtalkSettingsRecord()
@@ -287,7 +432,7 @@ export async function updateAlimtalkSettings(input: {
   enabled: boolean
 }): Promise<AlimtalkSettingsView> {
   const existing = await getAlimtalkSettingsRecord()
-  await upsertAlimtalkSettings(input.enabled, existing?.messageTemplate ?? DEFAULT_ALIMTALK_TEMPLATE)
+  await upsertAlimtalkSettings(input.enabled, existing?.messageTemplate ?? ALIMTALK_MESSAGE_TEMPLATE)
   return getAlimtalkSettings()
 }
 
@@ -296,23 +441,18 @@ export async function isAlimtalkEnabled(): Promise<boolean> {
   return settings?.enabled ?? true
 }
 
+// ─────────────────────────────────────────
+// 실제 주문 알림톡 발송 (주문 처리 흐름에서 호출)
+// ─────────────────────────────────────────
+
 export async function sendOrderAlimtalk(input: SendOrderAlimtalkInput): Promise<void> {
   const config = getEnvConfig()
   if (!isConfigured(config)) {
     throw new Error('알리고 환경변수가 모두 설정되지 않았습니다.')
   }
 
-  const messageTemplate = await getMessageTemplate(config)
-  const vars: Record<string, string> = {
-    purchaseDate: formatDate(input.paidAt),
-    productName: input.productName,
-    accountUsername: input.accountUsername,
-    accountPassword: input.accountPassword,
-    accountEmail: input.accountEmail,
-    accountEmailPassword: input.accountEmailPassword,
-    accountEmailSiteUrl: input.accountEmailSiteUrl,
-  }
-  const message = applyTemplate(messageTemplate, vars)
+  const template = await getActiveTemplateOrThrow(config)
+  const buttonJson = buildButtonPayload(template)
   const deliveryLog = await createDeliveryLog({
     orderItemId: input.orderItemId,
     channel: 'alimtalk',
@@ -320,11 +460,21 @@ export async function sendOrderAlimtalk(input: SendOrderAlimtalkInput): Promise<
   })
 
   try {
+    const templateContent = template.templateContent ?? ALIMTALK_MESSAGE_TEMPLATE
+    // 실제 주문 정보로 템플릿 변수 치환
+    const vars: Record<string, string> = {
+      서비스명: input.productName,
+      아이디: input.accountUsername,
+      임시비밀번호: input.accountPassword,
+      이메일: input.accountEmail,
+      이메일비밀번호: input.accountEmailPassword,
+      이메일플렛폼: input.accountEmailSiteUrl,
+    }
     const json = await sendAlimtalkMessage({
       recipientPhoneNumber: input.recipientPhoneNumber,
       recipientName: input.recipientName,
-      subject: input.productName,
-      message,
+      message: applyTemplate(templateContent, normalizeTemplateVars(vars)),
+      buttonJson,
     })
 
     await updateDeliveryLog(deliveryLog.id, {
@@ -332,6 +482,10 @@ export async function sendOrderAlimtalk(input: SendOrderAlimtalkInput): Promise<
       providerMessageId:
         typeof json.msg_id === 'string'
           ? json.msg_id
+          : typeof json.info?.mid === 'number'
+            ? String(json.info.mid)
+            : typeof json.info?.mid === 'string'
+              ? json.info.mid
           : typeof json.mid === 'string'
             ? json.mid
             : null,
@@ -339,14 +493,19 @@ export async function sendOrderAlimtalk(input: SendOrderAlimtalkInput): Promise<
       errorMessage: null,
     })
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const msg = error instanceof Error ? error.message : String(error)
     await updateDeliveryLog(deliveryLog.id, {
       status: 'failed',
-      errorMessage: message,
+      errorMessage: msg,
     })
     throw error
   }
 }
+
+// ─────────────────────────────────────────
+// 테스트 발송 (관리자 페이지에서 수동 실행)
+// config.sender(발신번호)로 더미 데이터를 치환하여 발송
+// ─────────────────────────────────────────
 
 export async function sendAlimtalkTest(): Promise<AlimtalkTestResult> {
   const config = getEnvConfig()
@@ -354,22 +513,24 @@ export async function sendAlimtalkTest(): Promise<AlimtalkTestResult> {
     throw new Error('알리고 환경변수가 모두 설정되지 않았습니다.')
   }
 
-  const messageTemplate = await getMessageTemplate(config)
-  const message = applyTemplate(messageTemplate, {
-    purchaseDate: formatDate(new Date()),
-    productName: '알림톡 연동 점검',
-    accountUsername: 'steam_test_user',
-    accountPassword: 'steam_test_password',
-    accountEmail: 'test@example.com',
-    accountEmailPassword: 'email_test_password',
-    accountEmailSiteUrl: 'https://example.com/mail',
+  const template = await getActiveTemplateOrThrow(config)
+  const buttonJson = buildButtonPayload(template)
+  const templateContent = template.templateContent ?? ALIMTALK_MESSAGE_TEMPLATE
+  // 테스트용 더미 데이터로 변수 치환
+  const message = applyTemplate(templateContent, {
+    서비스명: '알림톡 연동 점검',
+    아이디: 'test_user',
+    임시비밀번호: 'test_password',
+    이메일: 'test@example.com',
+    이메일비밀번호: 'email_password',
+    이메일플렛폼: 'https://example.com/mail',
   })
 
   const json = await sendAlimtalkMessage({
     recipientPhoneNumber: config.sender,
     recipientName: '스트림포켓 관리자',
-    subject: '알림톡 연동 점검',
     message,
+    buttonJson,
   })
 
   return {
@@ -377,6 +538,10 @@ export async function sendAlimtalkTest(): Promise<AlimtalkTestResult> {
     providerMessageId:
       typeof json.msg_id === 'string'
         ? json.msg_id
+        : typeof json.info?.mid === 'number'
+          ? String(json.info.mid)
+          : typeof json.info?.mid === 'string'
+            ? json.info.mid
         : typeof json.mid === 'string'
           ? json.mid
           : null,

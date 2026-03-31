@@ -5,6 +5,9 @@ import {
   bulkCreateAccounts,
   disableAccount as disableAccountRepo,
   countAvailableAccounts,
+  findAccountById,
+  updateAccount as updateAccountRepo,
+  deleteAccount as deleteAccountRepo,
 } from '../repositories/steamAccountRepository'
 import { findProductById } from '../repositories/steamProductRepository'
 
@@ -31,6 +34,14 @@ type BulkCreateInput = {
   }[]
 }
 
+type UpdateAccountInput = {
+  username: string
+  password: string
+  email: string
+  emailPassword: string
+  emailSiteUrl: string
+}
+
 export async function getAccounts(input: ListAccountsInput) {
   return listAccounts(input)
 }
@@ -51,4 +62,30 @@ export async function bulkCreate(input: BulkCreateInput) {
 
 export async function disable(id: string) {
   return disableAccountRepo(id)
+}
+
+export async function updateAccount(id: string, data: UpdateAccountInput) {
+  const account = await findAccountById(id)
+
+  if (!account) {
+    throw Object.assign(new Error('계정을 찾을 수 없습니다.'), { statusCode: 404 })
+  }
+
+  return updateAccountRepo(id, data)
+}
+
+export async function deleteAccount(id: string) {
+  const account = await findAccountById(id)
+
+  if (!account) {
+    throw Object.assign(new Error('계정을 찾을 수 없습니다.'), { statusCode: 404 })
+  }
+
+  if (account.status === 'sent') {
+    throw Object.assign(new Error('발송 완료된 계정은 삭제할 수 없습니다.'), {
+      statusCode: 400,
+    })
+  }
+
+  return deleteAccountRepo(id)
 }

@@ -1,6 +1,13 @@
 import { Request, Response } from 'express'
 import { z } from 'zod'
-import { getAccounts, bulkCreate, disable, exportAccountsForExcel } from '../services/steamAccountService'
+import {
+  getAccounts,
+  bulkCreate,
+  disable,
+  exportAccountsForExcel,
+  updateAccount,
+  deleteAccount,
+} from '../services/steamAccountService'
 import { buildAccountExcelBuffer } from '../utils/excel'
 
 const bulkCreateSchema = z.object({
@@ -42,6 +49,14 @@ const exportAccountQuerySchema = z.object({
   status: z.enum(['available', 'reserved', 'sent', 'disabled']).optional(),
 })
 
+const updateAccountBodySchema = z.object({
+  username: z.string().min(1),
+  password: z.string().min(1),
+  email: z.string().min(1),
+  emailPassword: z.string().min(1),
+  emailSiteUrl: z.string().min(1),
+})
+
 export async function exportAccountsHandler(req: Request, res: Response): Promise<void> {
   const query = exportAccountQuerySchema.parse(req.query)
   const accounts = await exportAccountsForExcel({
@@ -80,4 +95,17 @@ export async function disableAccountHandler(
   const { id } = req.params
   const account = await disable(id)
   res.json({ data: account })
+}
+
+export async function updateAccountHandler(req: Request<{ id: string }>, res: Response): Promise<void> {
+  const { id } = req.params
+  const body = updateAccountBodySchema.parse(req.body)
+  const account = await updateAccount(id, body)
+  res.status(200).json({ data: account })
+}
+
+export async function deleteAccountHandler(req: Request<{ id: string }>, res: Response): Promise<void> {
+  const { id } = req.params
+  await deleteAccount(id)
+  res.status(204).send()
 }

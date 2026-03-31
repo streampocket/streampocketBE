@@ -42,6 +42,14 @@ type BulkCreateAccountInput = {
   productNameSnapshot?: string
 }
 
+type UpdateAccountInput = {
+  username: string
+  password: string
+  email: string
+  emailPassword: string
+  emailSiteUrl: string
+}
+
 export async function listAccounts(input: ListAccountsInput): Promise<ListAccountsResult> {
   const where = {
     ...(input.productId ? { productId: input.productId } : {}),
@@ -144,6 +152,26 @@ export async function findAccountById(id: string): Promise<SteamAccount | null> 
 
 export async function disableAccount(id: string): Promise<SteamAccount> {
   return prisma.steamAccount.update({ where: { id }, data: { status: 'disabled' } })
+}
+
+export async function updateAccount(
+  id: string,
+  data: UpdateAccountInput,
+): Promise<SteamAccount> {
+  return prisma.steamAccount.update({
+    where: { id },
+    data: {
+      username: data.username,
+      password: data.password,
+      email: data.email,
+      emailPassword: data.emailPassword,
+      emailSiteUrl: data.emailSiteUrl,
+    },
+  })
+}
+
+export async function deleteAccount(id: string): Promise<SteamAccount> {
+  return prisma.steamAccount.delete({ where: { id } })
 }
 
 // 상품 ID 목록에 속한 available/reserved 계정을 일괄 disabled 처리

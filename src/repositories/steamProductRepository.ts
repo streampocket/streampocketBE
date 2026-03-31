@@ -66,6 +66,10 @@ export async function findActiveNaverProductIds(): Promise<string[]> {
   return products.map((p) => p.naverProductId)
 }
 
+export async function deleteProductById(id: string): Promise<void> {
+  await prisma.steamProduct.delete({ where: { id } })
+}
+
 // naverProductId 목록에 해당하는 상품 삭제
 export async function bulkDeleteProductsByNaverIds(naverProductIds: string[]): Promise<number> {
   if (naverProductIds.length === 0) return 0

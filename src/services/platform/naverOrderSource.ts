@@ -184,6 +184,7 @@ export async function fetchNaverProducts(): Promise<{ productId: string; name: s
     body: JSON.stringify({
       page: 1,
       size: 100,
+      productStatusTypes: ['SALE', 'OUTOFSTOCK', 'WAIT'],
     }),
   })
 

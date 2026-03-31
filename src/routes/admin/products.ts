@@ -4,6 +4,7 @@ import {
   getProductDetailHandler,
   createProductHandler,
   updateProductHandler,
+  deleteProductHandler,
   syncProductsHandler,
 } from '../../controllers/steamProductController'
 import { authMiddleware } from '../../middlewares/auth'
@@ -18,3 +19,4 @@ adminProductsRouter.post('/sync', asyncHandler(syncProductsHandler))
 adminProductsRouter.get('/:id', asyncHandler(getProductDetailHandler))
 adminProductsRouter.post('/', asyncHandler(createProductHandler))
 adminProductsRouter.patch('/:id', asyncHandler(updateProductHandler))
+adminProductsRouter.delete('/:id', asyncHandler(deleteProductHandler))

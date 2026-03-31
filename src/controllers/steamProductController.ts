@@ -5,6 +5,7 @@ import {
   getProductDetail,
   createSteamProduct,
   updateSteamProduct,
+  deleteSteamProduct,
   syncNaverProducts,
 } from '../services/steamProductService'
 
@@ -51,6 +52,15 @@ export async function updateProductHandler(
   const body = updateProductSchema.parse(req.body)
   const product = await updateSteamProduct(id, body)
   res.json({ data: product })
+}
+
+export async function deleteProductHandler(
+  req: Request<{ id: string }>,
+  res: Response,
+): Promise<void> {
+  const { id } = req.params
+  await deleteSteamProduct(id)
+  res.status(204).send()
 }
 
 export async function syncProductsHandler(req: Request, res: Response): Promise<void> {

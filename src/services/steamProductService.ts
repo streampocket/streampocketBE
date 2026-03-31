@@ -8,6 +8,7 @@ import {
   bulkDeleteProductsByNaverIds,
   createProduct,
   updateProduct,
+  deleteProductById,
 } from '../repositories/steamProductRepository'
 import { bulkDisableByProductIds } from '../repositories/steamAccountRepository'
 import { fetchNaverProducts } from './platform/naverOrderSource'
@@ -54,6 +55,14 @@ export async function updateSteamProduct(id: string, input: UpdateProductInput) 
     await bulkDisableByProductIds([id])
   }
   return updateProduct(id, input)
+}
+
+export async function deleteSteamProduct(id: string): Promise<void> {
+  const product = await findProductById(id)
+  if (!product) {
+    throw Object.assign(new Error('상품을 찾을 수 없습니다.'), { statusCode: 404 })
+  }
+  await deleteProductById(id)
 }
 
 export async function syncNaverProducts(): Promise<{

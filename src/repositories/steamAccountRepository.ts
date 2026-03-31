@@ -8,7 +8,7 @@ type ListAccountsInput = {
   pageSize: number
 }
 
-export type AccountWithProductName = Omit<SteamAccount, never> & { productName: string }
+export type AccountWithProductName = Omit<SteamAccount, never> & { productName: string | null }
 
 type ListAccountsResult = {
   items: AccountWithProductName[]
@@ -30,10 +30,19 @@ export type AccountExportItem = {
   status: AccountStatus
   createdAt: Date
   sentAt: Date | null
-  product: { name: string }
+  product: { name: string | null }
 }
 
 type BulkCreateAccountInput = {
+  username: string
+  password: string
+  email: string
+  emailPassword: string
+  emailSiteUrl: string
+  productNameSnapshot?: string
+}
+
+type UpdateAccountInput = {
   username: string
   password: string
   email: string
@@ -58,7 +67,7 @@ export async function listAccounts(input: ListAccountsInput): Promise<ListAccoun
   ])
   const items = rawItems.map(({ product, ...account }) => ({
     ...account,
-    productName: product.name,
+    productName: product?.name ?? account.productNameSnapshot ?? null,
   }))
   return { items, total }
 }
@@ -91,7 +100,7 @@ export async function exportAccounts(input: ExportAccountsInput): Promise<Accoun
     status: r.status,
     createdAt: r.createdAt,
     sentAt: r.orderItems[0]?.updatedAt ?? null,
-    product: { name: r.product.name },
+    product: { name: r.product?.name ?? r.productNameSnapshot ?? null },
   }))
 }
 
@@ -117,10 +126,12 @@ export async function countAvailableAccounts(productId: string): Promise<number>
 export async function bulkCreateAccounts(
   productId: string,
   accounts: BulkCreateAccountInput[],
+  productName?: string,
 ): Promise<number> {
   const result = await prisma.steamAccount.createMany({
     data: accounts.map(({ username, password, email, emailPassword, emailSiteUrl }) => ({
       productId,
+      productNameSnapshot: productName ?? null,
       username,
       password,
       email,
@@ -141,6 +152,26 @@ export async function findAccountById(id: string): Promise<SteamAccount | null> 
 
 export async function disableAccount(id: string): Promise<SteamAccount> {
   return prisma.steamAccount.update({ where: { id }, data: { status: 'disabled' } })
+}
+
+export async function updateAccount(
+  id: string,
+  data: UpdateAccountInput,
+): Promise<SteamAccount> {
+  return prisma.steamAccount.update({
+    where: { id },
+    data: {
+      username: data.username,
+      password: data.password,
+      email: data.email,
+      emailPassword: data.emailPassword,
+      emailSiteUrl: data.emailSiteUrl,
+    },
+  })
+}
+
+export async function deleteAccount(id: string): Promise<SteamAccount> {
+  return prisma.steamAccount.delete({ where: { id } })
 }
 
 // 상품 ID 목록에 속한 available/reserved 계정을 일괄 disabled 처리

@@ -5,8 +5,7 @@ import {
   findProductByNaverId,
   findAllNaverProductIds,
   findActiveNaverProductIds,
-  findProductIdsByNaverIds,
-  bulkInactivateByNaverIds,
+  bulkDeleteProductsByNaverIds,
   createProduct,
   updateProduct,
 } from '../repositories/steamProductRepository'
@@ -60,7 +59,7 @@ export async function updateSteamProduct(id: string, input: UpdateProductInput) 
 export async function syncNaverProducts(): Promise<{
   created: number
   skipped: number
-  deactivated: number
+  deleted: number
   products: { naverProductId: string; name: string }[]
 }> {
   const [naverProducts, existingIds, activeIds] = await Promise.all([
@@ -76,22 +75,20 @@ export async function syncNaverProducts(): Promise<{
     newProducts.map((p) => createProduct({ name: p.name, naverProductId: p.productId })),
   )
 
-  // inactive 처리: active/draft 상품 중 네이버에 없는 것
+  // 삭제 처리: active/draft 상품 중 네이버에 없는 것
   const naverSet = new Set(naverProducts.map((p) => p.productId))
-  const toDeactivate = activeIds.filter((id) => !naverSet.has(id))
+  const toDelete = activeIds.filter((id) => !naverSet.has(id))
 
-  // 비활성화될 상품의 연결 계정도 disabled 처리
-  if (toDeactivate.length > 0) {
-    const productIds = await findProductIdsByNaverIds(toDeactivate)
-    await bulkDisableByProductIds(productIds)
+  let deleted = 0
+  if (toDelete.length > 0) {
+    // onDelete: SetNull 이므로 상품 삭제 시 연결 계정의 productId가 자동으로 null 처리됨
+    deleted = await bulkDeleteProductsByNaverIds(toDelete)
   }
-
-  const deactivated = await bulkInactivateByNaverIds(toDeactivate)
 
   return {
     created: created.length,
     skipped: naverProducts.length - created.length,
-    deactivated,
+    deleted,
     products: created.map((p) => ({ naverProductId: p.naverProductId, name: p.name })),
   }
 }

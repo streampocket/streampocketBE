@@ -61,7 +61,8 @@ model SteamProduct {
 
 model SteamAccount {
   id            String        @id @default(uuid()) @db.Uuid
-  productId     String        @map("product_id") @db.Uuid
+  productId            String?       @map("product_id") @db.Uuid
+  productNameSnapshot  String?       @map("product_name_snapshot") @db.VarChar(255)
   username      String
   password      String
   email         String        @map("email") @db.VarChar(320)
@@ -69,7 +70,7 @@ model SteamAccount {
   emailSiteUrl  String        @map("email_site_url") @db.VarChar(2048)
   status        AccountStatus @default(available)
   createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  product       SteamProduct  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  product       SteamProduct? @relation(fields: [productId], references: [id], onDelete: SetNull)
   orderItems    SteamOrderItem[]
 
   @@index([productId, status, createdAt])

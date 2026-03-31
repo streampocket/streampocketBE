@@ -66,12 +66,11 @@ export async function findActiveNaverProductIds(): Promise<string[]> {
   return products.map((p) => p.naverProductId)
 }
 
-// naverProductId 목록에 해당하는 상품을 일괄 inactive 처리
-export async function bulkInactivateByNaverIds(naverProductIds: string[]): Promise<number> {
+// naverProductId 목록에 해당하는 상품 삭제
+export async function bulkDeleteProductsByNaverIds(naverProductIds: string[]): Promise<number> {
   if (naverProductIds.length === 0) return 0
-  const result = await prisma.steamProduct.updateMany({
+  const result = await prisma.steamProduct.deleteMany({
     where: { naverProductId: { in: naverProductIds } },
-    data: { status: 'inactive' },
   })
   return result.count
 }

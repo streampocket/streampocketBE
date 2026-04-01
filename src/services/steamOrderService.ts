@@ -8,6 +8,7 @@ import {
 import { findAccountById, markAccountAsSent } from '../repositories/steamAccountRepository'
 import { isAlimtalkEnabled, sendOrderAlimtalk } from './alimtalkService'
 import { sendDiscordAlert } from '../lib/discord'
+import { detectProductType } from '../utils/productType'
 
 type ListOrdersInput = {
   status?: FulfillmentStatus
@@ -59,6 +60,32 @@ export async function retryOrder(id: string): Promise<void> {
     })
   }
 
+  const productType = detectProductType(order.productName)
+  if (!productType) {
+    throw Object.assign(new Error('상품 타입(NA/AA) 미감지'), { statusCode: 400 })
+  }
+
+  if (!(await isAlimtalkEnabled())) {
+    throw Object.assign(new Error('알림톡 발송이 비활성화되어 있습니다.'), { statusCode: 400 })
+  }
+
+  if (productType === 'AA') {
+    await sendOrderAlimtalk({
+      productType: 'AA',
+      orderItemId: order.id,
+      recipientPhoneNumber: order.receiverPhoneNumber,
+      recipientName: order.receiverName,
+      productName: order.productName,
+      paidAt: order.paidAt ?? order.createdAt,
+    })
+    await updateOrderItem(order.id, { fulfillmentStatus: 'completed', errorMessage: undefined })
+    await sendDiscordAlert(
+      'order',
+      `✅ 재시도 처리 완료\n상품: ${order.productName}\n수신번호: ${order.receiverPhoneNumber}`,
+    )
+    return
+  }
+
   if (!order.accountId) {
     throw Object.assign(new Error('연결된 계정이 없습니다. 계정을 먼저 할당하세요.'), {
       statusCode: 400,
@@ -70,11 +97,8 @@ export async function retryOrder(id: string): Promise<void> {
     throw Object.assign(new Error('연결된 계정을 찾을 수 없습니다.'), { statusCode: 404 })
   }
 
-  if (!(await isAlimtalkEnabled())) {
-    throw Object.assign(new Error('알림톡 발송이 비활성화되어 있습니다.'), { statusCode: 400 })
-  }
-
   await sendOrderAlimtalk({
+    productType: 'NA',
     orderItemId: order.id,
     recipientPhoneNumber: order.receiverPhoneNumber,
     recipientName: order.receiverName,
@@ -88,10 +112,7 @@ export async function retryOrder(id: string): Promise<void> {
   })
 
   await markAccountAsSent(account.id)
-  await updateOrderItem(order.id, {
-    fulfillmentStatus: 'completed',
-    errorMessage: undefined,
-  })
+  await updateOrderItem(order.id, { fulfillmentStatus: 'completed', errorMessage: undefined })
 
   await sendDiscordAlert(
     'order',

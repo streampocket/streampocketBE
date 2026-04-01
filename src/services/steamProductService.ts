@@ -5,9 +5,11 @@ import {
   findProductByNaverId,
   findAllNaverProductIds,
   findActiveNaverProductIds,
+  findProductNamesByNaverIds,
   bulkDeleteProductsByNaverIds,
   createProduct,
   updateProduct,
+  updateProductNameByNaverId,
   deleteProductById,
 } from '../repositories/steamProductRepository'
 import { bulkDisableByProductIds } from '../repositories/steamAccountRepository'
@@ -67,6 +69,7 @@ export async function deleteSteamProduct(id: string): Promise<void> {
 
 export async function syncNaverProducts(): Promise<{
   created: number
+  updated: number
   skipped: number
   deleted: number
   products: { naverProductId: string; name: string }[]
@@ -84,6 +87,17 @@ export async function syncNaverProducts(): Promise<{
     newProducts.map((p) => createProduct({ name: p.name, naverProductId: p.productId })),
   )
 
+  // 이름 업데이트: 이미 존재하는 상품 중 네이버 상품명이 변경된 것
+  const existingNaverIds = naverProducts
+    .filter((p) => existingSet.has(p.productId))
+    .map((p) => p.productId)
+  const dbProducts = await findProductNamesByNaverIds(existingNaverIds)
+  const dbNameMap = new Map(dbProducts.map((p) => [p.naverProductId, p.name]))
+  const toUpdate = naverProducts.filter(
+    (p) => existingSet.has(p.productId) && dbNameMap.get(p.productId) !== p.name,
+  )
+  await Promise.all(toUpdate.map((p) => updateProductNameByNaverId(p.productId, p.name)))
+
   // 삭제 처리: active/draft 상품 중 네이버에 없는 것
   const naverSet = new Set(naverProducts.map((p) => p.productId))
   const toDelete = activeIds.filter((id) => !naverSet.has(id))
@@ -96,7 +110,8 @@ export async function syncNaverProducts(): Promise<{
 
   return {
     created: created.length,
-    skipped: naverProducts.length - created.length,
+    updated: toUpdate.length,
+    skipped: naverProducts.length - created.length - toUpdate.length,
     deleted,
     products: created.map((p) => ({ naverProductId: p.naverProductId, name: p.name })),
   }

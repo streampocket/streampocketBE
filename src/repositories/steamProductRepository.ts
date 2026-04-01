@@ -47,6 +47,23 @@ export async function findAllNaverProductIds(): Promise<string[]> {
   return products.map((p) => p.naverProductId)
 }
 
+export async function findProductNamesByNaverIds(
+  naverProductIds: string[],
+): Promise<{ naverProductId: string; name: string }[]> {
+  if (naverProductIds.length === 0) return []
+  return prisma.steamProduct.findMany({
+    where: { naverProductId: { in: naverProductIds } },
+    select: { naverProductId: true, name: true },
+  })
+}
+
+export async function updateProductNameByNaverId(
+  naverProductId: string,
+  name: string,
+): Promise<void> {
+  await prisma.steamProduct.update({ where: { naverProductId }, data: { name } })
+}
+
 // naverProductId 목록으로 실제 productId 목록 반환
 export async function findProductIdsByNaverIds(naverProductIds: string[]): Promise<string[]> {
   if (naverProductIds.length === 0) return []

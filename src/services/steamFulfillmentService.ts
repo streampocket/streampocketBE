@@ -10,6 +10,7 @@ import {
   countAvailableAccounts,
   markAccountAsSent,
 } from '../repositories/steamAccountRepository'
+import { detectProductType } from '../utils/productType'
 import { IOrderSource, IncomingOrderItem } from './platform/IOrderSource'
 import { isAlimtalkEnabled, sendOrderAlimtalk } from './alimtalkService'
 
@@ -30,7 +31,6 @@ function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-// 단일 주문 아이템을 풀필먼트 처리
 export async function processOrder(
   item: IncomingOrderItem,
   orderSource: IOrderSource,
@@ -40,7 +40,7 @@ export async function processOrder(
 
   await sendDiscordAlert(
     'order',
-    `🆕 신규 주문 감지\n상품: ${item.productName}\n주문: ${item.productOrderId}`,
+    `🔔 신규 주문 감지\n상품: ${item.productName}\n주문: ${item.productOrderId}`,
   )
 
   const orderItem = await createOrderItem({
@@ -60,7 +60,7 @@ export async function processOrder(
     })
     await sendDiscordAlert(
       'error',
-      `⚠️ 구매자 연락처 조회 실패 — 수동 처리 필요\n주문: ${item.productOrderId}\n상품: ${item.productName}`,
+      `⚠️ 구매자 연락처 조회 실패 및 수동 처리 필요\n주문: ${item.productOrderId}\n상품: ${item.productName}`,
     )
     return
   }
@@ -73,12 +73,98 @@ export async function processOrder(
     })
     await sendDiscordAlert(
       'error',
-      `⚠️ 상품 매핑 실패 — 수동 처리 필요\n주문: ${item.productOrderId}\n네이버 상품 ID: ${item.naverProductId}`,
+      `⚠️ 상품 매핑 실패 및 수동 처리 필요\n주문: ${item.productOrderId}\n네이버 상품 ID: ${item.naverProductId}`,
     )
     return
   }
 
   await updateOrderItem(orderItem.id, { productId: product.id })
+
+  const productType = detectProductType(product.name)
+  if (productType === null) {
+    await updateOrderItem(orderItem.id, {
+      fulfillmentStatus: 'manual_review',
+      errorMessage: '상품 타입(NA/AA) 미감지',
+    })
+    await sendDiscordAlert(
+      'error',
+      `⚠️ 상품 타입 미감지\n상품: ${product.name}\n주문번호: ${item.productOrderId}`,
+    )
+    return
+  }
+
+  if (productType === 'AA') {
+    try {
+      await orderSource.confirmOrder(item.productOrderId)
+    } catch (error) {
+      const message = toErrorMessage(error)
+      await updateOrderItem(orderItem.id, {
+        fulfillmentStatus: 'failed',
+        errorMessage: `발주 확인 실패: ${message}`,
+      })
+      await sendDiscordAlert(
+        'error',
+        `❌ 발주 확인 실패\n주문: ${item.productOrderId}\n오류: ${message}`,
+      )
+      return
+    }
+
+    try {
+      await orderSource.dispatchOrder(item.productOrderId)
+    } catch (error) {
+      const message = toErrorMessage(error)
+      await updateOrderItem(orderItem.id, {
+        fulfillmentStatus: 'failed',
+        errorMessage: `발송 처리 실패: ${message}`,
+      })
+      await sendDiscordAlert(
+        'error',
+        `❌ 발송 처리 실패\n주문: ${item.productOrderId}\n오류: ${message}`,
+      )
+      return
+    }
+
+    try {
+      const alimtalkEnabled = await isAlimtalkEnabled()
+      if (!alimtalkEnabled) {
+        await updateOrderItem(orderItem.id, {
+          fulfillmentStatus: 'manual_review',
+          errorMessage: '알림톡 발송이 비활성화되어 수동 처리로 전환됨',
+        })
+        await sendDiscordAlert(
+          'error',
+          `⚠️ 알림톡 발송 비활성화 및 수동 처리 필요\n주문: ${item.productOrderId}\n수신번호: ${item.receiverPhoneNumber}`,
+        )
+        return
+      }
+
+      await sendOrderAlimtalk({
+        productType: 'AA',
+        orderItemId: orderItem.id,
+        recipientPhoneNumber: item.receiverPhoneNumber,
+        recipientName: item.receiverName,
+        productName: item.productName,
+        paidAt: item.paidAt,
+      })
+
+      await updateOrderItem(orderItem.id, { fulfillmentStatus: 'completed' })
+      await sendDiscordAlert(
+        'order',
+        `🛒 AA 계정 주문\n상품: ${item.productName}\n주문번호: ${item.productOrderId}\n알림톡: ✅ 발송 성공`,
+      )
+    } catch (error) {
+      const message = toErrorMessage(error)
+      await updateOrderItem(orderItem.id, {
+        fulfillmentStatus: 'manual_review',
+        errorMessage: `알림톡 발송 실패: ${message}`,
+      })
+      await sendDiscordAlert(
+        'error',
+        `🛒 AA 계정 주문 — 알림톡 발송 실패\n상품: ${item.productName}\n주문번호: ${item.productOrderId}\n알림톡: ❌ ${message}`,
+      )
+    }
+    return
+  }
 
   const account = await reserveNextAvailableAccount(product.id)
   if (!account) {
@@ -88,7 +174,7 @@ export async function processOrder(
     })
     await sendDiscordAlert(
       'stock',
-      `🚨 재고 부족 — 즉시 보충 필요\n상품: ${product.name}\n주문: ${item.productOrderId}`,
+      `🚨 재고 부족. 즉시 보충 필요\n상품: ${product.name}\n주문: ${item.productOrderId}`,
     )
     return
   }
@@ -147,12 +233,13 @@ export async function processOrder(
       })
       await sendDiscordAlert(
         'error',
-        `⚠️ 알림톡 발송 비활성화 — 수동 처리 필요\n주문: ${item.productOrderId}\n수신번호: ${item.receiverPhoneNumber}`,
+        `⚠️ 알림톡 발송 비활성화 및 수동 처리 필요\n주문: ${item.productOrderId}\n수신번호: ${item.receiverPhoneNumber}`,
       )
       return
     }
 
     await sendOrderAlimtalk({
+      productType: 'NA',
       orderItemId: orderItem.id,
       recipientPhoneNumber: item.receiverPhoneNumber,
       recipientName: item.receiverName,
@@ -172,7 +259,7 @@ export async function processOrder(
     })
     await sendDiscordAlert(
       'error',
-      `❌ 알림톡 발송 실패 — 수동 재발송 필요\n주문: ${item.productOrderId}\n수신번호: ${item.receiverPhoneNumber}`,
+      `❌ 알림톡 발송 실패 및 수동 개입 필요\n주문: ${item.productOrderId}\n수신번호: ${item.receiverPhoneNumber}`,
     )
     return
   }
@@ -186,7 +273,6 @@ export async function processOrder(
   )
 }
 
-// 변경된 주문 목록 전체 처리
 export async function pollAndProcess(orderSource: IOrderSource): Promise<OrderPollingResult> {
   const items = await orderSource.fetchNewOrders()
   let processedCount = 0

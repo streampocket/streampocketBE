@@ -17,7 +17,7 @@ export type GetReviewCodesInput = {
 }
 
 export type ReviewCodeFormInput = {
-  gameName: string
+  gameName?: string
   code: string
 }
 
@@ -32,7 +32,7 @@ export async function getReviewCodes(input: GetReviewCodesInput) {
 
 export async function createReviewCodeEntry(input: ReviewCodeFormInput) {
   return createReviewCode({
-    gameName: input.gameName.trim(),
+    gameName: input.gameName?.trim(),
     code: input.code.trim(),
   })
 }
@@ -45,7 +45,7 @@ export async function updateReviewCodeEntry(id: string, input: ReviewCodeFormInp
   }
 
   return updateReviewCode(id, {
-    gameName: input.gameName.trim(),
+    gameName: input.gameName?.trim(),
     code: input.code.trim(),
   })
 }

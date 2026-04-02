@@ -10,12 +10,12 @@ export type ReviewCodeListParams = {
 }
 
 export type CreateReviewCodeInput = {
-  gameName: string
+  gameName?: string
   code: string
 }
 
 export type UpdateReviewCodeInput = {
-  gameName: string
+  gameName?: string
   code: string
 }
 

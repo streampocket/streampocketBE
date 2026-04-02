@@ -22,7 +22,7 @@ const reviewCodeListQuerySchema = z.object({
 })
 
 const reviewCodeBodySchema = z.object({
-  gameName: z.string().trim().min(1),
+  gameName: z.string().trim().optional(),
   code: z.string().trim().min(1),
 })
 

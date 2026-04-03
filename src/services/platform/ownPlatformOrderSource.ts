@@ -1,8 +1,13 @@
-import { IOrderSource, IncomingOrderItem } from './IOrderSource'
+import { IOrderSource, IncomingOrderItem, ReturnedOrderInfo } from './IOrderSource'
 
 export const ownPlatformOrderSource: IOrderSource = {
   async fetchNewOrders(): Promise<IncomingOrderItem[]> {
     // TODO: 자체 플랫폼 웹훅 기반 주문 수집 (추후 구현)
+    return []
+  },
+
+  async fetchReturnedOrders(): Promise<ReturnedOrderInfo[]> {
+    // TODO: 자체 플랫폼 반품 조회 (추후 구현)
     return []
   },
 

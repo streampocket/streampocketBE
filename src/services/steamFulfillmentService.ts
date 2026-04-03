@@ -24,6 +24,7 @@ export type OrderPollingResult = {
   fetchedCount: number
   processedCount: number
   failedCount: number
+  returnedCount: number
   skipped: boolean
 }
 
@@ -275,6 +276,37 @@ export async function processOrder(
   )
 }
 
+export async function processReturnedOrders(orderSource: IOrderSource): Promise<number> {
+  const returnedItems = await orderSource.fetchReturnedOrders()
+  let returnedCount = 0
+
+  for (const item of returnedItems) {
+    try {
+      const existing = await findOrderByProductOrderId(item.productOrderId)
+      if (!existing || existing.fulfillmentStatus === 'returned') continue
+
+      await updateOrderItem(existing.id, {
+        fulfillmentStatus: 'returned',
+        returnedAt: new Date(),
+      })
+      returnedCount += 1
+
+      await sendDiscordAlert(
+        'order',
+        `📦 반품 감지\n주문: ${item.productOrderId}\n상품: ${existing.productName}\n클레임 상태: ${item.claimStatus}`,
+      )
+    } catch (error) {
+      const message = toErrorMessage(error)
+      await sendDiscordAlert(
+        'error',
+        `❌ 반품 처리 중 예외 발생\n주문: ${item.productOrderId}\n오류: ${message}`,
+      )
+    }
+  }
+
+  return returnedCount
+}
+
 export async function pollAndProcess(orderSource: IOrderSource): Promise<OrderPollingResult> {
   const items = await orderSource.fetchNewOrders()
   let processedCount = 0
@@ -294,10 +326,13 @@ export async function pollAndProcess(orderSource: IOrderSource): Promise<OrderPo
     }
   }
 
+  const returnedCount = await processReturnedOrders(orderSource)
+
   return {
     fetchedCount: items.length,
     processedCount,
     failedCount,
+    returnedCount,
     skipped: false,
   }
 }
@@ -312,6 +347,7 @@ export async function runOrderPolling(
       fetchedCount: 0,
       processedCount: 0,
       failedCount: 0,
+      returnedCount: 0,
       skipped: true,
     }
   }
@@ -324,7 +360,7 @@ export async function runOrderPolling(
     const result = await pollAndProcess(orderSource)
     const durationMs = Date.now() - startedAt
     console.log(
-      `[ORDER_POLL] done trigger=${trigger} fetched=${result.fetchedCount} processed=${result.processedCount} failed=${result.failedCount} duration_ms=${durationMs}`,
+      `[ORDER_POLL] done trigger=${trigger} fetched=${result.fetchedCount} processed=${result.processedCount} failed=${result.failedCount} returned=${result.returnedCount} duration_ms=${durationMs}`,
     )
     return result
   } catch (error) {

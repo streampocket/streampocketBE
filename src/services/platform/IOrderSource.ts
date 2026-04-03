@@ -10,8 +10,15 @@ export type IncomingOrderItem = {
   platform: 'NAVER' | 'OWN'
 }
 
+export type ReturnedOrderInfo = {
+  productOrderId: string
+  claimType: string
+  claimStatus: string
+}
+
 export type IOrderSource = {
   fetchNewOrders(): Promise<IncomingOrderItem[]>
+  fetchReturnedOrders(): Promise<ReturnedOrderInfo[]>
   confirmOrder(productOrderId: string): Promise<void>
   dispatchOrder(productOrderId: string): Promise<void>
 }

@@ -25,6 +25,7 @@ enum FulfillmentStatus {
   completed
   manual_review
   failed
+  returned
 }
 
 enum DeliveryChannel {
@@ -97,6 +98,7 @@ model SteamOrderItem {
   fulfillmentStatus   FulfillmentStatus @default(pending) @map("fulfillment_status")
   errorMessage        String?           @map("error_message")
   paidAt              DateTime?         @map("paid_at") @db.Timestamptz(6)
+  returnedAt          DateTime?         @map("returned_at") @db.Timestamptz(6)
   createdAt           DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
   product             SteamProduct?     @relation(fields: [productId], references: [id], onDelete: SetNull)

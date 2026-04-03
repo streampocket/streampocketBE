@@ -1,10 +1,10 @@
 import { Request, Response } from 'express'
 import { z } from 'zod'
-import { getOrders, getOrderDetail, retryOrder, exportOrdersForExcel } from '../services/steamOrderService'
+import { getOrders, getOrderDetail, retryOrder, manualReturnOrder, exportOrdersForExcel } from '../services/steamOrderService'
 import { buildOrderExcelBuffer } from '../utils/excel'
 
 const listQuerySchema = z.object({
-  status: z.enum(['pending', 'completed', 'manual_review', 'failed']).optional(),
+  status: z.enum(['pending', 'completed', 'manual_review', 'failed', 'returned']).optional(),
   from: z.string().datetime({ offset: true }).optional(),
   to: z.string().datetime({ offset: true }).optional(),
   page: z.coerce.number().int().min(1).default(1),
@@ -39,7 +39,7 @@ export async function getOrderDetailHandler(
 }
 
 const exportQuerySchema = z.object({
-  status: z.enum(['pending', 'completed', 'manual_review', 'failed']).optional(),
+  status: z.enum(['pending', 'completed', 'manual_review', 'failed', 'returned']).optional(),
   from: z.string().datetime({ offset: true }).optional(),
   to: z.string().datetime({ offset: true }).optional(),
 })
@@ -65,4 +65,13 @@ export async function retryOrderHandler(
   const { id } = req.params
   await retryOrder(id)
   res.json({ message: '재시도 완료' })
+}
+
+export async function manualReturnHandler(
+  req: Request<{ id: string }>,
+  res: Response,
+): Promise<void> {
+  const { id } = req.params
+  await manualReturnOrder(id)
+  res.json({ message: '반품 처리 완료' })
 }

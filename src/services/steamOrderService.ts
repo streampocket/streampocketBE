@@ -121,3 +121,30 @@ export async function retryOrder(id: string): Promise<void> {
     `✅ 재시도 처리 완료\n상품: ${order.productName}\n수신번호: ${order.receiverPhoneNumber}`,
   )
 }
+
+export async function manualReturnOrder(id: string): Promise<void> {
+  const order = await findOrderById(id)
+  if (!order) {
+    throw Object.assign(new Error('주문을 찾을 수 없습니다.'), { statusCode: 404 })
+  }
+
+  if (order.fulfillmentStatus === 'returned') {
+    throw Object.assign(new Error('이미 반품 처리된 주문입니다.'), { statusCode: 400 })
+  }
+
+  if (order.fulfillmentStatus === 'pending') {
+    throw Object.assign(new Error('아직 처리되지 않은 주문은 반품할 수 없습니다.'), {
+      statusCode: 400,
+    })
+  }
+
+  await updateOrderItem(order.id, {
+    fulfillmentStatus: 'returned',
+    returnedAt: new Date(),
+  })
+
+  await sendDiscordAlert(
+    'order',
+    `📦 수동 반품 처리\n주문: ${order.productOrderId}\n상품: ${order.productName}`,
+  )
+}

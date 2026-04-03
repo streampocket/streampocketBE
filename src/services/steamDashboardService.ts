@@ -33,6 +33,7 @@ function getPeriodRange(period: Period): { start: Date; end: Date } {
 
 type RevenueSummary = {
   totalRevenue: number
+  totalSettlement: number
   costs: {
     naverCommission: number
     alimtalk: number
@@ -43,43 +44,55 @@ type RevenueSummary = {
   }
   totalCosts: number
   netProfit: number
-  commissionRate: number
+  pendingSettlement: number
   alimtalkUnitCost: number
   alimtalkCount: number
 }
 
 export async function getRevenueSummary(startDate: Date, endDate: Date): Promise<RevenueSummary> {
-  const [revenueAggregate, settings, alimtalkCount, expenseSums] = await Promise.all([
-    prisma.steamOrderItem.aggregate({
-      where: {
-        fulfillmentStatus: 'completed',
-        paidAt: { gte: startDate, lte: endDate },
-      },
-      _sum: { unitPrice: true },
-    }),
-    prisma.systemSettings.findFirst(),
-    prisma.deliveryLog.count({
-      where: {
-        status: 'sent',
-        sentAt: { gte: startDate, lte: endDate },
-      },
-    }),
-    sumExpensesByCategory(startDate, endDate),
-  ])
+  const [decidedAggregate, pendingAggregate, settings, alimtalkCount, expenseSums] =
+    await Promise.all([
+      prisma.steamOrderItem.aggregate({
+        where: {
+          fulfillmentStatus: 'completed',
+          decisionDate: { not: null, gte: startDate, lte: endDate },
+        },
+        _sum: { unitPrice: true, settlementAmount: true },
+      }),
+      prisma.steamOrderItem.aggregate({
+        where: {
+          fulfillmentStatus: 'completed',
+          decisionDate: null,
+          paidAt: { gte: startDate, lte: endDate },
+        },
+        _sum: { unitPrice: true },
+      }),
+      prisma.systemSettings.findFirst(),
+      prisma.deliveryLog.count({
+        where: {
+          status: 'sent',
+          sentAt: { gte: startDate, lte: endDate },
+        },
+      }),
+      sumExpensesByCategory(startDate, endDate),
+    ])
 
-  const commissionRate = settings?.commissionRate ? Number(settings.commissionRate) : 0
   const alimtalkUnitCost = settings?.alimtalkUnitCost ? Number(settings.alimtalkUnitCost) : 6.5
 
-  const totalRevenue = revenueAggregate._sum.unitPrice ?? 0
-  const naverCommission = Math.round((totalRevenue * commissionRate) / 100)
+  const totalRevenue = decidedAggregate._sum.unitPrice ?? 0
+  const totalSettlement = decidedAggregate._sum.settlementAmount ?? 0
+  const naverCommission = totalRevenue - totalSettlement
   const alimtalkCost = Math.round(alimtalkCount * alimtalkUnitCost)
+  const pendingSettlement = pendingAggregate._sum.unitPrice ?? 0
 
-  const manualCosts = expenseSums.gamePurchase + expenseSums.countryChange + expenseSums.reviewGame + expenseSums.other
+  const manualCosts =
+    expenseSums.gamePurchase + expenseSums.countryChange + expenseSums.reviewGame + expenseSums.other
   const totalCosts = naverCommission + alimtalkCost + manualCosts
-  const netProfit = totalRevenue - totalCosts
+  const netProfit = totalSettlement - alimtalkCost - manualCosts
 
   return {
     totalRevenue,
+    totalSettlement,
     costs: {
       naverCommission,
       alimtalk: alimtalkCost,
@@ -87,7 +100,7 @@ export async function getRevenueSummary(startDate: Date, endDate: Date): Promise
     },
     totalCosts,
     netProfit,
-    commissionRate,
+    pendingSettlement,
     alimtalkUnitCost,
     alimtalkCount,
   }

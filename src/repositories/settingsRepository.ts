@@ -1,25 +1,5 @@
 import { prisma } from '../lib/prisma'
 
-export async function getCommissionRate(): Promise<number> {
-  const settings = await prisma.systemSettings.findFirst()
-  return settings?.commissionRate ? Number(settings.commissionRate) : 0
-}
-
-export async function upsertCommissionRate(rate: number): Promise<number> {
-  const existing = await prisma.systemSettings.findFirst()
-  if (existing) {
-    const updated = await prisma.systemSettings.update({
-      where: { id: existing.id },
-      data: { commissionRate: rate },
-    })
-    return Number(updated.commissionRate)
-  }
-  const created = await prisma.systemSettings.create({
-    data: { commissionRate: rate },
-  })
-  return Number(created.commissionRate)
-}
-
 export async function getAlimtalkUnitCost(): Promise<number> {
   const settings = await prisma.systemSettings.findFirst()
   return settings?.alimtalkUnitCost ? Number(settings.alimtalkUnitCost) : 6.5
@@ -35,7 +15,7 @@ export async function upsertAlimtalkUnitCost(cost: number): Promise<number> {
     return Number(updated.alimtalkUnitCost)
   }
   const created = await prisma.systemSettings.create({
-    data: { commissionRate: 0, alimtalkUnitCost: cost },
+    data: { alimtalkUnitCost: cost },
   })
   return Number(created.alimtalkUnitCost)
 }

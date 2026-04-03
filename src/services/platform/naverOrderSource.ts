@@ -1,6 +1,11 @@
 import { z } from 'zod'
 import { naverApiRequest } from '../../lib/naverAuth'
-import { IOrderSource, IncomingOrderItem, ReturnedOrderInfo } from './IOrderSource'
+import {
+  IOrderSource,
+  IncomingOrderItem,
+  ReturnedOrderInfo,
+  PurchaseDecidedInfo,
+} from './IOrderSource'
 
 const lastChangedStatusSchema = z.object({
   orderId: z.string().min(1),
@@ -32,6 +37,9 @@ const queryProductOrderSchema = z.object({
   unitPrice: z.number(),
   claimType: z.string().optional(),
   claimStatus: z.string().optional(),
+  productOrderStatus: z.string().optional(),
+  decisionDate: z.string().optional(),
+  expectedSettlementAmount: z.number().optional(),
 })
 
 const queryProductOrderItemSchema = z.object({
@@ -163,7 +171,7 @@ async function fetchLastChangedStatuses(
   return body.data?.lastChangeStatuses ?? []
 }
 
-async function fetchProductOrderDetails(
+export async function fetchProductOrderDetails(
   productOrderIds: string[],
 ): Promise<NaverQueryProductOrderItem[]> {
   if (productOrderIds.length === 0) return []
@@ -244,6 +252,25 @@ export const naverOrderSource: IOrderSource = {
         productOrderId: detail.productOrder.productOrderId,
         claimType: detail.productOrder.claimType ?? 'RETURN',
         claimStatus: detail.productOrder.claimStatus ?? '',
+      }))
+  },
+
+  async fetchPurchaseDecidedOrders(): Promise<PurchaseDecidedInfo[]> {
+    const changedStatuses = await fetchLastChangedStatuses('PURCHASE_DECIDED')
+    const productOrderIds = changedStatuses.map((status) => status.productOrderId)
+    const details = await fetchProductOrderDetails(productOrderIds)
+
+    return details
+      .filter(
+        (detail) =>
+          detail.productOrder.productOrderStatus === 'PURCHASE_DECIDED' &&
+          detail.productOrder.decisionDate != null &&
+          detail.productOrder.expectedSettlementAmount != null,
+      )
+      .map((detail) => ({
+        productOrderId: detail.productOrder.productOrderId,
+        decisionDate: new Date(detail.productOrder.decisionDate!),
+        settlementAmount: detail.productOrder.expectedSettlementAmount!,
       }))
   },
 

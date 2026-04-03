@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { naverApiRequest } from '../../lib/naverAuth'
-import { IOrderSource, IncomingOrderItem } from './IOrderSource'
+import { IOrderSource, IncomingOrderItem, ReturnedOrderInfo } from './IOrderSource'
 
 const lastChangedStatusSchema = z.object({
   orderId: z.string().min(1),
@@ -30,6 +30,8 @@ const queryProductOrderSchema = z.object({
   productId: z.union([z.string(), z.number()]).transform(String),
   productName: z.string().min(1),
   unitPrice: z.number(),
+  claimType: z.string().optional(),
+  claimStatus: z.string().optional(),
 })
 
 const queryProductOrderItemSchema = z.object({
@@ -139,9 +141,11 @@ function logFetchedOrderFields(
   )
 }
 
-async function fetchLastChangedStatuses(): Promise<NaverLastChangedStatus[]> {
+async function fetchLastChangedStatuses(
+  lastChangedType: string = 'PAYED',
+): Promise<NaverLastChangedStatus[]> {
   const query = new URLSearchParams({
-    lastChangedType: 'PAYED',
+    lastChangedType,
     lastChangedFrom: getLastChangedFrom(),
     limitCount: '300',
   })
@@ -152,7 +156,7 @@ async function fetchLastChangedStatuses(): Promise<NaverLastChangedStatus[]> {
 
   if (!res.ok) {
     const text = await res.text()
-    throw buildNaverError('네이버 신규 주문 조회 실패', res.status, text)
+    throw buildNaverError(`네이버 주문 상태 조회 실패 (${lastChangedType})`, res.status, text)
   }
 
   const body = lastChangedStatusesResponseSchema.parse(await res.json())
@@ -203,7 +207,7 @@ export async function fetchNaverProducts(): Promise<{ productId: string; name: s
 
 export const naverOrderSource: IOrderSource = {
   async fetchNewOrders(): Promise<IncomingOrderItem[]> {
-    const changedStatuses = await fetchLastChangedStatuses()
+    const changedStatuses = await fetchLastChangedStatuses('PAYED')
     const productOrderIds = changedStatuses.map((status) => status.productOrderId)
     const details = await fetchProductOrderDetails(productOrderIds)
     const changedStatusByProductOrderId = new Map(
@@ -227,6 +231,20 @@ export const naverOrderSource: IOrderSource = {
         platform: 'NAVER',
       }
     })
+  },
+
+  async fetchReturnedOrders(): Promise<ReturnedOrderInfo[]> {
+    const changedStatuses = await fetchLastChangedStatuses('CLAIM_REQUESTED')
+    const productOrderIds = changedStatuses.map((status) => status.productOrderId)
+    const details = await fetchProductOrderDetails(productOrderIds)
+
+    return details
+      .filter((detail) => detail.productOrder.claimType === 'RETURN')
+      .map((detail) => ({
+        productOrderId: detail.productOrder.productOrderId,
+        claimType: detail.productOrder.claimType ?? 'RETURN',
+        claimStatus: detail.productOrder.claimStatus ?? '',
+      }))
   },
 
   async confirmOrder(productOrderId: string): Promise<void> {

@@ -20,6 +20,7 @@ const ORDER_STATUS_KO: Record<FulfillmentStatus, string> = {
   completed: '완료',
   manual_review: '수동 검토',
   failed: '실패',
+  returned: '반품',
 }
 
 const ACCOUNT_STATUS_KO: Record<AccountStatus, string> = {

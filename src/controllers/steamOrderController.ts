@@ -4,7 +4,7 @@ import { getOrders, getOrderDetail, retryOrder, exportOrdersForExcel } from '../
 import { buildOrderExcelBuffer } from '../utils/excel'
 
 const listQuerySchema = z.object({
-  status: z.enum(['pending', 'completed', 'manual_review', 'failed']).optional(),
+  status: z.enum(['pending', 'completed', 'manual_review', 'failed', 'returned']).optional(),
   from: z.string().datetime({ offset: true }).optional(),
   to: z.string().datetime({ offset: true }).optional(),
   page: z.coerce.number().int().min(1).default(1),
@@ -39,7 +39,7 @@ export async function getOrderDetailHandler(
 }
 
 const exportQuerySchema = z.object({
-  status: z.enum(['pending', 'completed', 'manual_review', 'failed']).optional(),
+  status: z.enum(['pending', 'completed', 'manual_review', 'failed', 'returned']).optional(),
   from: z.string().datetime({ offset: true }).optional(),
   to: z.string().datetime({ offset: true }).optional(),
 })

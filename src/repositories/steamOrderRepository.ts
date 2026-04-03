@@ -19,6 +19,7 @@ type UpdateOrderItemInput = {
   receiverName?: string
   productId?: string
   errorMessage?: string
+  returnedAt?: Date
 }
 
 type ListOrdersInput = {

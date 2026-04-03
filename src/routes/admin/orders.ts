@@ -3,6 +3,7 @@ import {
   getOrdersHandler,
   getOrderDetailHandler,
   retryOrderHandler,
+  manualReturnHandler,
   exportOrdersHandler,
 } from '../../controllers/steamOrderController'
 import { authMiddleware } from '../../middlewares/auth'
@@ -16,3 +17,4 @@ adminOrdersRouter.get('/', asyncHandler(getOrdersHandler))
 adminOrdersRouter.get('/export', asyncHandler(exportOrdersHandler))
 adminOrdersRouter.get('/:id', asyncHandler(getOrderDetailHandler))
 adminOrdersRouter.post('/:id/retry', asyncHandler(retryOrderHandler))
+adminOrdersRouter.post('/:id/return', asyncHandler(manualReturnHandler))

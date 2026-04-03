@@ -20,15 +20,16 @@ app.listen(PORT, () => {
 
   console.log(`주문 폴링 시작: ${POLL_INTERVAL_MS / 1000}초 간격`)
 
-  // 주간 정산 스케줄러 (매주 금요일 23:59)
+  // 주간 정산 스케줄러 (매주 금요일 23:59 KST)
   let lastSettlementDate = ''
 
   setInterval(() => {
     const now = new Date()
-    const day = now.getDay()
-    const hour = now.getHours()
-    const minute = now.getMinutes()
-    const today = now.toISOString().slice(0, 10)
+    const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000)
+    const day = kst.getUTCDay()
+    const hour = kst.getUTCHours()
+    const minute = kst.getUTCMinutes()
+    const today = kst.toISOString().slice(0, 10)
 
     if (day === 5 && hour === 23 && minute === 59 && lastSettlementDate !== today) {
       lastSettlementDate = today

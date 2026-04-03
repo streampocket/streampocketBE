@@ -14,6 +14,7 @@ import { adminProductsRouter } from './routes/admin/products'
 import { adminAccountsRouter } from './routes/admin/accounts'
 import { adminAlimtalkRouter } from './routes/admin/alimtalk'
 import { adminDashboardRouter } from './routes/admin/dashboard'
+import { adminSettingsRouter } from './routes/admin/settings'
 import { adminReviewCodesRouter } from './routes/admin/reviewCodes'
 
 const app = express()
@@ -58,6 +59,7 @@ app.use('/steam/admin/products', adminProductsRouter)
 app.use('/steam/admin/accounts', adminAccountsRouter)
 app.use('/steam/admin/alimtalk', adminAlimtalkRouter)
 app.use('/steam/admin/dashboard', adminDashboardRouter)
+app.use('/steam/admin/settings', adminSettingsRouter)
 app.use('/steam/admin/review-codes', adminReviewCodesRouter)
 
 // ───────────────────────── Health ─────────────────────────

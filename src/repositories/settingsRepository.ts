@@ -20,26 +20,22 @@ export async function upsertCommissionRate(rate: number): Promise<number> {
   return Number(created.commissionRate)
 }
 
-export async function findMonthlyAdjustment(yearMonth: string) {
-  return prisma.monthlyAdjustment.findUnique({ where: { yearMonth } })
+export async function getAlimtalkUnitCost(): Promise<number> {
+  const settings = await prisma.systemSettings.findFirst()
+  return settings?.alimtalkUnitCost ? Number(settings.alimtalkUnitCost) : 6.5
 }
 
-export async function findAllMonthlyAdjustments() {
-  return prisma.monthlyAdjustment.findMany()
-}
-
-export async function upsertMonthlyAdjustment(
-  yearMonth: string,
-  data: {
-    paymentAdjustment: number
-    commissionAdjustment: number
-    netRevenueAdjustment: number
-    memo?: string
-  },
-) {
-  return prisma.monthlyAdjustment.upsert({
-    where: { yearMonth },
-    update: data,
-    create: { yearMonth, ...data },
+export async function upsertAlimtalkUnitCost(cost: number): Promise<number> {
+  const existing = await prisma.systemSettings.findFirst()
+  if (existing) {
+    const updated = await prisma.systemSettings.update({
+      where: { id: existing.id },
+      data: { alimtalkUnitCost: cost },
+    })
+    return Number(updated.alimtalkUnitCost)
+  }
+  const created = await prisma.systemSettings.create({
+    data: { commissionRate: 0, alimtalkUnitCost: cost },
   })
+  return Number(created.alimtalkUnitCost)
 }

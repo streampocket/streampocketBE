@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma'
-import { findMonthlyAdjustment, findAllMonthlyAdjustments } from '../repositories/settingsRepository'
+import { sumExpensesByCategory } from '../repositories/expenseRepository'
 
 type Period = 'today' | 'week' | 'month' | 'all'
 
@@ -31,36 +31,66 @@ function getPeriodRange(period: Period): { start: Date; end: Date } {
   }
 }
 
-function getCurrentYearMonth(): string {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+type RevenueSummary = {
+  totalRevenue: number
+  costs: {
+    naverCommission: number
+    alimtalk: number
+    gamePurchase: number
+    countryChange: number
+    reviewGame: number
+    other: number
+  }
+  totalCosts: number
+  netProfit: number
+  commissionRate: number
+  alimtalkUnitCost: number
+  alimtalkCount: number
 }
 
-async function getAdjustmentsForPeriod(period: Period) {
-  const zero = { payment: 0, commission: 0, net: 0 }
-
-  if (period === 'today' || period === 'week') return zero
-
-  if (period === 'month') {
-    const adj = await findMonthlyAdjustment(getCurrentYearMonth())
-    if (!adj) return zero
-    return {
-      payment: adj.paymentAdjustment,
-      commission: adj.commissionAdjustment,
-      net: adj.netRevenueAdjustment,
-    }
-  }
-
-  // all
-  const allAdj = await findAllMonthlyAdjustments()
-  return allAdj.reduce(
-    (acc, adj) => ({
-      payment: acc.payment + adj.paymentAdjustment,
-      commission: acc.commission + adj.commissionAdjustment,
-      net: acc.net + adj.netRevenueAdjustment,
+export async function getRevenueSummary(startDate: Date, endDate: Date): Promise<RevenueSummary> {
+  const [revenueAggregate, settings, alimtalkCount, expenseSums] = await Promise.all([
+    prisma.steamOrderItem.aggregate({
+      where: {
+        fulfillmentStatus: 'completed',
+        paidAt: { gte: startDate, lte: endDate },
+      },
+      _sum: { unitPrice: true },
     }),
-    { payment: 0, commission: 0, net: 0 },
-  )
+    prisma.systemSettings.findFirst(),
+    prisma.deliveryLog.count({
+      where: {
+        status: 'sent',
+        sentAt: { gte: startDate, lte: endDate },
+      },
+    }),
+    sumExpensesByCategory(startDate, endDate),
+  ])
+
+  const commissionRate = settings?.commissionRate ? Number(settings.commissionRate) : 0
+  const alimtalkUnitCost = settings?.alimtalkUnitCost ? Number(settings.alimtalkUnitCost) : 6.5
+
+  const totalRevenue = revenueAggregate._sum.unitPrice ?? 0
+  const naverCommission = Math.round((totalRevenue * commissionRate) / 100)
+  const alimtalkCost = Math.round(alimtalkCount * alimtalkUnitCost)
+
+  const manualCosts = expenseSums.gamePurchase + expenseSums.countryChange + expenseSums.reviewGame + expenseSums.other
+  const totalCosts = naverCommission + alimtalkCost + manualCosts
+  const netProfit = totalRevenue - totalCosts
+
+  return {
+    totalRevenue,
+    costs: {
+      naverCommission,
+      alimtalk: alimtalkCost,
+      ...expenseSums,
+    },
+    totalCosts,
+    netProfit,
+    commissionRate,
+    alimtalkUnitCost,
+    alimtalkCount,
+  }
 }
 
 export async function getDashboardStats(period: Period = 'today') {
@@ -75,8 +105,6 @@ export async function getDashboardStats(period: Period = 'today') {
     manualReviewCount,
     failedCount,
     stockByProduct,
-    revenueAggregate,
-    settings,
   ] = await Promise.all([
     prisma.steamOrderItem.count({
       where: { createdAt: { gte: todayStart } },
@@ -97,22 +125,9 @@ export async function getDashboardStats(period: Period = 'today') {
       },
       orderBy: { name: 'asc' },
     }),
-    prisma.steamOrderItem.aggregate({
-      where: {
-        fulfillmentStatus: 'completed',
-        paidAt: { gte: periodStart, lte: periodEnd },
-      },
-      _sum: { unitPrice: true },
-    }),
-    prisma.systemSettings.findFirst(),
   ])
 
-  const commissionRate = settings?.commissionRate ? Number(settings.commissionRate) : 0
-  const autoPayment = revenueAggregate._sum.unitPrice ?? 0
-  const autoCommission = Math.round((autoPayment * commissionRate) / 100)
-  const autoNet = autoPayment - autoCommission
-
-  const adj = await getAdjustmentsForPeriod(period)
+  const revenue = await getRevenueSummary(periodStart, periodEnd)
 
   return {
     today: {
@@ -128,15 +143,6 @@ export async function getDashboardStats(period: Period = 'today') {
       productName: p.name,
       availableCodes: p._count.accounts,
     })),
-    revenue: {
-      auto: { payment: autoPayment, commission: autoCommission, net: autoNet },
-      adjustment: { payment: adj.payment, commission: adj.commission, net: adj.net },
-      total: {
-        payment: autoPayment + adj.payment,
-        commission: autoCommission + adj.commission,
-        net: autoNet + adj.net,
-      },
-      commissionRate,
-    },
+    revenue,
   }
 }

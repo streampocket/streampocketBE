@@ -1,17 +1,24 @@
-export type DiscordChannel = 'order' | 'stock' | 'error'
+export type DiscordChannel = 'order' | 'stock' | 'error' | 'expense' | 'settlement'
 
-// 채널별 제목과 색상 (Discord embed color: decimal)
 const CHANNEL_META: Record<DiscordChannel, { title: string; color: number }> = {
-  order: { title: '주문 알림', color: 0x57f287 },  // 초록
-  stock: { title: '재고 알림', color: 0xfee75c },  // 노랑
-  error: { title: '오류 알림', color: 0xed4245 },  // 빨강
+  order: { title: '주문 알림', color: 0x57f287 },
+  stock: { title: '재고 알림', color: 0xfee75c },
+  error: { title: '오류 알림', color: 0xed4245 },
+  expense: { title: '비용 등록 알림', color: 0xe67e22 },
+  settlement: { title: '주간 정산', color: 0x5865f2 },
+}
+
+function getWebhookUrl(channel: DiscordChannel): string | undefined {
+  if (channel === 'expense') return process.env['DISCORD_EXPENSE_WEBHOOK_URL']
+  if (channel === 'settlement') return process.env['DISCORD_SETTLEMENT_WEBHOOK_URL']
+  return process.env['DISCORD_WEBHOOK_URL']
 }
 
 export async function sendDiscordAlert(
   channel: DiscordChannel,
   message: string,
 ): Promise<void> {
-  const url = process.env['DISCORD_WEBHOOK_URL']
+  const url = getWebhookUrl(channel)
   if (!url) return
 
   const { title, color } = CHANNEL_META[channel]

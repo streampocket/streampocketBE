@@ -43,6 +43,13 @@ enum ReviewCodeStatus {
   used
 }
 
+enum ExpenseCategory {
+  game_purchase
+  country_change
+  review_game
+  other
+}
+
 model Admin {
   id        String   @id @default(uuid()) @db.Uuid
   email     String   @unique @db.VarChar(320)
@@ -151,21 +158,24 @@ model ReviewCode {
 }
 
 model SystemSettings {
-  id             String   @id @default(uuid()) @db.Uuid
-  commissionRate Decimal  @map("commission_rate") @db.Decimal(5, 2)
-  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id               String   @id @default(uuid()) @db.Uuid
+  commissionRate   Decimal  @map("commission_rate") @db.Decimal(5, 2)
+  alimtalkUnitCost Decimal  @default(6.5) @map("alimtalk_unit_cost") @db.Decimal(7, 1)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@map("system_settings")
 }
 
-model MonthlyAdjustment {
-  id                   String   @id @default(uuid()) @db.Uuid
-  yearMonth            String   @unique @map("year_month") @db.VarChar(7)
-  paymentAdjustment    Int      @default(0) @map("payment_adjustment")
-  commissionAdjustment Int      @default(0) @map("commission_adjustment")
-  netRevenueAdjustment Int      @default(0) @map("net_revenue_adjustment")
-  memo                 String?  @db.VarChar(500)
-  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+model Expense {
+  id        String          @id @default(uuid()) @db.Uuid
+  date      DateTime        @db.Date
+  category  ExpenseCategory
+  amount    Int
+  memo      String?         @db.VarChar(500)
+  createdAt DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  @@map("monthly_adjustments")
+  @@index([date])
+  @@index([category, date])
+  @@map("expenses")
 }

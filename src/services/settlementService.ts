@@ -36,7 +36,8 @@ export async function generateWeeklySettlement(): Promise<void> {
   const message = [
     `📊 **주간 정산 (${formatDate(start)} ~ ${formatDate(end)})**`,
     `━━━━━━━━━━━━━━━━━━━━`,
-    `매출: ${formatAmount(summary.totalRevenue)}원`,
+    `판매금: ${formatAmount(summary.totalRevenue)}원`,
+    `정산금: ${formatAmount(summary.totalSettlement)}원`,
     `비용: ${formatAmount(summary.totalCosts)}원`,
     `  - 네이버 수수료: ${formatAmount(summary.costs.naverCommission)}원`,
     `  - 알림톡: ${formatAmount(summary.costs.alimtalk)}원`,
@@ -45,9 +46,14 @@ export async function generateWeeklySettlement(): Promise<void> {
     `  - 리뷰 게임: ${formatAmount(summary.costs.reviewGame)}원`,
     `  - 기타: ${formatAmount(summary.costs.other)}원`,
     `순수익: ${formatAmount(summary.netProfit)}원`,
+    summary.pendingSettlement > 0
+      ? `구매확정 대기: ${formatAmount(summary.pendingSettlement)}원`
+      : '',
     `━━━━━━━━━━━━━━━━━━━━`,
     `**인당 수익: ${formatAmount(perPerson)}원**`,
-  ].join('\n')
+  ]
+    .filter(Boolean)
+    .join('\n')
 
   await sendDiscordAlert('settlement', message)
 }

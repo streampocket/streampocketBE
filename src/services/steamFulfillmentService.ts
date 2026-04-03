@@ -25,6 +25,7 @@ export type OrderPollingResult = {
   processedCount: number
   failedCount: number
   returnedCount: number
+  decidedCount: number
   skipped: boolean
 }
 
@@ -307,6 +308,33 @@ export async function processReturnedOrders(orderSource: IOrderSource): Promise<
   return returnedCount
 }
 
+export async function processPurchaseDecidedOrders(orderSource: IOrderSource): Promise<number> {
+  const decidedItems = await orderSource.fetchPurchaseDecidedOrders()
+  let decidedCount = 0
+
+  for (const item of decidedItems) {
+    try {
+      const existing = await findOrderByProductOrderId(item.productOrderId)
+      if (!existing || existing.decisionDate) continue
+
+      await updateOrderItem(existing.id, {
+        decisionDate: item.decisionDate,
+        settlementAmount: item.settlementAmount,
+      })
+      decidedCount += 1
+
+      console.log(
+        `[PURCHASE_DECIDED] ${item.productOrderId} settlementAmount=${item.settlementAmount}`,
+      )
+    } catch (error) {
+      const message = toErrorMessage(error)
+      console.error(`[PURCHASE_DECIDED] 처리 실패 ${item.productOrderId}: ${message}`)
+    }
+  }
+
+  return decidedCount
+}
+
 export async function pollAndProcess(orderSource: IOrderSource): Promise<OrderPollingResult> {
   const items = await orderSource.fetchNewOrders()
   let processedCount = 0
@@ -327,12 +355,14 @@ export async function pollAndProcess(orderSource: IOrderSource): Promise<OrderPo
   }
 
   const returnedCount = await processReturnedOrders(orderSource)
+  const decidedCount = await processPurchaseDecidedOrders(orderSource)
 
   return {
     fetchedCount: items.length,
     processedCount,
     failedCount,
     returnedCount,
+    decidedCount,
     skipped: false,
   }
 }
@@ -348,6 +378,7 @@ export async function runOrderPolling(
       processedCount: 0,
       failedCount: 0,
       returnedCount: 0,
+      decidedCount: 0,
       skipped: true,
     }
   }
@@ -360,7 +391,7 @@ export async function runOrderPolling(
     const result = await pollAndProcess(orderSource)
     const durationMs = Date.now() - startedAt
     console.log(
-      `[ORDER_POLL] done trigger=${trigger} fetched=${result.fetchedCount} processed=${result.processedCount} failed=${result.failedCount} returned=${result.returnedCount} duration_ms=${durationMs}`,
+      `[ORDER_POLL] done trigger=${trigger} fetched=${result.fetchedCount} processed=${result.processedCount} failed=${result.failedCount} returned=${result.returnedCount} decided=${result.decidedCount} duration_ms=${durationMs}`,
     )
     return result
   } catch (error) {

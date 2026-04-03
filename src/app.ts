@@ -17,6 +17,7 @@ import { adminDashboardRouter } from './routes/admin/dashboard'
 import { adminSettingsRouter } from './routes/admin/settings'
 import { adminReviewCodesRouter } from './routes/admin/reviewCodes'
 import { adminExpensesRouter } from './routes/admin/expenses'
+import { adminBackfillRouter } from './routes/admin/backfill'
 
 const app = express()
 
@@ -63,6 +64,7 @@ app.use('/steam/admin/dashboard', adminDashboardRouter)
 app.use('/steam/admin/settings', adminSettingsRouter)
 app.use('/steam/admin/review-codes', adminReviewCodesRouter)
 app.use('/steam/admin/expenses', adminExpensesRouter)
+app.use('/steam/admin/backfill', adminBackfillRouter)
 
 // ───────────────────────── Health ─────────────────────────
 app.get('/health', (_req, res) => {

@@ -102,6 +102,8 @@ model SteamOrderItem {
   receiverPhoneNumber String?           @map("receiver_phone_number") @db.VarChar(30)
   receiverName        String?           @map("receiver_name") @db.VarChar(100)
   unitPrice           Int               @map("unit_price")
+  settlementAmount    Int?              @map("settlement_amount")
+  decisionDate        DateTime?         @map("decision_date") @db.Timestamptz(6)
   fulfillmentStatus   FulfillmentStatus @default(pending) @map("fulfillment_status")
   errorMessage        String?           @map("error_message")
   paidAt              DateTime?         @map("paid_at") @db.Timestamptz(6)
@@ -159,7 +161,6 @@ model ReviewCode {
 
 model SystemSettings {
   id               String   @id @default(uuid()) @db.Uuid
-  commissionRate   Decimal  @map("commission_rate") @db.Decimal(5, 2)
   alimtalkUnitCost Decimal  @default(6.5) @map("alimtalk_unit_cost") @db.Decimal(7, 1)
   updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 

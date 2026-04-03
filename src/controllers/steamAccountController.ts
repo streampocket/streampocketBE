@@ -20,6 +20,8 @@ const bulkCreateSchema = z.object({
         email: z.string().min(1),
         emailPassword: z.string().min(1),
         emailSiteUrl: z.string().min(1),
+        secondaryEmail: z.string().optional(),
+        secondaryEmailPassword: z.string().optional(),
       }),
     )
     .min(1),
@@ -55,6 +57,8 @@ const updateAccountBodySchema = z.object({
   email: z.string().min(1),
   emailPassword: z.string().min(1),
   emailSiteUrl: z.string().min(1),
+  secondaryEmail: z.string().nullable().optional(),
+  secondaryEmailPassword: z.string().nullable().optional(),
 })
 
 export async function exportAccountsHandler(req: Request, res: Response): Promise<void> {
@@ -71,6 +75,8 @@ export async function exportAccountsHandler(req: Request, res: Response): Promis
       email: a.email,
       emailPassword: a.emailPassword,
       emailSiteUrl: a.emailSiteUrl,
+      secondaryEmail: a.secondaryEmail,
+      secondaryEmailPassword: a.secondaryEmailPassword,
       status: a.status,
       sentAt: a.sentAt,
       createdAt: a.createdAt,

@@ -108,6 +108,8 @@ export async function retryOrder(id: string): Promise<void> {
     accountEmail: account.email,
     accountEmailPassword: account.emailPassword,
     accountEmailSiteUrl: account.emailSiteUrl,
+    accountSecondaryEmail: account.secondaryEmail,
+    accountSecondaryEmailPassword: account.secondaryEmailPassword,
     paidAt: order.paidAt ?? order.createdAt,
   })
 

@@ -18,6 +18,8 @@ type SendOrderAlimtalkInput =
       accountEmail: string
       accountEmailPassword: string
       accountEmailSiteUrl: string
+      accountSecondaryEmail: string | null
+      accountSecondaryEmailPassword: string | null
     }
   | {
       productType: 'AA'
@@ -57,6 +59,7 @@ export type AlimtalkSettingsView = {
     senderKey: string | null
     templateCodeNA: string | null
     templateCodeAA: string | null
+    templateCodeNASecondary: string | null
     sender: string | null
     providerConnected: boolean
     providerMessage: string
@@ -87,6 +90,7 @@ type EnvConfig = {
   senderKey: string
   templateCodeNA: string
   templateCodeAA: string
+  templateCodeNASecondary: string
   sender: string
 }
 
@@ -172,6 +176,7 @@ function getEnvConfig(): EnvConfig {
     senderKey: process.env['ALIGO_SENDER_KEY'] ?? '',
     templateCodeNA: process.env['ALIGO_TEMPLATE_CODE_NA'] ?? '',
     templateCodeAA: process.env['ALIGO_TEMPLATE_CODE_AA'] ?? '',
+    templateCodeNASecondary: process.env['ALIGO_TEMPLATE_CODE_NA_SECONDARY'] ?? '',
     sender: process.env['ALIGO_SENDER'] ?? '',
   }
 }
@@ -424,6 +429,7 @@ export async function getAlimtalkSettings(): Promise<AlimtalkSettingsView> {
       senderKey: config.senderKey || null,
       templateCodeNA: config.templateCodeNA || null,
       templateCodeAA: config.templateCodeAA || null,
+      templateCodeNASecondary: config.templateCodeNASecondary || null,
       sender: config.sender || null,
       providerConnected: provider.providerConnected,
       providerMessage: provider.providerMessage,
@@ -454,8 +460,16 @@ export async function sendOrderAlimtalk(
     throw new Error('알리고 환경변수가 모두 설정되지 않았습니다.')
   }
 
+  const hasSecondaryEmail = input.productType === 'NA' && Boolean(input.accountSecondaryEmail)
+
+  if (hasSecondaryEmail && !config.templateCodeNASecondary) {
+    throw new Error('2차 이메일 알림톡 템플릿 코드(ALIGO_TEMPLATE_CODE_NA_SECONDARY)가 설정되지 않았습니다.')
+  }
+
   const templateCode =
-    input.productType === 'NA' ? config.templateCodeNA : config.templateCodeAA
+    input.productType === 'NA'
+      ? (hasSecondaryEmail ? config.templateCodeNASecondary : config.templateCodeNA)
+      : config.templateCodeAA
   const template = await getActiveTemplateOrThrow(config, templateCode)
   const buttonJson = buildButtonPayload(template)
   const deliveryLog = await createDeliveryLog({
@@ -475,6 +489,12 @@ export async function sendOrderAlimtalk(
             이메일: input.accountEmail,
             이메일비밀번호: input.accountEmailPassword,
             이메일플렛폼: input.accountEmailSiteUrl,
+            ...(input.accountSecondaryEmail
+              ? {
+                  '2차이메일': input.accountSecondaryEmail,
+                  '2차이메일비밀번호': input.accountSecondaryEmailPassword ?? '',
+                }
+              : {}),
           }
         : {
             상품명: input.productName,

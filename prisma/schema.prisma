@@ -73,6 +73,8 @@ model SteamAccount {
   email         String        @map("email") @db.VarChar(320)
   emailPassword String        @map("email_password")
   emailSiteUrl  String        @map("email_site_url") @db.VarChar(2048)
+  secondaryEmail         String?  @map("secondary_email") @db.VarChar(320)
+  secondaryEmailPassword String?  @map("secondary_email_password")
   status        AccountStatus @default(available)
   createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   product       SteamProduct? @relation(fields: [productId], references: [id], onDelete: SetNull)

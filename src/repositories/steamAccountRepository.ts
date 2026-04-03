@@ -27,6 +27,8 @@ export type AccountExportItem = {
   email: string
   emailPassword: string
   emailSiteUrl: string
+  secondaryEmail: string | null
+  secondaryEmailPassword: string | null
   status: AccountStatus
   createdAt: Date
   sentAt: Date | null
@@ -39,6 +41,8 @@ type BulkCreateAccountInput = {
   email: string
   emailPassword: string
   emailSiteUrl: string
+  secondaryEmail?: string
+  secondaryEmailPassword?: string
   productNameSnapshot?: string
 }
 
@@ -48,6 +52,8 @@ type UpdateAccountInput = {
   email: string
   emailPassword: string
   emailSiteUrl: string
+  secondaryEmail?: string | null
+  secondaryEmailPassword?: string | null
 }
 
 export async function listAccounts(input: ListAccountsInput): Promise<ListAccountsResult> {
@@ -97,6 +103,8 @@ export async function exportAccounts(input: ExportAccountsInput): Promise<Accoun
     email: r.email,
     emailPassword: r.emailPassword,
     emailSiteUrl: r.emailSiteUrl,
+    secondaryEmail: r.secondaryEmail,
+    secondaryEmailPassword: r.secondaryEmailPassword,
     status: r.status,
     createdAt: r.createdAt,
     sentAt: r.orderItems[0]?.updatedAt ?? null,
@@ -129,7 +137,7 @@ export async function bulkCreateAccounts(
   productName?: string,
 ): Promise<number> {
   const result = await prisma.steamAccount.createMany({
-    data: accounts.map(({ username, password, email, emailPassword, emailSiteUrl }) => ({
+    data: accounts.map(({ username, password, email, emailPassword, emailSiteUrl, secondaryEmail, secondaryEmailPassword }) => ({
       productId,
       productNameSnapshot: productName ?? null,
       username,
@@ -137,6 +145,8 @@ export async function bulkCreateAccounts(
       email,
       emailPassword,
       emailSiteUrl,
+      secondaryEmail: secondaryEmail || null,
+      secondaryEmailPassword: secondaryEmailPassword || null,
     })),
   })
   return result.count
@@ -166,6 +176,8 @@ export async function updateAccount(
       email: data.email,
       emailPassword: data.emailPassword,
       emailSiteUrl: data.emailSiteUrl,
+      secondaryEmail: data.secondaryEmail === undefined ? undefined : (data.secondaryEmail || null),
+      secondaryEmailPassword: data.secondaryEmailPassword === undefined ? undefined : (data.secondaryEmailPassword || null),
     },
   })
 }

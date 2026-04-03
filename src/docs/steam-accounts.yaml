@@ -57,6 +57,23 @@ paths:
                       password:
                         type: string
                         example: P@ssw0rd!
+                      email:
+                        type: string
+                        example: user@gmail.com
+                      emailPassword:
+                        type: string
+                        example: mailpass
+                      emailSiteUrl:
+                        type: string
+                        example: https://gmail.com
+                      secondaryEmail:
+                        type: string
+                        nullable: true
+                        description: 2차 이메일 (선택)
+                      secondaryEmailPassword:
+                        type: string
+                        nullable: true
+                        description: 2차 이메일 비밀번호 (선택)
       responses:
         '201':
           description: 등록 완료 (등록된 계정 수 반환)

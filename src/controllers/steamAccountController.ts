@@ -22,6 +22,7 @@ const bulkCreateSchema = z.object({
         emailSiteUrl: z.string().min(1),
         secondaryEmail: z.string().optional(),
         secondaryEmailPassword: z.string().optional(),
+        secondaryEmailSiteUrl: z.string().optional(),
       }),
     )
     .min(1),
@@ -29,7 +30,7 @@ const bulkCreateSchema = z.object({
 
 const listQuerySchema = z.object({
   productId: z.string().uuid().optional(),
-  status: z.enum(['available', 'reserved', 'sent', 'disabled']).optional(),
+  status: z.enum(['available', 'reserved', 'sent', 'disabled', 'manual']).optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 })
@@ -48,7 +49,7 @@ export async function getAccountsHandler(req: Request, res: Response): Promise<v
 
 const exportAccountQuerySchema = z.object({
   productId: z.string().uuid().optional(),
-  status: z.enum(['available', 'reserved', 'sent', 'disabled']).optional(),
+  status: z.enum(['available', 'reserved', 'sent', 'disabled', 'manual']).optional(),
 })
 
 const updateAccountBodySchema = z.object({
@@ -59,6 +60,7 @@ const updateAccountBodySchema = z.object({
   emailSiteUrl: z.string().min(1),
   secondaryEmail: z.string().nullable().optional(),
   secondaryEmailPassword: z.string().nullable().optional(),
+  secondaryEmailSiteUrl: z.string().nullable().optional(),
 })
 
 export async function exportAccountsHandler(req: Request, res: Response): Promise<void> {
@@ -77,6 +79,7 @@ export async function exportAccountsHandler(req: Request, res: Response): Promis
       emailSiteUrl: a.emailSiteUrl,
       secondaryEmail: a.secondaryEmail,
       secondaryEmailPassword: a.secondaryEmailPassword,
+      secondaryEmailSiteUrl: a.secondaryEmailSiteUrl,
       status: a.status,
       sentAt: a.sentAt,
       createdAt: a.createdAt,

@@ -10,6 +10,7 @@ type AccountExportRow = {
   emailSiteUrl: string
   secondaryEmail: string | null
   secondaryEmailPassword: string | null
+  secondaryEmailSiteUrl: string | null
   status: AccountStatus
   sentAt: Date | null
   createdAt: Date
@@ -28,6 +29,7 @@ const ACCOUNT_STATUS_KO: Record<AccountStatus, string> = {
   reserved: '선점됨',
   sent: '발송 완료',
   disabled: '비활성화',
+  manual: '수동',
 }
 
 function formatDate(date: Date | null): string {
@@ -79,7 +81,7 @@ export function buildOrderExcelBuffer(orders: SteamOrderItem[]): Buffer {
 }
 
 export function buildAccountExcelBuffer(accounts: AccountExportRow[]): Buffer {
-  const header = ['상품명', '아이디', '비밀번호', '이메일', '이메일비번', '이메일사이트', '2차이메일', '2차이메일비번', '상태', '발송일시', '등록일시']
+  const header = ['상품명', '아이디', '비밀번호', '이메일', '이메일비번', '이메일사이트', '2차이메일', '2차이메일비번', '2차이메일플랫폼', '상태', '발송일시', '등록일시']
 
   const rows = accounts.map((a) => [
     a.productName,
@@ -90,6 +92,7 @@ export function buildAccountExcelBuffer(accounts: AccountExportRow[]): Buffer {
     a.emailSiteUrl,
     a.secondaryEmail ?? '',
     a.secondaryEmailPassword ?? '',
+    a.secondaryEmailSiteUrl ?? '',
     ACCOUNT_STATUS_KO[a.status],
     formatDate(a.sentAt),
     formatDate(a.createdAt),

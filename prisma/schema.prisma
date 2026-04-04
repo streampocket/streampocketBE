@@ -18,6 +18,7 @@ enum AccountStatus {
   reserved
   sent
   disabled
+  manual
 }
 
 enum FulfillmentStatus {
@@ -83,6 +84,7 @@ model SteamAccount {
   emailSiteUrl  String        @map("email_site_url") @db.VarChar(2048)
   secondaryEmail         String?  @map("secondary_email") @db.VarChar(320)
   secondaryEmailPassword String?  @map("secondary_email_password")
+  secondaryEmailSiteUrl  String?  @map("secondary_email_site_url") @db.VarChar(2048)
   status        AccountStatus @default(available)
   createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   product       SteamProduct? @relation(fields: [productId], references: [id], onDelete: SetNull)

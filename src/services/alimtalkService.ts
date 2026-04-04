@@ -20,6 +20,7 @@ type SendOrderAlimtalkInput =
       accountEmailSiteUrl: string
       accountSecondaryEmail: string | null
       accountSecondaryEmailPassword: string | null
+      accountSecondaryEmailSiteUrl: string | null
     }
   | {
       productType: 'AA'
@@ -493,6 +494,7 @@ export async function sendOrderAlimtalk(
               ? {
                   '2차이메일': input.accountSecondaryEmail,
                   '2차이메일비밀번호': input.accountSecondaryEmailPassword ?? '',
+                  '2차이메일플렛폼': input.accountSecondaryEmailSiteUrl ?? '',
                 }
               : {}),
           }

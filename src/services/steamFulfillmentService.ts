@@ -252,6 +252,7 @@ export async function processOrder(
       accountEmailSiteUrl: account.emailSiteUrl,
       accountSecondaryEmail: account.secondaryEmail,
       accountSecondaryEmailPassword: account.secondaryEmailPassword,
+      accountSecondaryEmailSiteUrl: account.secondaryEmailSiteUrl,
       paidAt: item.paidAt,
     })
   } catch (error) {

@@ -33,6 +33,7 @@ type BulkCreateInput = {
     emailSiteUrl: string
     secondaryEmail?: string
     secondaryEmailPassword?: string
+    secondaryEmailSiteUrl?: string
   }[]
 }
 
@@ -44,6 +45,7 @@ type UpdateAccountInput = {
   emailSiteUrl: string
   secondaryEmail?: string | null
   secondaryEmailPassword?: string | null
+  secondaryEmailSiteUrl?: string | null
 }
 
 export async function getAccounts(input: ListAccountsInput) {

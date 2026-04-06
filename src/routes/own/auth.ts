@@ -9,6 +9,8 @@ import {
   googleRedirectHandler,
   googleCallbackHandler,
   socialCompleteHandler,
+  refreshHandler,
+  logoutHandler,
 } from '../../controllers/own/authController'
 import { asyncHandler } from '../../utils/asyncHandler'
 
@@ -28,3 +30,7 @@ ownAuthRouter.get('/social/kakao/callback', asyncHandler(kakaoCallbackHandler))
 ownAuthRouter.get('/social/google', asyncHandler(googleRedirectHandler))
 ownAuthRouter.get('/social/google/callback', asyncHandler(googleCallbackHandler))
 ownAuthRouter.post('/social/complete', asyncHandler(socialCompleteHandler))
+
+// 토큰 갱신 / 로그아웃
+ownAuthRouter.post('/refresh', asyncHandler(refreshHandler))
+ownAuthRouter.post('/logout', asyncHandler(logoutHandler))

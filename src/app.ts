@@ -1,5 +1,6 @@
 import express from 'express'
 import cors from 'cors'
+import cookieParser from 'cookie-parser'
 import helmet from 'helmet'
 import swaggerJsdoc from 'swagger-jsdoc'
 import swaggerUi from 'swagger-ui-express'
@@ -51,6 +52,7 @@ app.use(
     exposedHeaders: ['Content-Disposition'],
   }),
 )
+app.use(cookieParser())
 app.use(express.json())
 app.use(requestLogger)
 

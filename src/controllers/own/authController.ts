@@ -1,7 +1,15 @@
 import { Request, Response } from 'express'
 import jwt from 'jsonwebtoken'
 import { z } from 'zod'
-import { signup, login, signUserToken } from '../../services/own/userAuthService'
+import {
+  signup,
+  login,
+  signAccessToken,
+  signRefreshToken,
+  verifyRefreshToken,
+  setRefreshCookie,
+  clearRefreshCookie,
+} from '../../services/own/userAuthService'
 import { sendCode, verifyCode, isPhoneVerified } from '../../services/own/phoneVerificationService'
 import { getKakaoAuthUrl, getKakaoUserInfo } from '../../services/own/kakaoOAuthService'
 import { getGoogleAuthUrl, getGoogleUserInfo } from '../../services/own/googleOAuthService'
@@ -55,12 +63,20 @@ const phoneVerifySchema = z.object({
 export async function signupHandler(req: Request, res: Response): Promise<void> {
   const body = signupSchema.parse(req.body)
   const result = await signup(body)
+
+  const refreshToken = signRefreshToken({ id: result.user.id, email: result.user.email })
+  setRefreshCookie(res, refreshToken)
+
   res.status(201).json({ data: result })
 }
 
 export async function loginHandler(req: Request, res: Response): Promise<void> {
   const body = loginSchema.parse(req.body)
   const result = await login(body)
+
+  const refreshToken = signRefreshToken({ id: result.user.id, email: result.user.email })
+  setRefreshCookie(res, refreshToken)
+
   res.json({ data: result })
 }
 
@@ -74,6 +90,30 @@ export async function phoneVerifyHandler(req: Request, res: Response): Promise<v
   const body = phoneVerifySchema.parse(req.body)
   const result = await verifyCode(body.phone, body.code)
   res.json({ data: result })
+}
+
+// ───────────────────────── 토큰 갱신 / 로그아웃 ─────────────────────────
+
+export async function refreshHandler(req: Request, res: Response): Promise<void> {
+  const token = req.cookies?.refreshToken
+  if (!token) {
+    res.status(401).json({ message: '리프레시 토큰이 없습니다.' })
+    return
+  }
+
+  try {
+    const payload = verifyRefreshToken(token)
+    const accessToken = signAccessToken({ id: payload.id, email: payload.email })
+    res.json({ data: { token: accessToken } })
+  } catch {
+    clearRefreshCookie(res)
+    res.status(401).json({ message: '리프레시 토큰이 만료되었습니다.' })
+  }
+}
+
+export async function logoutHandler(_req: Request, res: Response): Promise<void> {
+  clearRefreshCookie(res)
+  res.json({ message: '로그아웃 되었습니다.' })
 }
 
 // ───────────────────────── 소셜 로그인 ─────────────────────────
@@ -102,8 +142,10 @@ async function handleSocialCallback(
   let user = await findUserByProvider(provider, providerId)
 
   if (user && user.phoneVerified) {
-    // 이미 가입 완료된 유저 → 정식 JWT
-    const token = signUserToken({ id: user.id, email: user.email })
+    // 이미 가입 완료된 유저 → 정식 JWT + Refresh Cookie
+    const token = signAccessToken({ id: user.id, email: user.email })
+    const refreshToken = signRefreshToken({ id: user.id, email: user.email })
+    setRefreshCookie(res, refreshToken)
     res.redirect(`${feOrigin}/auth/social/callback?token=${token}`)
     return
   }
@@ -127,8 +169,8 @@ async function handleSocialCallback(
     })
   }
 
-  // 전화인증 미완료 → 임시 JWT
-  const tempToken = signUserToken({ id: user.id, email: user.email, temp: true })
+  // 전화인증 미완료 → 임시 JWT (Refresh Token 발급 안 함)
+  const tempToken = signAccessToken({ id: user.id, email: user.email, temp: true })
   res.redirect(`${feOrigin}/auth/social/phone?tempToken=${tempToken}`)
 }
 
@@ -210,7 +252,10 @@ export async function socialCompleteHandler(req: Request, res: Response): Promis
     phoneVerified: true,
   })
 
-  const token = signUserToken({ id: payload.id, email: payload.email })
+  const token = signAccessToken({ id: payload.id, email: payload.email })
+  const refreshToken = signRefreshToken({ id: payload.id, email: payload.email })
+  setRefreshCookie(res, refreshToken)
+
   res.json({
     data: {
       token,

@@ -40,7 +40,6 @@ export async function generateWeeklySettlement(): Promise<void> {
     `정산금: ${formatAmount(summary.totalSettlement)}원`,
     `비용: ${formatAmount(summary.totalCosts)}원`,
     `  - 네이버 수수료: ${formatAmount(summary.costs.naverCommission)}원`,
-    `  - 알림톡: ${formatAmount(summary.costs.alimtalk)}원`,
     `  - 게임 구매비: ${formatAmount(summary.costs.gamePurchase)}원`,
     `  - 국가변경: ${formatAmount(summary.costs.countryChange)}원`,
     `  - 리뷰 게임: ${formatAmount(summary.costs.reviewGame)}원`,

@@ -2,7 +2,7 @@
 ALTER TYPE "AccountStatus" ADD VALUE 'manual';
 
 -- DropIndex
-DROP INDEX "steam_order_items_decision_date_idx";
+DROP INDEX IF EXISTS "steam_order_items_decision_date_idx";
 
 -- AlterTable
 ALTER TABLE "expenses" ALTER COLUMN "id" DROP DEFAULT;

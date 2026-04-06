@@ -22,6 +22,12 @@ import { adminBackfillRouter } from './routes/admin/backfill'
 import { adminManualRevenuesRouter } from './routes/admin/manualRevenues'
 import { ownAuthRouter } from './routes/own/auth'
 import { ownUsersRouter } from './routes/own/users'
+import { ownCategoriesRouter } from './routes/own/categories'
+import { ownProductsRouter } from './routes/own/products'
+import { ownPartnersRouter } from './routes/own/partners'
+import { adminOwnCategoriesRouter } from './routes/admin/ownCategories'
+import { adminOwnProductsRouter } from './routes/admin/ownProducts'
+import { adminOwnPartnersRouter } from './routes/admin/ownPartners'
 
 const app = express()
 
@@ -75,6 +81,12 @@ app.use('/steam/admin/manual-revenues', adminManualRevenuesRouter)
 // ───────────────────────── Own (OTTALL) ─────────────────────────
 app.use('/own/auth', ownAuthRouter)
 app.use('/own/users', ownUsersRouter)
+app.use('/own/categories', ownCategoriesRouter)
+app.use('/own/products', ownProductsRouter)
+app.use('/own/partners', ownPartnersRouter)
+app.use('/own/admin/categories', adminOwnCategoriesRouter)
+app.use('/own/admin/products', adminOwnProductsRouter)
+app.use('/own/admin/partners', adminOwnPartnersRouter)
 
 // ───────────────────────── Health ─────────────────────────
 app.get('/health', (_req, res) => {

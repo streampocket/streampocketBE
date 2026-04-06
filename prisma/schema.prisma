@@ -215,8 +215,60 @@ model User {
   createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
 
+  ownProducts OwnProduct[]
+  partner     Partner?
+
   @@unique([provider, providerId])
   @@map("users")
+}
+
+// ───────────────────────── OTT 상품 (OTTALL) ─────────────────────────
+
+enum OwnProductStatus {
+  recruiting
+  closed
+  expired
+}
+
+enum PartnerStatus {
+  pending
+  approved
+  rejected
+}
+
+model OwnCategory {
+  id        String       @id @default(uuid()) @db.Uuid
+  name      String       @unique @db.VarChar(100)
+  sortOrder Int          @default(0) @map("sort_order")
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  products  OwnProduct[]
+
+  @@map("own_categories")
+}
+
+model OwnProduct {
+  id           String           @id @default(uuid()) @db.Uuid
+  name         String           @db.VarChar(255)
+  categoryId   String           @map("category_id") @db.Uuid
+  durationDays Int              @map("duration_days")
+  price        Int
+  totalSlots   Int              @map("total_slots")
+  filledSlots  Int              @default(0) @map("filled_slots")
+  imagePath    String?          @map("image_path") @db.VarChar(500)
+  notes        String?          @db.Text
+  status       OwnProductStatus @default(recruiting)
+  userId       String           @map("user_id") @db.Uuid
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  category OwnCategory @relation(fields: [categoryId], references: [id])
+  user     User        @relation(fields: [userId], references: [id])
+
+  @@index([categoryId, status])
+  @@index([userId])
+  @@index([status, createdAt])
+  @@map("own_products")
 }
 
 model PhoneVerification {
@@ -230,4 +282,25 @@ model PhoneVerification {
 
   @@index([phone, createdAt])
   @@map("phone_verifications")
+}
+
+// ───────────────────────── 파트너 (OTTALL) ─────────────────────────
+
+model Partner {
+  id            String        @id @default(uuid()) @db.Uuid
+  userId        String        @unique @map("user_id") @db.Uuid
+  name          String        @db.VarChar(100)
+  phone         String        @db.VarChar(20)
+  bankName      String        @map("bank_name") @db.VarChar(50)
+  bankAccount   String        @map("bank_account") @db.VarChar(50)
+  status        PartnerStatus @default(pending)
+  rejectedAt    DateTime?     @map("rejected_at") @db.Timestamptz(6)
+  rejectionNote String?       @map("rejection_note") @db.VarChar(500)
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@map("partners")
 }

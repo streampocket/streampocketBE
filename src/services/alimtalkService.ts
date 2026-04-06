@@ -362,7 +362,7 @@ async function getActiveTemplateOrThrow(
   return provider.activeTemplate
 }
 
-async function sendAlimtalkMessage(input: {
+export async function sendAlimtalkMessage(input: {
   templateCode: string
   recipientPhoneNumber: string
   recipientName: string | null

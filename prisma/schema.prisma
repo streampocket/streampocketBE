@@ -194,3 +194,40 @@ model Expense {
   @@index([category, date])
   @@map("expenses")
 }
+
+// ───────────────────────── 유저 인증 (OTTALL) ─────────────────────────
+
+enum AuthProvider {
+  local
+  kakao
+  google
+}
+
+model User {
+  id            String       @id @default(uuid()) @db.Uuid
+  email         String       @unique @db.VarChar(320)
+  password      String?
+  name          String       @db.VarChar(100)
+  phone         String       @unique @db.VarChar(20)
+  phoneVerified Boolean      @default(false) @map("phone_verified")
+  provider      AuthProvider @default(local)
+  providerId    String?      @map("provider_id") @db.VarChar(255)
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([provider, providerId])
+  @@map("users")
+}
+
+model PhoneVerification {
+  id        String   @id @default(uuid()) @db.Uuid
+  phone     String   @db.VarChar(20)
+  code      String   @db.VarChar(6)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  verified  Boolean  @default(false)
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([phone, createdAt])
+  @@map("phone_verifications")
+}

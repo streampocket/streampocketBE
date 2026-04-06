@@ -19,6 +19,8 @@ import { adminReviewCodesRouter } from './routes/admin/reviewCodes'
 import { adminExpensesRouter } from './routes/admin/expenses'
 import { adminBackfillRouter } from './routes/admin/backfill'
 import { adminManualRevenuesRouter } from './routes/admin/manualRevenues'
+import { ownAuthRouter } from './routes/own/auth'
+import { ownUsersRouter } from './routes/own/users'
 
 const app = express()
 
@@ -67,6 +69,10 @@ app.use('/steam/admin/review-codes', adminReviewCodesRouter)
 app.use('/steam/admin/expenses', adminExpensesRouter)
 app.use('/steam/admin/backfill', adminBackfillRouter)
 app.use('/steam/admin/manual-revenues', adminManualRevenuesRouter)
+
+// ───────────────────────── Own (OTTALL) ─────────────────────────
+app.use('/own/auth', ownAuthRouter)
+app.use('/own/users', ownUsersRouter)
 
 // ───────────────────────── Health ─────────────────────────
 app.get('/health', (_req, res) => {

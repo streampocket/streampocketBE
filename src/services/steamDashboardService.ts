@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma'
 import { sumExpensesByCategory } from '../repositories/expenseRepository'
+import { sumManualRevenue } from '../repositories/manualRevenueRepository'
 
 type Period = 'today' | 'week' | 'month' | 'all'
 
@@ -36,7 +37,6 @@ type RevenueSummary = {
   totalSettlement: number
   costs: {
     naverCommission: number
-    alimtalk: number
     gamePurchase: number
     countryChange: number
     reviewGame: number
@@ -45,12 +45,11 @@ type RevenueSummary = {
   totalCosts: number
   netProfit: number
   pendingSettlement: number
-  alimtalkUnitCost: number
   alimtalkCount: number
 }
 
 export async function getRevenueSummary(startDate: Date, endDate: Date): Promise<RevenueSummary> {
-  const [decidedAggregate, pendingAggregate, settings, alimtalkCount, expenseSums] =
+  const [decidedAggregate, pendingAggregate, alimtalkCount, expenseSums, manualRevenueTotal] =
     await Promise.all([
       prisma.steamOrderItem.aggregate({
         where: {
@@ -67,7 +66,6 @@ export async function getRevenueSummary(startDate: Date, endDate: Date): Promise
         },
         _sum: { unitPrice: true },
       }),
-      prisma.systemSettings.findFirst(),
       prisma.deliveryLog.count({
         where: {
           status: 'sent',
@@ -75,33 +73,32 @@ export async function getRevenueSummary(startDate: Date, endDate: Date): Promise
         },
       }),
       sumExpensesByCategory(startDate, endDate),
+      sumManualRevenue(startDate, endDate),
     ])
 
-  const alimtalkUnitCost = settings?.alimtalkUnitCost ? Number(settings.alimtalkUnitCost) : 6.5
-
-  const totalRevenue = decidedAggregate._sum.unitPrice ?? 0
-  const totalSettlement = decidedAggregate._sum.settlementAmount ?? 0
-  const naverCommission = totalRevenue - totalSettlement
-  const alimtalkCost = Math.round(alimtalkCount * alimtalkUnitCost)
+  const naverRevenue = decidedAggregate._sum.unitPrice ?? 0
+  const naverSettlement = decidedAggregate._sum.settlementAmount ?? 0
+  const naverCommission = naverRevenue - naverSettlement
   const pendingSettlement = pendingAggregate._sum.unitPrice ?? 0
+
+  const totalRevenue = naverRevenue + manualRevenueTotal
+  const totalSettlement = naverSettlement + manualRevenueTotal
 
   const manualCosts =
     expenseSums.gamePurchase + expenseSums.countryChange + expenseSums.reviewGame + expenseSums.other
-  const totalCosts = naverCommission + alimtalkCost + manualCosts
-  const netProfit = totalSettlement - alimtalkCost - manualCosts
+  const totalCosts = naverCommission + manualCosts
+  const netProfit = totalSettlement - manualCosts
 
   return {
     totalRevenue,
     totalSettlement,
     costs: {
       naverCommission,
-      alimtalk: alimtalkCost,
       ...expenseSums,
     },
     totalCosts,
     netProfit,
     pendingSettlement,
-    alimtalkUnitCost,
     alimtalkCount,
   }
 }

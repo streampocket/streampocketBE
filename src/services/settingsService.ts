@@ -1,12 +1,1 @@
-import {
-  getAlimtalkUnitCost as getCost,
-  upsertAlimtalkUnitCost as upsertCost,
-} from '../repositories/settingsRepository'
-
-export async function getAlimtalkUnitCost(): Promise<number> {
-  return getCost()
-}
-
-export async function updateAlimtalkUnitCost(cost: number): Promise<number> {
-  return upsertCost(cost)
-}
+// 알림톡 단가 설정 제거됨 — 선불 포인트제이므로 자동 차감 불필요

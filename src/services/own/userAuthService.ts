@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
+import { Response } from 'express'
 import {
   findUserByEmail,
   findUserByPhone,
@@ -25,20 +26,75 @@ type AuthResult = {
   user: { id: string; email: string; name: string }
 }
 
-const BCRYPT_ROUNDS = 12
+type RefreshPayload = {
+  id: string
+  email: string
+  type: 'refresh'
+}
 
-function getJwtConfig() {
+const BCRYPT_ROUNDS = 12
+const REFRESH_COOKIE_NAME = 'refreshToken'
+const REFRESH_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000 // 7일
+
+function getAccessJwtConfig() {
   const secret = process.env.JWT_USER_SECRET
   if (!secret) throw new Error('JWT_USER_SECRET 환경변수가 설정되지 않았습니다.')
-  const expiresIn = process.env.JWT_USER_EXPIRES_IN ?? '30d'
+  const expiresIn = process.env.JWT_USER_EXPIRES_IN ?? '15m'
   return { secret, expiresIn }
 }
 
-export function signUserToken(payload: { id: string; email: string; temp?: boolean }): string {
-  const { secret, expiresIn } = getJwtConfig()
+function getRefreshJwtConfig() {
+  const secret = process.env.JWT_USER_REFRESH_SECRET
+  if (!secret) throw new Error('JWT_USER_REFRESH_SECRET 환경변수가 설정되지 않았습니다.')
+  const expiresIn = process.env.JWT_USER_REFRESH_EXPIRES_IN ?? '7d'
+  return { secret, expiresIn }
+}
+
+export function signAccessToken(payload: { id: string; email: string; temp?: boolean }): string {
+  const { secret, expiresIn } = getAccessJwtConfig()
   // 단언 사유: jwt.SignOptions['expiresIn']은 string을 허용하나 타입 추론이 안 됨
   return jwt.sign(payload, secret, {
     expiresIn: (payload.temp ? '15m' : expiresIn) as jwt.SignOptions['expiresIn'],
+  })
+}
+
+export function signRefreshToken(payload: { id: string; email: string }): string {
+  const { secret, expiresIn } = getRefreshJwtConfig()
+  const refreshPayload: RefreshPayload = { id: payload.id, email: payload.email, type: 'refresh' }
+  // 단언 사유: jwt.SignOptions['expiresIn']은 string을 허용하나 타입 추론이 안 됨
+  return jwt.sign(refreshPayload, secret, {
+    expiresIn: expiresIn as jwt.SignOptions['expiresIn'],
+  })
+}
+
+export function verifyRefreshToken(token: string): { id: string; email: string } {
+  const { secret } = getRefreshJwtConfig()
+  // 단언 사유: jwt.verify 반환 타입이 string | JwtPayload이나 sign 시 객체로 전달하므로 객체 보장
+  const payload = jwt.verify(token, secret) as RefreshPayload
+  if (payload.type !== 'refresh') {
+    throw new Error('유효하지 않은 리프레시 토큰입니다.')
+  }
+  return { id: payload.id, email: payload.email }
+}
+
+export function setRefreshCookie(res: Response, token: string): void {
+  const isProd = process.env.NODE_ENV === 'production'
+  res.cookie(REFRESH_COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax',
+    path: '/own/auth',
+    maxAge: REFRESH_MAX_AGE_MS,
+  })
+}
+
+export function clearRefreshCookie(res: Response): void {
+  const isProd = process.env.NODE_ENV === 'production'
+  res.clearCookie(REFRESH_COOKIE_NAME, {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax',
+    path: '/own/auth',
   })
 }
 
@@ -69,7 +125,7 @@ export async function signup(input: SignupInput): Promise<AuthResult> {
     provider: 'local',
   })
 
-  const token = signUserToken({ id: user.id, email: user.email })
+  const token = signAccessToken({ id: user.id, email: user.email })
 
   return { token, user: { id: user.id, email: user.email, name: user.name } }
 }
@@ -89,7 +145,7 @@ export async function login(input: LoginInput): Promise<AuthResult> {
     throw Object.assign(new Error('전화번호 인증이 필요합니다.'), { statusCode: 403 })
   }
 
-  const token = signUserToken({ id: user.id, email: user.email })
+  const token = signAccessToken({ id: user.id, email: user.email })
 
   return { token, user: { id: user.id, email: user.email, name: user.name } }
 }

@@ -215,11 +215,24 @@ model User {
   createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  ownProducts OwnProduct[]
-  partner     Partner?
+  ownProducts      OwnProduct[]
+  partner          Partner?
+  termsAgreements  TermsAgreement[]
 
   @@unique([provider, providerId])
   @@map("users")
+}
+
+model TermsAgreement {
+  id       String   @id @default(uuid()) @db.Uuid
+  userId   String   @map("user_id") @db.Uuid
+  type     String   @db.VarChar(30)
+  agreedAt DateTime @default(now()) @map("agreed_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type])
+  @@map("terms_agreements")
 }
 
 // ───────────────────────── OTT 상품 (OTTALL) ─────────────────────────

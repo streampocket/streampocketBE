@@ -120,7 +120,7 @@ export async function logoutHandler(_req: Request, res: Response): Promise<void>
 
 // ───────────────────────── 소셜 로그인 ─────────────────────────
 
-const feOrigin = process.env.FE_ORIGIN ?? 'http://localhost:3000'
+const feOrigin = (process.env.FE_ORIGIN ?? 'http://localhost:3000').split(',')[0].trim()
 
 type TempJwtPayload = {
   id: string

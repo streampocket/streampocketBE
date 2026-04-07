@@ -72,3 +72,23 @@ paths:
           description: 재시도 불가 상태
         '404':
           description: 주문 없음
+
+  /steam/admin/orders/{id}/return:
+    post:
+      summary: 수동 반품 처리
+      tags: [SteamOrders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 반품 처리 완료
+        '400':
+          description: 반품 불가 상태
+        '404':
+          description: 주문 없음

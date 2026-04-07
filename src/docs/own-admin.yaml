@@ -1,0 +1,236 @@
+paths:
+  # ───────────────────────── 카테고리 관리 ─────────────────────────
+  /own/admin/categories:
+    get:
+      summary: 카테고리 목록 조회
+      tags: [OwnAdminCategories]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 카테고리 목록
+    post:
+      summary: 카테고리 생성
+      tags: [OwnAdminCategories]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                sortOrder:
+                  type: integer
+      responses:
+        '201':
+          description: 생성 성공
+
+  /own/admin/categories/{id}:
+    patch:
+      summary: 카테고리 수정
+      tags: [OwnAdminCategories]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                sortOrder:
+                  type: integer
+      responses:
+        '200':
+          description: 수정 성공
+    delete:
+      summary: 카테고리 삭제
+      tags: [OwnAdminCategories]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 삭제 성공
+
+  # ───────────────────────── 상품 관리 ─────────────────────────
+  /own/admin/products:
+    get:
+      summary: 전체 상품 목록 조회
+      tags: [OwnAdminProducts]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 전체 상품 목록 (파트너 정보 포함)
+
+  /own/admin/products/{id}:
+    get:
+      summary: 상품 상세 조회
+      tags: [OwnAdminProducts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 상품 상세
+        '404':
+          description: 상품 없음
+    patch:
+      summary: 상품 수정
+      tags: [OwnAdminProducts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 수정 성공
+    delete:
+      summary: 상품 삭제
+      tags: [OwnAdminProducts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 삭제 성공
+
+  # ───────────────────────── 파트너 관리 ─────────────────────────
+  /own/admin/partners:
+    get:
+      summary: 파트너 목록 조회
+      tags: [OwnAdminPartners]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 전체 파트너 목록
+
+  /own/admin/partners/{id}:
+    get:
+      summary: 파트너 상세 조회
+      tags: [OwnAdminPartners]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 파트너 상세 (등록 상품 포함)
+        '404':
+          description: 파트너 없음
+    delete:
+      summary: 파트너 삭제
+      tags: [OwnAdminPartners]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 삭제 성공
+
+  /own/admin/partners/{id}/approve:
+    patch:
+      summary: 파트너 승인
+      tags: [OwnAdminPartners]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 승인 완료
+
+  /own/admin/partners/{id}/reject:
+    patch:
+      summary: 파트너 거절
+      tags: [OwnAdminPartners]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 거절 완료
+
+  /own/admin/partners/{id}/products/{productId}:
+    delete:
+      summary: 파트너 상품 강제 삭제
+      tags: [OwnAdminPartners]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: productId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 강제 삭제 완료

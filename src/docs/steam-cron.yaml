@@ -6,3 +6,11 @@ paths:
       responses:
         '200':
           description: 폴링 완료
+
+  /steam/cron/weekly-settlement:
+    post:
+      summary: 주간 정산 실행
+      tags: [SteamCron]
+      responses:
+        '200':
+          description: 주간 정산 완료

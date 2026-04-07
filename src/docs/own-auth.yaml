@@ -1,0 +1,249 @@
+paths:
+  /own/auth/signup:
+    post:
+      summary: 회원가입
+      tags: [OwnAuth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password, phone, verificationId, termsAgreed]
+              properties:
+                name:
+                  type: string
+                  minLength: 2
+                  maxLength: 20
+                  example: 홍길동
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+                password:
+                  type: string
+                  minLength: 8
+                  description: 영문/숫자/특수문자 중 2가지 이상 조합
+                phone:
+                  type: string
+                  pattern: ^010\d{8}$
+                  example: '01012345678'
+                verificationId:
+                  type: string
+                  format: uuid
+                  description: 전화번호 인증 완료 후 받은 ID
+                termsAgreed:
+                  type: boolean
+                  enum: [true]
+                  description: 약관 동의 필수 (true만 허용)
+      responses:
+        '201':
+          description: 가입 성공 (JWT + Refresh Cookie 발급)
+        '400':
+          description: 전화번호 인증 미완료
+        '409':
+          description: 이메일 또는 전화번호 중복
+
+  /own/auth/login:
+    post:
+      summary: 로그인
+      tags: [OwnAuth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        '200':
+          description: 로그인 성공 (JWT + Refresh Cookie 발급)
+        '401':
+          description: 이메일 또는 비밀번호 불일치
+        '403':
+          description: 전화번호 인증 미완료
+
+  /own/auth/phone/send:
+    post:
+      summary: 전화번호 인증코드 발송
+      tags: [OwnAuth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone:
+                  type: string
+                  pattern: ^010\d{8}$
+                  example: '01012345678'
+      responses:
+        '200':
+          description: 발송 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      expiresIn:
+                        type: integer
+                        description: 인증번호 유효시간 (초)
+                        example: 180
+        '409':
+          description: 이미 등록된 전화번호
+        '429':
+          description: 재발송 쿨다운(60초) 또는 일일 한도(10회) 초과
+
+  /own/auth/phone/verify:
+    post:
+      summary: 전화번호 인증코드 검증
+      tags: [OwnAuth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, code]
+              properties:
+                phone:
+                  type: string
+                  pattern: ^010\d{8}$
+                code:
+                  type: string
+                  minLength: 6
+                  maxLength: 6
+                  example: '123456'
+      responses:
+        '200':
+          description: 인증 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      verified:
+                        type: boolean
+                      verificationId:
+                        type: string
+                        format: uuid
+        '400':
+          description: 인증 실패 (만료/불일치/시도횟수 초과)
+
+  /own/auth/social/kakao:
+    get:
+      summary: 카카오 로그인 (리다이렉트)
+      tags: [OwnAuth]
+      responses:
+        '302':
+          description: 카카오 OAuth 페이지로 리다이렉트
+
+  /own/auth/social/kakao/callback:
+    get:
+      summary: 카카오 OAuth 콜백
+      tags: [OwnAuth]
+      parameters:
+        - in: query
+          name: code
+          required: true
+          schema:
+            type: string
+      responses:
+        '302':
+          description: 기존 유저 → FE 콜백 / 신규 유저 → 전화번호 인증 페이지
+
+  /own/auth/social/google:
+    get:
+      summary: 구글 로그인 (리다이렉트)
+      tags: [OwnAuth]
+      responses:
+        '302':
+          description: 구글 OAuth 페이지로 리다이렉트
+
+  /own/auth/social/google/callback:
+    get:
+      summary: 구글 OAuth 콜백
+      tags: [OwnAuth]
+      parameters:
+        - in: query
+          name: code
+          required: true
+          schema:
+            type: string
+      responses:
+        '302':
+          description: 기존 유저 → FE 콜백 / 신규 유저 → 전화번호 인증 페이지
+
+  /own/auth/social/complete:
+    post:
+      summary: 소셜 가입 완료 (전화번호 보충 + 약관 동의)
+      tags: [OwnAuth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tempToken, phone, verificationId, termsAgreed]
+              properties:
+                tempToken:
+                  type: string
+                  description: 소셜 로그인 후 발급된 임시 토큰
+                phone:
+                  type: string
+                  pattern: ^010\d{8}$
+                verificationId:
+                  type: string
+                  format: uuid
+                termsAgreed:
+                  type: boolean
+                  enum: [true]
+      responses:
+        '200':
+          description: 가입 완료 (JWT + Refresh Cookie 발급)
+        '400':
+          description: 잘못된 토큰 또는 전화번호 인증 미완료
+
+  /own/auth/refresh:
+    post:
+      summary: Access Token 갱신
+      tags: [OwnAuth]
+      description: Refresh Token (HttpOnly Cookie)으로 새 Access Token 발급
+      responses:
+        '200':
+          description: 갱신 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      token:
+                        type: string
+        '401':
+          description: Refresh Token 없음 또는 만료
+
+  /own/auth/logout:
+    post:
+      summary: 로그아웃
+      tags: [OwnAuth]
+      description: Refresh Token 쿠키 제거
+      responses:
+        '200':
+          description: 로그아웃 완료

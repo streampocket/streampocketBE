@@ -1,0 +1,39 @@
+paths:
+  /own/partners/me:
+    get:
+      summary: 내 파트너 정보 조회
+      tags: [OwnPartners]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 파트너 정보 (미신청 시 null)
+        '401':
+          description: 인증 필요
+
+  /own/partners/apply:
+    post:
+      summary: 파트너 신청
+      tags: [OwnPartners]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                businessName:
+                  type: string
+                  description: 상호명
+                businessNumber:
+                  type: string
+                  description: 사업자번호
+      responses:
+        '201':
+          description: 신청 성공
+        '401':
+          description: 인증 필요
+        '409':
+          description: 이미 신청됨

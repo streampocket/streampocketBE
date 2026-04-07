@@ -19,6 +19,7 @@ import {
   createUser,
   updateUserPhone,
 } from '../../repositories/own/userRepository'
+import { createTermsAgreements } from '../../repositories/own/termsAgreementRepository'
 
 const passwordSchema = z
   .string()
@@ -44,6 +45,7 @@ const signupSchema = z.object({
   password: passwordSchema,
   phone: z.string().regex(/^010\d{8}$/, { message: '올바른 휴대폰 번호를 입력해주세요.' }),
   verificationId: z.string().uuid(),
+  termsAgreed: z.literal(true, { message: '약관에 동의해주세요.' }),
 })
 
 const loginSchema = z.object({
@@ -222,6 +224,7 @@ const socialCompleteSchema = z.object({
   tempToken: z.string(),
   phone: z.string().regex(/^010\d{8}$/),
   verificationId: z.string().uuid(),
+  termsAgreed: z.literal(true, { message: '약관에 동의해주세요.' }),
 })
 
 export async function socialCompleteHandler(req: Request, res: Response): Promise<void> {
@@ -251,6 +254,8 @@ export async function socialCompleteHandler(req: Request, res: Response): Promis
     phone: body.phone,
     phoneVerified: true,
   })
+
+  await createTermsAgreements(payload.id, ['service', 'privacy'])
 
   const token = signAccessToken({ id: payload.id, email: payload.email })
   const refreshToken = signRefreshToken({ id: payload.id, email: payload.email })

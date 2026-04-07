@@ -7,6 +7,7 @@ import {
   createUser,
 } from '../../repositories/own/userRepository'
 import { isPhoneVerified } from './phoneVerificationService'
+import { createTermsAgreements } from '../../repositories/own/termsAgreementRepository'
 
 type SignupInput = {
   name: string
@@ -124,6 +125,8 @@ export async function signup(input: SignupInput): Promise<AuthResult> {
     phoneVerified: true,
     provider: 'local',
   })
+
+  await createTermsAgreements(user.id, ['service', 'privacy'])
 
   const token = signAccessToken({ id: user.id, email: user.email })
 

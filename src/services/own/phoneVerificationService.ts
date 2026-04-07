@@ -8,7 +8,13 @@ import {
   countRecentByPhone,
   findMostRecentByPhone,
 } from '../../repositories/own/phoneVerificationRepository'
-import { sendAlimtalkMessage } from '../alimtalkService'
+import {
+  sendAlimtalkMessage,
+  getEnvConfig,
+  getActiveTemplateOrThrow,
+  applyTemplate,
+} from '../alimtalkService'
+import { findUserByPhone } from '../../repositories/own/userRepository'
 
 const CODE_EXPIRY_MINUTES = 3
 const MAX_ATTEMPTS = 5
@@ -16,6 +22,12 @@ const RESEND_COOLDOWN_SECONDS = 60
 const DAILY_LIMIT = 10
 
 export async function sendCode(phone: string): Promise<{ expiresIn: number }> {
+  // 전화번호 중복 확인
+  const existingUser = await findUserByPhone(phone)
+  if (existingUser) {
+    throw Object.assign(new Error('이미 등록된 전화번호입니다.'), { statusCode: 409 })
+  }
+
   // 60초 재발송 쿨다운
   const mostRecent = await findMostRecentByPhone(phone)
   if (mostRecent) {
@@ -48,16 +60,10 @@ export async function sendCode(phone: string): Promise<{ expiresIn: number }> {
       throw new Error('ALIGO_TEMPLATE_CODE_PHONE_VERIFY 환경변수가 설정되지 않았습니다.')
     }
 
-    const message = [
-      'OTTALL 인증번호 안내',
-      '',
-      '안녕하세요, OTTALL 입니다.',
-      '',
-      `요청하신 인증번호는 ${code} 입니다.`,
-      '3분 내에 입력해주세요.',
-      '',
-      '본인이 요청하지 않았다면 이 메세지를 무시해주세요.',
-    ].join('\n')
+    const config = getEnvConfig()
+    const template = await getActiveTemplateOrThrow(config, templateCode)
+    const templateContent = template.templateContent ?? ''
+    const message = applyTemplate(templateContent, { 인증번호: code })
 
     await sendAlimtalkMessage({
       templateCode,

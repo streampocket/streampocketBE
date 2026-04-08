@@ -7,7 +7,12 @@ import {
   updateOwnProductHandler,
   closeOwnProductHandler,
   deleteOwnProductHandler,
+  getOwnProductCredentialsHandler,
 } from '../../controllers/own/ownProductController'
+import {
+  applyToPartyHandler,
+  checkApplicationHandler,
+} from '../../controllers/own/partyApplicationController'
 import { userAuthMiddleware } from '../../middlewares/userAuth'
 import { asyncHandler } from '../../utils/asyncHandler'
 
@@ -24,7 +29,10 @@ ownProductsRouter.get('/:id', asyncHandler(getOwnProductDetailHandler))
 
 // 인증 필요 API
 ownProductsRouter.use(userAuthMiddleware)
+ownProductsRouter.post('/:id/apply', asyncHandler(applyToPartyHandler))
+ownProductsRouter.get('/:id/apply/check', asyncHandler(checkApplicationHandler))
 ownProductsRouter.post('/', asyncHandler(createOwnProductHandler))
+ownProductsRouter.get('/:id/credentials', asyncHandler(getOwnProductCredentialsHandler))
 ownProductsRouter.patch('/:id', asyncHandler(updateOwnProductHandler))
 ownProductsRouter.patch('/:id/close', asyncHandler(closeOwnProductHandler))
 ownProductsRouter.delete('/:id', asyncHandler(deleteOwnProductHandler))

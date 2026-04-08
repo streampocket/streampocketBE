@@ -25,9 +25,11 @@ import { ownUsersRouter } from './routes/own/users'
 import { ownCategoriesRouter } from './routes/own/categories'
 import { ownProductsRouter } from './routes/own/products'
 import { ownPartnersRouter } from './routes/own/partners'
+import { ownApplicationsRouter } from './routes/own/applications'
 import { adminOwnCategoriesRouter } from './routes/admin/ownCategories'
 import { adminOwnProductsRouter } from './routes/admin/ownProducts'
 import { adminOwnPartnersRouter } from './routes/admin/ownPartners'
+import { adminOwnPaymentsRouter } from './routes/admin/ownPayments'
 
 const app = express()
 
@@ -84,9 +86,11 @@ app.use('/own/users', ownUsersRouter)
 app.use('/own/categories', ownCategoriesRouter)
 app.use('/own/products', ownProductsRouter)
 app.use('/own/partners', ownPartnersRouter)
+app.use('/own/applications', ownApplicationsRouter)
 app.use('/own/admin/categories', adminOwnCategoriesRouter)
 app.use('/own/admin/products', adminOwnProductsRouter)
 app.use('/own/admin/partners', adminOwnPartnersRouter)
+app.use('/own/admin/payments', adminOwnPaymentsRouter)
 
 // ───────────────────────── Health ─────────────────────────
 app.get('/health', (_req, res) => {

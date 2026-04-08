@@ -215,9 +215,10 @@ model User {
   createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  ownProducts      OwnProduct[]
-  partner          Partner?
-  termsAgreements  TermsAgreement[]
+  ownProducts        OwnProduct[]
+  partner            Partner?
+  termsAgreements    TermsAgreement[]
+  partyApplications  PartyApplication[]
 
   @@unique([provider, providerId])
   @@map("users")
@@ -249,6 +250,24 @@ enum PartnerStatus {
   rejected
 }
 
+enum PartyApplicationStatus {
+  pending
+  confirmed
+  cancelled
+  expired
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  cancelled
+}
+
+enum PaymentMethod {
+  manual
+  pg
+}
+
 model OwnCategory {
   id        String       @id @default(uuid()) @db.Uuid
   name      String       @unique @db.VarChar(100)
@@ -269,19 +288,66 @@ model OwnProduct {
   totalSlots   Int              @map("total_slots")
   filledSlots  Int              @default(0) @map("filled_slots")
   imagePath    String?          @map("image_path") @db.VarChar(500)
-  notes        String?          @db.Text
-  status       OwnProductStatus @default(recruiting)
+  notes           String?          @db.Text
+  accountId       String?          @map("account_id") @db.Text
+  accountPassword String?          @map("account_password") @db.Text
+  status          OwnProductStatus @default(recruiting)
+  startedAt    DateTime?        @map("started_at") @db.Timestamptz(6)
   userId       String           @map("user_id") @db.Uuid
   createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  category OwnCategory @relation(fields: [categoryId], references: [id])
-  user     User        @relation(fields: [userId], references: [id])
+  category     OwnCategory        @relation(fields: [categoryId], references: [id])
+  user         User               @relation(fields: [userId], references: [id])
+  applications PartyApplication[]
 
   @@index([categoryId, status])
   @@index([userId])
   @@index([status, createdAt])
   @@map("own_products")
+}
+
+model PartyApplication {
+  id          String                 @id @default(uuid()) @db.Uuid
+  productId   String                 @map("product_id") @db.Uuid
+  userId      String                 @map("user_id") @db.Uuid
+  price       Int
+  fee         Int
+  totalAmount Int                    @map("total_amount")
+  status      PartyApplicationStatus @default(pending)
+  startedAt   DateTime?              @map("started_at") @db.Timestamptz(6)
+  expiresAt   DateTime?              @map("expires_at") @db.Timestamptz(6)
+  createdAt   DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  product  OwnProduct @relation(fields: [productId], references: [id])
+  user     User       @relation(fields: [userId], references: [id])
+  payments Payment[]
+
+  @@unique([productId, userId])
+  @@index([userId, createdAt])
+  @@index([status, expiresAt])
+  @@map("party_applications")
+}
+
+model Payment {
+  id              String        @id @default(uuid()) @db.Uuid
+  applicationId   String        @map("application_id") @db.Uuid
+  amount          Int
+  method          PaymentMethod @default(manual)
+  status          PaymentStatus @default(pending)
+  pgTransactionId String?       @map("pg_transaction_id") @db.VarChar(255)
+  pgProvider      String?       @map("pg_provider") @db.VarChar(50)
+  paidAt          DateTime?     @map("paid_at") @db.Timestamptz(6)
+  adminNote       String?       @map("admin_note") @db.VarChar(500)
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  application PartyApplication @relation(fields: [applicationId], references: [id])
+
+  @@index([applicationId])
+  @@index([status, createdAt])
+  @@map("payments")
 }
 
 model PhoneVerification {

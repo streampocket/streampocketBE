@@ -14,3 +14,12 @@ paths:
       responses:
         '200':
           description: 주간 정산 완료
+
+  /steam/cron/expire-parties:
+    post:
+      summary: 만료된 파티 자동 상태 전환
+      description: startedAt + durationDays가 현재 시각을 초과한 closed 파티를 expired로 변경
+      tags: [SteamCron]
+      responses:
+        '200':
+          description: 만료 처리 완료 (expiredCount 반환)

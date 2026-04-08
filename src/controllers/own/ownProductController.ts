@@ -18,7 +18,7 @@ const createOwnProductSchema = z.object({
   name: z.string().min(1).max(255),
   durationDays: z.number().int().positive(),
   price: z.number().int().positive(),
-  totalSlots: z.number().int().min(2),
+  totalSlots: z.number().int().min(1),
   imagePath: z.string().max(500).optional().nullable(),
   notes: z.string().optional().nullable(),
 })
@@ -27,7 +27,7 @@ const updateOwnProductSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   durationDays: z.number().int().positive().optional(),
   price: z.number().int().positive().optional(),
-  totalSlots: z.number().int().min(2).optional(),
+  totalSlots: z.number().int().min(1).optional(),
   imagePath: z.string().max(500).optional().nullable(),
   notes: z.string().optional().nullable(),
 })

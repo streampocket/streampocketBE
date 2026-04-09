@@ -16,6 +16,7 @@ import { getGoogleAuthUrl, getGoogleUserInfo } from '../../services/own/googleOA
 import {
   findUserByProvider,
   findUserByEmail,
+  findUserById,
   createUser,
   updateUserPhone,
 } from '../../repositories/own/userRepository'
@@ -145,7 +146,7 @@ async function handleSocialCallback(
 
   if (user && user.phoneVerified) {
     // 이미 가입 완료된 유저 → 정식 JWT + Refresh Cookie
-    const token = signAccessToken({ id: user.id, email: user.email })
+    const token = signAccessToken({ id: user.id, email: user.email, name: user.name })
     const refreshToken = signRefreshToken({ id: user.id, email: user.email })
     setRefreshCookie(res, refreshToken)
     res.redirect(`${feOrigin}/auth/social/callback?token=${token}`)
@@ -257,14 +258,17 @@ export async function socialCompleteHandler(req: Request, res: Response): Promis
 
   await createTermsAgreements(payload.id, ['service', 'privacy'])
 
-  const token = signAccessToken({ id: payload.id, email: payload.email })
+  const user = await findUserById(payload.id)
+  const userName = user?.name ?? '사용자'
+
+  const token = signAccessToken({ id: payload.id, email: payload.email, name: userName })
   const refreshToken = signRefreshToken({ id: payload.id, email: payload.email })
   setRefreshCookie(res, refreshToken)
 
   res.json({
     data: {
       token,
-      user: { id: payload.id, email: payload.email },
+      user: { id: payload.id, email: payload.email, name: userName },
     },
   })
 }

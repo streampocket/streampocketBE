@@ -51,7 +51,7 @@ function getRefreshJwtConfig() {
   return { secret, expiresIn }
 }
 
-export function signAccessToken(payload: { id: string; email: string; temp?: boolean }): string {
+export function signAccessToken(payload: { id: string; email: string; name?: string; temp?: boolean }): string {
   const { secret, expiresIn } = getAccessJwtConfig()
   // 단언 사유: jwt.SignOptions['expiresIn']은 string을 허용하나 타입 추론이 안 됨
   return jwt.sign(payload, secret, {
@@ -128,7 +128,7 @@ export async function signup(input: SignupInput): Promise<AuthResult> {
 
   await createTermsAgreements(user.id, ['service', 'privacy'])
 
-  const token = signAccessToken({ id: user.id, email: user.email })
+  const token = signAccessToken({ id: user.id, email: user.email, name: user.name })
 
   return { token, user: { id: user.id, email: user.email, name: user.name } }
 }
@@ -148,7 +148,7 @@ export async function login(input: LoginInput): Promise<AuthResult> {
     throw Object.assign(new Error('전화번호 인증이 필요합니다.'), { statusCode: 403 })
   }
 
-  const token = signAccessToken({ id: user.id, email: user.email })
+  const token = signAccessToken({ id: user.id, email: user.email, name: user.name })
 
   return { token, user: { id: user.id, email: user.email, name: user.name } }
 }

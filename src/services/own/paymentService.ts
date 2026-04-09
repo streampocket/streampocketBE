@@ -5,6 +5,7 @@ import {
   findPaymentById,
 } from '../../repositories/own/paymentRepository'
 import { sendDiscordAlert } from '../../lib/discord'
+import { calculatePartyExpiresAt, isPartyJoinable } from '../../utils/partyPricing'
 
 type ListPaymentsInput = {
   status?: PaymentStatus
@@ -45,8 +46,9 @@ export async function approvePayment(id: string, adminNote?: string) {
   const application = payment.application
   const product = application.product
 
-  if (product.filledSlots >= product.totalSlots) {
-    throw Object.assign(new Error('파티 모집이 이미 마감되었습니다.'), { statusCode: 400 })
+  const joinCheck = isPartyJoinable(product)
+  if (!joinCheck.joinable) {
+    throw Object.assign(new Error(joinCheck.reason ?? '참여가 불가합니다.'), { statusCode: 400 })
   }
 
   const result = await prisma.$transaction(async (tx) => {
@@ -60,35 +62,30 @@ export async function approvePayment(id: string, adminNote?: string) {
     })
 
     const now = new Date()
-    const expiresAt = new Date(now.getTime() + product.durationDays * 24 * 60 * 60 * 1000)
+    const partyStartedAt = product.startedAt ?? now
+    const partyExpiresAt = calculatePartyExpiresAt(partyStartedAt, product.durationDays)
 
     await tx.partyApplication.update({
       where: { id: application.id },
       data: {
         status: 'confirmed',
         startedAt: now,
-        expiresAt,
+        expiresAt: partyExpiresAt,
       },
     })
 
-    const updatedProduct = await tx.ownProduct.update({
+    const isFirstMember = !product.startedAt
+    const newFilledSlots = product.filledSlots + 1
+    const isFull = newFilledSlots >= product.totalSlots
+
+    await tx.ownProduct.update({
       where: { id: product.id },
-      data: { filledSlots: { increment: 1 } },
+      data: {
+        filledSlots: { increment: 1 },
+        ...(isFirstMember ? { startedAt: now } : {}),
+        ...(isFull ? { status: 'closed' } : {}),
+      },
     })
-
-    if (!updatedProduct.startedAt) {
-      await tx.ownProduct.update({
-        where: { id: product.id },
-        data: { startedAt: new Date() },
-      })
-    }
-
-    if (updatedProduct.filledSlots >= updatedProduct.totalSlots) {
-      await tx.ownProduct.update({
-        where: { id: product.id },
-        data: { status: 'closed' },
-      })
-    }
 
     return updatedPayment
   })

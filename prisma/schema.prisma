@@ -284,8 +284,9 @@ model OwnProduct {
   name         String           @db.VarChar(255)
   categoryId   String           @map("category_id") @db.Uuid
   durationDays Int              @map("duration_days")
-  price        Int
-  totalSlots   Int              @map("total_slots")
+  price         Int
+  dailyDiscount Int              @default(0) @map("daily_discount")
+  totalSlots    Int              @map("total_slots")
   filledSlots  Int              @default(0) @map("filled_slots")
   imagePath    String?          @map("image_path") @db.VarChar(500)
   notes           String?          @db.Text
@@ -293,6 +294,7 @@ model OwnProduct {
   accountPassword String?          @map("account_password") @db.Text
   status          OwnProductStatus @default(recruiting)
   startedAt    DateTime?        @map("started_at") @db.Timestamptz(6)
+  deletedAt    DateTime?        @map("deleted_at") @db.Timestamptz(6)
   userId       String           @map("user_id") @db.Uuid
   createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)

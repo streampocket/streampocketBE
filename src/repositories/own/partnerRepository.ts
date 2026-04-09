@@ -75,7 +75,7 @@ export async function findPartnerDetailWithProducts(id: string) {
   if (!partner) return null
 
   const products = await prisma.ownProduct.findMany({
-    where: { userId: partner.userId },
+    where: { userId: partner.userId, deletedAt: null },
     include: { category: true },
     orderBy: { createdAt: 'desc' },
   })
@@ -85,7 +85,10 @@ export async function findPartnerDetailWithProducts(id: string) {
 
 export function deletePartnerWithProducts(partnerId: string, userId: string) {
   return prisma.$transaction([
-    prisma.ownProduct.deleteMany({ where: { userId } }),
+    prisma.ownProduct.updateMany({
+      where: { userId, deletedAt: null },
+      data: { deletedAt: new Date() },
+    }),
     prisma.partner.delete({ where: { id: partnerId } }),
   ])
 }

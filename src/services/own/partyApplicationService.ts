@@ -8,6 +8,7 @@ import {
 import { createPayment } from '../../repositories/own/paymentRepository'
 import { sendDiscordAlert } from '../../lib/discord'
 import { decrypt } from '../../utils/crypto'
+import { isPartyJoinable, calculateCurrentPrice } from '../../utils/partyPricing'
 
 const FEE_RATE = 0.1
 
@@ -17,12 +18,9 @@ export async function applyToParty(productId: string, userId: string) {
     throw Object.assign(new Error('파티를 찾을 수 없습니다.'), { statusCode: 404 })
   }
 
-  if (product.status !== 'recruiting') {
-    throw Object.assign(new Error('모집중인 파티만 신청할 수 있습니다.'), { statusCode: 400 })
-  }
-
-  if (product.filledSlots >= product.totalSlots) {
-    throw Object.assign(new Error('모집이 마감되었습니다.'), { statusCode: 400 })
+  const joinCheck = isPartyJoinable(product)
+  if (!joinCheck.joinable) {
+    throw Object.assign(new Error(joinCheck.reason ?? '참여가 불가합니다.'), { statusCode: 400 })
   }
 
   if (product.userId === userId) {
@@ -34,13 +32,14 @@ export async function applyToParty(productId: string, userId: string) {
     throw Object.assign(new Error('이미 신청한 파티입니다.'), { statusCode: 409 })
   }
 
-  const fee = Math.round(product.price * FEE_RATE)
-  const totalAmount = product.price + fee
+  const currentPrice = calculateCurrentPrice(product)
+  const fee = Math.round(currentPrice * FEE_RATE)
+  const totalAmount = currentPrice + fee
 
   const application = await createApplication({
     productId,
     userId,
-    price: product.price,
+    price: currentPrice,
     fee,
     totalAmount,
   })
@@ -55,7 +54,7 @@ export async function applyToParty(productId: string, userId: string) {
   // Discord 알림 — 결제 요청 (비동기 — 실패해도 신청 성공)
   sendDiscordAlert(
     'paymentRequest',
-    `**파티명:** ${product.name}\n**신청자:** 사용자\n**가격:** ${product.price.toLocaleString()}원\n**수수료:** ${fee.toLocaleString()}원\n**합계:** ${totalAmount.toLocaleString()}원`,
+    `**파티명:** ${product.name}\n**신청자:** 사용자\n**가격:** ${currentPrice.toLocaleString()}원${currentPrice < product.price ? ` (원가 ${product.price.toLocaleString()}원)` : ''}\n**수수료:** ${fee.toLocaleString()}원\n**합계:** ${totalAmount.toLocaleString()}원`,
   ).catch(() => {})
 
   return { data: application }

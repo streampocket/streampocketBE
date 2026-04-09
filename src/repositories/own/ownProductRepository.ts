@@ -5,6 +5,7 @@ type CreateOwnProductInput = {
   categoryId: string
   durationDays: number
   price: number
+  dailyDiscount?: number
   totalSlots: number
   imagePath?: string | null
   notes?: string | null
@@ -18,6 +19,7 @@ type UpdateOwnProductInput = {
   categoryId?: string
   durationDays?: number
   price?: number
+  dailyDiscount?: number
   totalSlots?: number
   imagePath?: string | null
   notes?: string | null
@@ -49,6 +51,7 @@ export function createOwnProduct(data: CreateOwnProductInput) {
 
 export async function findAllOwnProducts(filters: OwnProductFilters) {
   const where = {
+    deletedAt: null,
     ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),
     ...(filters.status ? { status: filters.status } : {}),
     ...(filters.search
@@ -85,7 +88,7 @@ export async function findAllOwnProducts(filters: OwnProductFilters) {
 
 export function findOwnProductsByUserId(userId: string) {
   return prisma.ownProduct.findMany({
-    where: { userId },
+    where: { userId, deletedAt: null },
     include: productInclude,
     orderBy: { createdAt: 'desc' },
   })
@@ -106,8 +109,11 @@ export function updateOwnProduct(id: string, data: UpdateOwnProductInput) {
   })
 }
 
-export function deleteOwnProductById(id: string) {
-  return prisma.ownProduct.delete({ where: { id } })
+export function softDeleteOwnProductById(id: string) {
+  return prisma.ownProduct.update({
+    where: { id },
+    data: { deletedAt: new Date() },
+  })
 }
 
 export function findOwnProductCredentialsById(id: string) {
@@ -117,10 +123,29 @@ export function findOwnProductCredentialsById(id: string) {
   })
 }
 
+export function findRecruitingStartedProducts() {
+  return prisma.ownProduct.findMany({
+    where: {
+      status: 'recruiting',
+      startedAt: { not: null },
+      deletedAt: null,
+    },
+    select: { id: true, name: true, startedAt: true, durationDays: true },
+  })
+}
+
+export function bulkCloseProducts(ids: string[]) {
+  return prisma.ownProduct.updateMany({
+    where: { id: { in: ids } },
+    data: { status: 'closed' },
+  })
+}
+
 export function findFullyExpiredProducts() {
   return prisma.ownProduct.findMany({
     where: {
       status: 'closed',
+      deletedAt: null,
       applications: {
         every: {
           OR: [

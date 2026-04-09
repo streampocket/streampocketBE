@@ -9,11 +9,13 @@ import {
   findOwnProductsByUserId,
   findOwnProductById,
   updateOwnProduct,
-  deleteOwnProductById,
+  softDeleteOwnProductById,
   findOwnProductCredentialsById,
   findOwnProductWithApplications,
   findFullyExpiredProducts,
   bulkExpireProducts,
+  findRecruitingStartedProducts,
+  bulkCloseProducts,
 } from '../../repositories/own/ownProductRepository'
 import {
   findExpiredApplications,
@@ -21,11 +23,17 @@ import {
 } from '../../repositories/own/partyApplicationRepository'
 import { encrypt, decrypt } from '../../utils/crypto'
 import { sendDiscordAlert } from '../../lib/discord'
+import {
+  calculateCurrentPrice,
+  calculatePartyExpiresAt,
+  getRemainingDays,
+} from '../../utils/partyPricing'
 
 type CreateInput = {
   name: string
   durationDays: number
   price: number
+  dailyDiscount?: number
   totalSlots: number
   imagePath?: string | null
   notes?: string | null
@@ -38,6 +46,7 @@ type UpdateInput = {
   name?: string
   durationDays?: number
   price?: number
+  dailyDiscount?: number
   totalSlots?: number
   imagePath?: string | null
   notes?: string | null
@@ -56,6 +65,20 @@ function stripCredentials<T extends { accountId?: string | null; accountPassword
 ): Omit<T, 'accountId' | 'accountPassword'> & { hasCredentials: boolean } {
   const { accountId, accountPassword, ...rest } = product
   return { ...rest, hasCredentials: accountId !== null && accountId !== undefined }
+}
+
+function enrichWithPricing<T extends { price: number; dailyDiscount: number; durationDays: number; startedAt: Date | null }>(
+  product: T,
+) {
+  const currentPrice = calculateCurrentPrice(product)
+  const partyExpiresAt = product.startedAt
+    ? calculatePartyExpiresAt(product.startedAt, product.durationDays).toISOString()
+    : null
+  const remainingDays = product.startedAt
+    ? Math.max(0, Math.floor(getRemainingDays(product.startedAt, product.durationDays)))
+    : product.durationDays
+
+  return { ...product, currentPrice, partyExpiresAt, remainingDays }
 }
 
 async function resolveCategoryByName(name: string): Promise<string> {
@@ -89,7 +112,7 @@ export async function createOwnProductItem(input: CreateInput) {
     accountId: encryptField(input.accountId) ?? null,
     accountPassword: encryptField(input.accountPassword) ?? null,
   })
-  return stripCredentials(product)
+  return enrichWithPricing(stripCredentials(product))
 }
 
 function sortByUrgency<T extends { totalSlots: number; filledSlots: number; createdAt: Date }>(
@@ -115,7 +138,7 @@ export async function getOwnProducts(filters: ListFilters) {
     items = items.slice(0, filters.limit)
   }
 
-  const data = items.map(stripCredentials)
+  const data = items.map((item) => enrichWithPricing(stripCredentials(item)))
 
   if (filters.page && filters.pageSize) {
     return {
@@ -132,15 +155,15 @@ export async function getOwnProducts(filters: ListFilters) {
 
 export async function getMyOwnProducts(userId: string) {
   const products = await findOwnProductsByUserId(userId)
-  return products.map(stripCredentials)
+  return products.map((p) => enrichWithPricing(stripCredentials(p)))
 }
 
 export async function getOwnProductDetail(id: string) {
   const product = await findOwnProductById(id)
-  if (!product) {
+  if (!product || product.deletedAt) {
     throw Object.assign(new Error('파티를 찾을 수 없습니다.'), { statusCode: 404 })
   }
-  return stripCredentials(product)
+  return enrichWithPricing(stripCredentials(product))
 }
 
 export async function updateOwnProductItem(id: string, userId: string, data: UpdateInput) {
@@ -168,7 +191,7 @@ export async function updateOwnProductItem(id: string, userId: string, data: Upd
     updateData.accountPassword = encryptField(data.accountPassword) ?? null
   }
   const updated = await updateOwnProduct(id, updateData)
-  return stripCredentials(updated)
+  return enrichWithPricing(stripCredentials(updated))
 }
 
 export async function closeOwnProduct(id: string, userId: string) {
@@ -183,7 +206,7 @@ export async function closeOwnProduct(id: string, userId: string) {
     throw Object.assign(new Error('모집중인 파티만 닫을 수 있습니다.'), { statusCode: 400 })
   }
   const updated = await updateOwnProduct(id, { status: 'closed' })
-  return stripCredentials(updated)
+  return enrichWithPricing(stripCredentials(updated))
 }
 
 export async function deleteOwnProductItem(id: string, userId: string) {
@@ -197,7 +220,7 @@ export async function deleteOwnProductItem(id: string, userId: string) {
   if (product.status !== 'recruiting') {
     throw Object.assign(new Error('모집중인 파티만 삭제할 수 있습니다.'), { statusCode: 400 })
   }
-  return deleteOwnProductById(id)
+  return softDeleteOwnProductById(id)
 }
 
 export async function getOwnProductCredentials(id: string, userId: string) {
@@ -237,7 +260,7 @@ export async function adminUpdateOwnProduct(id: string, data: UpdateInput) {
     updateData.accountPassword = encryptField(data.accountPassword) ?? null
   }
   const updated = await updateOwnProduct(id, updateData)
-  return stripCredentials(updated)
+  return enrichWithPricing(stripCredentials(updated))
 }
 
 export async function adminDeleteOwnProduct(id: string) {
@@ -245,7 +268,7 @@ export async function adminDeleteOwnProduct(id: string) {
   if (!product) {
     throw Object.assign(new Error('파티를 찾을 수 없습니다.'), { statusCode: 404 })
   }
-  return deleteOwnProductById(id)
+  return softDeleteOwnProductById(id)
 }
 
 export async function adminGetOwnProductDetailWithApplications(id: string) {
@@ -253,7 +276,7 @@ export async function adminGetOwnProductDetailWithApplications(id: string) {
   if (!product) {
     throw Object.assign(new Error('파티를 찾을 수 없습니다.'), { statusCode: 404 })
   }
-  return stripCredentials(product)
+  return enrichWithPricing(stripCredentials(product))
 }
 
 export async function adminGetOwnProductCredentials(id: string) {
@@ -273,7 +296,7 @@ export async function adminUpdatePartyStatus(id: string, status: 'recruiting' | 
     throw Object.assign(new Error('파티를 찾을 수 없습니다.'), { statusCode: 404 })
   }
   const updated = await updateOwnProduct(id, { status })
-  return stripCredentials(updated)
+  return enrichWithPricing(stripCredentials(updated))
 }
 
 export async function expireOldParties() {
@@ -296,7 +319,25 @@ export async function expireOldParties() {
     ).catch(() => {})
   }
 
-  // 2단계: 모든 파티원이 만료/취소된 파티 → 파티 자체 expired 처리
+  // 2단계: 남은 기간 1일 이하인 recruiting 파티 → closed 처리
+  const recruitingProducts = await findRecruitingStartedProducts()
+  const nearExpiration = recruitingProducts.filter((p) => {
+    if (!p.startedAt) return false
+    return getRemainingDays(p.startedAt, p.durationDays) <= 1
+  })
+  let closedPartyCount = 0
+
+  if (nearExpiration.length > 0) {
+    await bulkCloseProducts(nearExpiration.map((p) => p.id))
+    closedPartyCount = nearExpiration.length
+
+    sendDiscordAlert(
+      'partyApply',
+      `**파티 자동 마감:** ${closedPartyCount}개 파티가 남은 기간 1일 이하로 마감되었습니다.\n${nearExpiration.map((p) => `- ${p.name}`).join('\n')}`,
+    ).catch(() => {})
+  }
+
+  // 3단계: 모든 파티원이 만료/취소된 파티 → 파티 자체 expired 처리
   const fullyExpired = await findFullyExpiredProducts()
   let expiredPartyCount = 0
 
@@ -305,5 +346,5 @@ export async function expireOldParties() {
     expiredPartyCount = fullyExpired.length
   }
 
-  return { expiredAppCount, expiredPartyCount }
+  return { expiredAppCount, closedPartyCount, expiredPartyCount }
 }

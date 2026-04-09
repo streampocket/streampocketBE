@@ -65,12 +65,16 @@ async function resolveCategoryByName(name: string): Promise<string> {
   return created.id
 }
 
+type OwnProductSort = 'latest' | 'urgency'
+
 type ListFilters = {
   categoryId?: string
   status?: 'recruiting' | 'closed' | 'expired'
   search?: string
   page?: number
   pageSize?: number
+  sort?: OwnProductSort
+  limit?: number
 }
 
 export async function createOwnProductItem(input: CreateInput) {
@@ -88,9 +92,30 @@ export async function createOwnProductItem(input: CreateInput) {
   return stripCredentials(product)
 }
 
+function sortByUrgency<T extends { totalSlots: number; filledSlots: number; createdAt: Date }>(
+  items: T[],
+): T[] {
+  return [...items].sort((a, b) => {
+    const remainA = a.totalSlots - a.filledSlots
+    const remainB = b.totalSlots - b.filledSlots
+    if (remainA !== remainB) return remainA - remainB
+    return b.createdAt.getTime() - a.createdAt.getTime()
+  })
+}
+
 export async function getOwnProducts(filters: ListFilters) {
   const result = await findAllOwnProducts(filters)
-  const data = result.items.map(stripCredentials)
+  let items = result.items
+
+  if (filters.sort === 'urgency') {
+    items = sortByUrgency(items)
+  }
+
+  if (filters.limit) {
+    items = items.slice(0, filters.limit)
+  }
+
+  const data = items.map(stripCredentials)
 
   if (filters.page && filters.pageSize) {
     return {

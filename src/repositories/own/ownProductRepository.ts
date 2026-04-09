@@ -32,6 +32,7 @@ type OwnProductFilters = {
   search?: string
   page?: number
   pageSize?: number
+  limit?: number
 }
 
 const productInclude = {

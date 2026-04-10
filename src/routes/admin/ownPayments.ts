@@ -4,6 +4,7 @@ import {
   adminGetPaymentDetailHandler,
   adminApprovePaymentHandler,
   adminRejectPaymentHandler,
+  adminDeletePaymentHandler,
 } from '../../controllers/own/paymentController'
 import { authMiddleware } from '../../middlewares/auth'
 import { asyncHandler } from '../../utils/asyncHandler'
@@ -16,3 +17,4 @@ adminOwnPaymentsRouter.get('/', asyncHandler(adminGetPaymentsHandler))
 adminOwnPaymentsRouter.get('/:id', asyncHandler(adminGetPaymentDetailHandler))
 adminOwnPaymentsRouter.patch('/:id/approve', asyncHandler(adminApprovePaymentHandler))
 adminOwnPaymentsRouter.patch('/:id/reject', asyncHandler(adminRejectPaymentHandler))
+adminOwnPaymentsRouter.delete('/:id', asyncHandler(adminDeletePaymentHandler))

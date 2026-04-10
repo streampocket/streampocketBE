@@ -81,3 +81,7 @@ export function updatePaymentStatus(
     data,
   })
 }
+
+export function deletePaymentById(id: string) {
+  return prisma.payment.delete({ where: { id } })
+}

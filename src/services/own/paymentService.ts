@@ -3,6 +3,7 @@ import type { PaymentStatus } from '@prisma/client'
 import {
   findPayments,
   findPaymentById,
+  deletePaymentById,
 } from '../../repositories/own/paymentRepository'
 import { sendDiscordAlert } from '../../lib/discord'
 import { calculatePartyExpiresAt, isPartyJoinable } from '../../utils/partyPricing'
@@ -125,4 +126,42 @@ export async function rejectPayment(id: string, adminNote?: string) {
   })
 
   return result
+}
+
+export async function deletePayment(id: string) {
+  const payment = await findPaymentById(id)
+  if (!payment) {
+    throw Object.assign(new Error('결제를 찾을 수 없습니다.'), { statusCode: 404 })
+  }
+  if (payment.method !== 'manual') {
+    throw Object.assign(new Error('수동 결제만 삭제할 수 있습니다.'), { statusCode: 400 })
+  }
+
+  const application = payment.application
+  const product = application.product
+
+  await prisma.$transaction(async (tx) => {
+    // Payment 삭제
+    await tx.payment.delete({ where: { id } })
+
+    if (payment.status === 'pending') {
+      // pending: 아직 확정 전이므로 application도 함께 삭제
+      await tx.partyApplication.delete({ where: { id: application.id } })
+    } else if (payment.status === 'paid') {
+      // paid: application을 cancelled로, product 슬롯 복원
+      await tx.partyApplication.update({
+        where: { id: application.id },
+        data: { status: 'cancelled', startedAt: null, expiresAt: null },
+      })
+
+      await tx.ownProduct.update({
+        where: { id: product.id },
+        data: {
+          filledSlots: { decrement: 1 },
+          ...(product.status === 'closed' ? { status: 'recruiting' } : {}),
+        },
+      })
+    }
+    // cancelled: Payment만 삭제, 나머지 변경 없음
+  })
 }

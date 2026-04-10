@@ -30,6 +30,7 @@ import { adminOwnCategoriesRouter } from './routes/admin/ownCategories'
 import { adminOwnProductsRouter } from './routes/admin/ownProducts'
 import { adminOwnPartnersRouter } from './routes/admin/ownPartners'
 import { adminOwnPaymentsRouter } from './routes/admin/ownPayments'
+import { adminOwnUsersRouter } from './routes/admin/ownUsers'
 
 const app = express()
 
@@ -91,6 +92,7 @@ app.use('/own/admin/categories', adminOwnCategoriesRouter)
 app.use('/own/admin/products', adminOwnProductsRouter)
 app.use('/own/admin/partners', adminOwnPartnersRouter)
 app.use('/own/admin/payments', adminOwnPaymentsRouter)
+app.use('/own/admin/users', adminOwnUsersRouter)
 
 // ───────────────────────── Health ─────────────────────────
 app.get('/health', (_req, res) => {

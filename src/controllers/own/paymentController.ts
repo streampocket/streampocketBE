@@ -5,6 +5,7 @@ import {
   getPaymentDetail,
   approvePayment,
   rejectPayment,
+  deletePayment,
 } from '../../services/own/paymentService'
 
 // ───────────────────────── Zod 스키마 ─────────────────────────
@@ -51,4 +52,10 @@ export async function adminRejectPaymentHandler(req: Request, res: Response): Pr
   const { adminNote } = actionBodySchema.parse(req.body)
   const payment = await rejectPayment(id, adminNote)
   res.json({ data: payment })
+}
+
+export async function adminDeletePaymentHandler(req: Request, res: Response): Promise<void> {
+  const { id } = idParamSchema.parse(req.params)
+  await deletePayment(id)
+  res.json({ data: { message: 'ok' } })
 }

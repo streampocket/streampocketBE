@@ -1,6 +1,7 @@
 import { Prisma, ReviewCodeStatus } from '@prisma/client'
 import {
   createReviewCode,
+  createReviewCodes,
   deleteReviewCode,
   findReviewCodeById,
   findReviewCodes,
@@ -28,6 +29,21 @@ export type ReviewCodeStatusInput = {
 
 export async function getReviewCodes(input: GetReviewCodesInput) {
   return findReviewCodes(input)
+}
+
+export type BatchReviewCodeInput = {
+  gameName?: string
+  codes: string[]
+}
+
+export async function createReviewCodeBatch(input: BatchReviewCodeInput) {
+  const trimmedGameName = input.gameName?.trim() || undefined
+  const dataList = input.codes.map((code) => ({
+    gameName: trimmedGameName,
+    code: code.trim(),
+  }))
+  const count = await createReviewCodes(dataList)
+  return { count }
 }
 
 export async function createReviewCodeEntry(input: ReviewCodeFormInput) {

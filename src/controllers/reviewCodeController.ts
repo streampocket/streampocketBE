@@ -2,6 +2,7 @@ import { Prisma, ReviewCodeStatus } from '@prisma/client'
 import { Request, Response } from 'express'
 import { z } from 'zod'
 import {
+  createReviewCodeBatch,
   createReviewCodeEntry,
   deleteReviewCodeEntry,
   getReviewCodes,
@@ -24,6 +25,14 @@ const reviewCodeListQuerySchema = z.object({
 const reviewCodeBodySchema = z.object({
   gameName: z.string().trim().optional(),
   code: z.string().trim().min(1),
+})
+
+const reviewCodeBatchBodySchema = z.object({
+  gameName: z.string().trim().optional(),
+  codes: z
+    .array(z.string().trim().min(1))
+    .min(1, '최소 1개의 코드를 입력해주세요.')
+    .max(500, '한 번에 최대 500개까지 등록할 수 있습니다.'),
 })
 
 const reviewCodeStatusBodySchema = z.object({
@@ -54,6 +63,12 @@ export async function createReviewCodeHandler(req: Request, res: Response): Prom
   const body = reviewCodeBodySchema.parse(req.body)
   const reviewCode = await createReviewCodeEntry(body)
   res.status(201).json({ data: reviewCode })
+}
+
+export async function createReviewCodeBatchHandler(req: Request, res: Response): Promise<void> {
+  const body = reviewCodeBatchBodySchema.parse(req.body)
+  const result = await createReviewCodeBatch(body)
+  res.status(201).json({ data: result })
 }
 
 export async function updateReviewCodeHandler(

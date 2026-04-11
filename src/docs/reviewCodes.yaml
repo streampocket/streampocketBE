@@ -57,6 +57,45 @@ paths:
         '201':
           description: 생성 완료
 
+  /steam/admin/review-codes/batch:
+    post:
+      summary: 리뷰 게임 코드 일괄 등록
+      tags: [ReviewCodes]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [codes]
+              properties:
+                gameName:
+                  type: string
+                  example: Stardew Valley
+                codes:
+                  type: array
+                  items:
+                    type: string
+                  minItems: 1
+                  maxItems: 500
+                  example: ['XXXXX-YYYYY-ZZZZZ', 'AAAAA-BBBBB-CCCCC']
+      responses:
+        '201':
+          description: 일괄 등록 완료
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      count:
+                        type: integer
+                        example: 5
+
   /steam/admin/review-codes/{id}:
     put:
       summary: 리뷰 게임 코드 수정

@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import {
+  createReviewCodeBatchHandler,
   createReviewCodeHandler,
   deleteReviewCodeHandler,
   getReviewCodesHandler,
@@ -15,6 +16,7 @@ adminReviewCodesRouter.use(authMiddleware)
 
 adminReviewCodesRouter.get('/', asyncHandler(getReviewCodesHandler))
 adminReviewCodesRouter.post('/', asyncHandler(createReviewCodeHandler))
+adminReviewCodesRouter.post('/batch', asyncHandler(createReviewCodeBatchHandler))
 adminReviewCodesRouter.put('/:id', asyncHandler(updateReviewCodeHandler))
 adminReviewCodesRouter.patch('/:id/status', asyncHandler(updateReviewCodeStatusHandler))
 adminReviewCodesRouter.delete('/:id', asyncHandler(deleteReviewCodeHandler))

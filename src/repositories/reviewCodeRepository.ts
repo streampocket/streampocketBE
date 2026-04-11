@@ -85,6 +85,13 @@ export async function updateReviewCodeStatus(
   })
 }
 
+export async function createReviewCodes(
+  dataList: CreateReviewCodeInput[],
+): Promise<number> {
+  const result = await prisma.reviewCode.createMany({ data: dataList })
+  return result.count
+}
+
 export async function deleteReviewCode(id: string): Promise<void> {
   await prisma.reviewCode.delete({ where: { id } })
 }

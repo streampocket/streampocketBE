@@ -95,3 +95,31 @@ export async function createReviewCodes(
 export async function deleteReviewCode(id: string): Promise<void> {
   await prisma.reviewCode.delete({ where: { id } })
 }
+
+export async function reserveReviewCodes(
+  count: number,
+  usedBy: string,
+): Promise<ReviewCode[]> {
+  return prisma.$transaction(async (tx) => {
+    const codes = await tx.reviewCode.findMany({
+      where: { status: 'unused' },
+      orderBy: { createdAt: 'asc' },
+      take: count,
+    })
+
+    if (codes.length < count) {
+      throw Object.assign(
+        new Error(`사용 가능한 리뷰 코드가 부족합니다. (필요: ${count}, 가용: ${codes.length})`),
+        { statusCode: 409 },
+      )
+    }
+
+    const now = new Date()
+    await tx.reviewCode.updateMany({
+      where: { id: { in: codes.map((c) => c.id) } },
+      data: { status: 'used', usedBy, usedAt: now },
+    })
+
+    return codes.map((c) => ({ ...c, status: 'used' as const, usedBy, usedAt: now }))
+  })
+}

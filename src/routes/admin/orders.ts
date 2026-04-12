@@ -6,6 +6,7 @@ import {
   manualReturnHandler,
   exportOrdersHandler,
 } from '../../controllers/steamOrderController'
+import { sendReviewGameHandler } from '../../controllers/reviewGameController'
 import { authMiddleware } from '../../middlewares/auth'
 import { asyncHandler } from '../../utils/asyncHandler'
 
@@ -18,3 +19,4 @@ adminOrdersRouter.get('/export', asyncHandler(exportOrdersHandler))
 adminOrdersRouter.get('/:id', asyncHandler(getOrderDetailHandler))
 adminOrdersRouter.post('/:id/retry', asyncHandler(retryOrderHandler))
 adminOrdersRouter.post('/:id/return', asyncHandler(manualReturnHandler))
+adminOrdersRouter.post('/:id/review-game', asyncHandler(sendReviewGameHandler))

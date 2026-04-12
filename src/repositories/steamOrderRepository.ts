@@ -132,3 +132,10 @@ export async function updateOrderItem(
 ): Promise<SteamOrderItem> {
   return prisma.steamOrderItem.update({ where: { id }, data })
 }
+
+export async function updateReviewGameSentAt(id: string): Promise<SteamOrderItem> {
+  return prisma.steamOrderItem.update({
+    where: { id },
+    data: { reviewGameSentAt: new Date() },
+  })
+}

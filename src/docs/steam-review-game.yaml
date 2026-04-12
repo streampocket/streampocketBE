@@ -1,0 +1,39 @@
+paths:
+  /steam/admin/orders/{id}/review-game:
+    post:
+      tags:
+        - 주문 관리
+      summary: 리뷰게임 코드 알림톡 발송
+      description: |
+        구매확정된 주문에 대해 리뷰게임 코드를 알림톡으로 발송합니다.
+        상품명에서 "게임 1+N" 패턴을 파싱하여 N개의 ReviewCode를 FIFO로 소진하고 알림톡 1통으로 발송합니다.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: 주문 아이템 ID
+      responses:
+        '200':
+          description: 발송 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 리뷰게임 코드 발송 완료
+                  count:
+                    type: integer
+                    example: 7
+        '400':
+          description: 검증 실패 (미완료 주문, 구매확정 미완료, 전화번호 없음, 패턴 매칭 실패 등)
+        '404':
+          description: 주문을 찾을 수 없음
+        '409':
+          description: 이미 발송된 주문 또는 리뷰 코드 재고 부족

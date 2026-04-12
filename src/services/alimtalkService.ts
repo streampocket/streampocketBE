@@ -85,6 +85,14 @@ type AligoSendResponse = {
   }
 }
 
+type SendReviewGameAlimtalkInput = {
+  orderItemId: string
+  recipientPhoneNumber: string
+  recipientName: string | null
+  productName: string
+  codes: Array<{ gameName: string | null; code: string }>
+}
+
 type EnvConfig = {
   apiKey: string
   userId: string
@@ -92,6 +100,7 @@ type EnvConfig = {
   templateCodeNA: string
   templateCodeAA: string
   templateCodeNASecondary: string
+  templateCodeReviewGame: string
   sender: string
 }
 
@@ -178,6 +187,7 @@ export function getEnvConfig(): EnvConfig {
     templateCodeNA: process.env['ALIGO_TEMPLATE_CODE_NA'] ?? '',
     templateCodeAA: process.env['ALIGO_TEMPLATE_CODE_AA'] ?? '',
     templateCodeNASecondary: process.env['ALIGO_TEMPLATE_CODE_NA_SECONDARY'] ?? '',
+    templateCodeReviewGame: process.env['ALIGO_TEMPLATE_CODE_REVIEW_GAME'] ?? '',
     sender: process.env['ALIGO_SENDER'] ?? '',
   }
 }
@@ -556,5 +566,62 @@ export async function sendAlimtalkTest(): Promise<AlimtalkTestResult> {
     recipient: config.sender,
     providerMessageId: getProviderMessageId(json),
     providerMessage: json.message ?? '전송 요청 완료',
+  }
+}
+
+export async function sendReviewGameAlimtalk(
+  input: SendReviewGameAlimtalkInput,
+): Promise<void> {
+  const config = getEnvConfig()
+  if (!isConfigured(config)) {
+    throw new Error('알리고 환경변수가 모두 설정되지 않았습니다.')
+  }
+
+  if (!config.templateCodeReviewGame) {
+    throw new Error('리뷰게임 알림톡 템플릿 코드(ALIGO_TEMPLATE_CODE_REVIEW_GAME)가 설정되지 않았습니다.')
+  }
+
+  const template = await getActiveTemplateOrThrow(config, config.templateCodeReviewGame)
+  const buttonJson = buildButtonPayload(template)
+
+  const codeList = input.codes
+    .map((c, i) => `${i + 1}. ${c.gameName ? `[${c.gameName}] ` : ''}${c.code}`)
+    .join('\n')
+
+  const templateContent = template.templateContent ?? ''
+  const vars: Record<string, string> = {
+    상품명: input.productName,
+    코드목록: codeList,
+    코드수: String(input.codes.length),
+  }
+
+  const deliveryLog = await createDeliveryLog({
+    orderItemId: input.orderItemId,
+    channel: 'alimtalk',
+    recipient: input.recipientPhoneNumber,
+  })
+
+  try {
+    const json = await sendAlimtalkMessage({
+      templateCode: config.templateCodeReviewGame,
+      recipientPhoneNumber: input.recipientPhoneNumber,
+      recipientName: input.recipientName,
+      message: applyTemplate(templateContent, normalizeTemplateVars(vars)),
+      buttonJson,
+    })
+
+    await updateDeliveryLog(deliveryLog.id, {
+      status: 'sent',
+      providerMessageId: getProviderMessageId(json),
+      sentAt: new Date(),
+      errorMessage: null,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    await updateDeliveryLog(deliveryLog.id, {
+      status: 'failed',
+      errorMessage: message,
+    })
+    throw error
   }
 }

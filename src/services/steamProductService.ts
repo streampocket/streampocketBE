@@ -7,6 +7,7 @@ import {
   findActiveNaverProductIds,
   findProductNamesByNaverIds,
   bulkDeleteProductsByNaverIds,
+  countProductsByStatus,
   createProduct,
   updateProduct,
   updateProductNameByNaverId,
@@ -25,9 +26,13 @@ type UpdateProductInput = {
   status?: ProductStatus
 }
 
-export async function getProducts(status?: ProductStatus) {
-  const products = await findAllProducts(status)
+export async function getProducts(status?: ProductStatus, search?: string) {
+  const products = await findAllProducts(status, search)
   return products.map(({ _count, ...rest }) => ({ ...rest, stockCount: _count.accounts }))
+}
+
+export async function getProductCounts(search?: string) {
+  return countProductsByStatus(search)
 }
 
 export async function getProductDetail(id: string) {

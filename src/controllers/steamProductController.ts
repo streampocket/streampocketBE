@@ -2,6 +2,7 @@ import { Request, Response } from 'express'
 import { z } from 'zod'
 import {
   getProducts,
+  getProductCounts,
   getProductDetail,
   createSteamProduct,
   updateSteamProduct,
@@ -21,12 +22,16 @@ const updateProductSchema = z.object({
 
 const listQuerySchema = z.object({
   status: z.enum(['draft', 'active', 'inactive']).optional(),
+  search: z.string().optional(),
 })
 
 export async function getProductsHandler(req: Request, res: Response): Promise<void> {
-  const { status } = listQuerySchema.parse(req.query)
-  const products = await getProducts(status)
-  res.json({ data: products })
+  const { status, search } = listQuerySchema.parse(req.query)
+  const [products, counts] = await Promise.all([
+    getProducts(status, search),
+    getProductCounts(search),
+  ])
+  res.json({ data: products, total: products.length, counts })
 }
 
 export async function getProductDetailHandler(

@@ -15,9 +15,12 @@ type ProductWithAccountCount = SteamProduct & {
   _count: { accounts: number }
 }
 
-export async function findAllProducts(status?: ProductStatus): Promise<ProductWithAccountCount[]> {
+export async function findAllProducts(status?: ProductStatus, search?: string): Promise<ProductWithAccountCount[]> {
   return prisma.steamProduct.findMany({
-    where: status ? { status } : undefined,
+    where: {
+      ...(status ? { status } : {}),
+      ...(search ? { name: { contains: search, mode: 'insensitive' as const } } : {}),
+    },
     include: { _count: { select: { accounts: { where: { status: 'available' } } } } },
     orderBy: { createdAt: 'desc' },
   })
@@ -81,6 +84,22 @@ export async function findActiveNaverProductIds(): Promise<string[]> {
     select: { naverProductId: true },
   })
   return products.map((p) => p.naverProductId)
+}
+
+export async function countProductsByStatus(search?: string): Promise<{
+  total: number
+  active: number
+  draft: number
+  inactive: number
+}> {
+  const nameFilter = search ? { name: { contains: search, mode: 'insensitive' as const } } : {}
+  const [total, active, draft, inactive] = await Promise.all([
+    prisma.steamProduct.count({ where: { ...nameFilter } }),
+    prisma.steamProduct.count({ where: { status: 'active', ...nameFilter } }),
+    prisma.steamProduct.count({ where: { status: 'draft', ...nameFilter } }),
+    prisma.steamProduct.count({ where: { status: 'inactive', ...nameFilter } }),
+  ])
+  return { total, active, draft, inactive }
 }
 
 export async function deleteProductById(id: string): Promise<void> {

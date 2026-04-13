@@ -590,9 +590,7 @@ export async function sendReviewGameAlimtalk(
 
   const templateContent = template.templateContent ?? ''
   const vars: Record<string, string> = {
-    상품명: input.productName,
-    코드목록: codeList,
-    코드수: String(input.codes.length),
+    리뷰상품: codeList,
   }
 
   const deliveryLog = await createDeliveryLog({

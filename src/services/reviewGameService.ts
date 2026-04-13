@@ -44,7 +44,7 @@ export async function sendReviewGame(orderItemId: string): Promise<SendReviewGam
     )
   }
 
-  const codes = await reserveReviewCodes(reviewGameCount, order.productOrderId)
+  const codes = await reserveReviewCodes(reviewGameCount, order.receiverName ?? order.productOrderId)
 
   try {
     await sendReviewGameAlimtalk({

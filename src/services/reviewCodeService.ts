@@ -12,6 +12,7 @@ import {
 export type GetReviewCodesInput = {
   status?: ReviewCodeStatus
   gameName?: string
+  sortField: 'createdAt' | 'usedAt'
   dateOrder: Prisma.SortOrder
   page: number
   pageSize: number

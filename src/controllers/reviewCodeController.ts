@@ -17,6 +17,7 @@ const reviewCodeIdParamSchema = z.object({
 const reviewCodeListQuerySchema = z.object({
   status: z.nativeEnum(ReviewCodeStatus).optional(),
   gameName: z.string().trim().optional(),
+  sortField: z.enum(['createdAt', 'usedAt']).default('createdAt'),
   dateOrder: z.enum(['asc', 'desc']).default('desc'),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(10),
@@ -45,6 +46,7 @@ export async function getReviewCodesHandler(req: Request, res: Response): Promis
   const result = await getReviewCodes({
     status: query.status,
     gameName: query.gameName,
+    sortField: query.sortField,
     dateOrder: query.dateOrder as Prisma.SortOrder,
     page: query.page,
     pageSize: query.pageSize,

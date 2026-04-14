@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma'
 export type ReviewCodeListParams = {
   status?: ReviewCodeStatus
   gameName?: string
+  sortField: 'createdAt' | 'usedAt'
   dateOrder: Prisma.SortOrder
   page: number
   pageSize: number
@@ -47,7 +48,10 @@ export async function findReviewCodes(
   const [items, total] = await prisma.$transaction([
     prisma.reviewCode.findMany({
       where,
-      orderBy: { createdAt: params.dateOrder },
+      orderBy:
+        params.sortField === 'usedAt'
+          ? { usedAt: { sort: params.dateOrder, nulls: 'last' } }
+          : { createdAt: params.dateOrder },
       skip: (params.page - 1) * params.pageSize,
       take: params.pageSize,
     }),

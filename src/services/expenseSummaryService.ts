@@ -1,4 +1,4 @@
-import type { ExpenseCategory } from '@prisma/client'
+import type { ExpenseCategory, ExpensePayer } from '@prisma/client'
 import { findExpensesByDateRange } from '../repositories/expenseRepository'
 import { sendDiscordAlert } from '../lib/discord'
 
@@ -14,6 +14,11 @@ const CATEGORY_ICONS: Record<ExpenseCategory, string> = {
   country_change: '🌍',
   review_game: '📝',
   other: '📦',
+}
+
+const PAYER_LABELS: Record<ExpensePayer, string> = {
+  song_donggeon: '송동건',
+  im_jeongbin: '임정빈',
 }
 
 export async function sendDailyExpenseSummary(): Promise<void> {
@@ -50,19 +55,34 @@ export async function sendDailyExpenseSummary(): Promise<void> {
     lines.push(`\n${icon} **${label}** (${items.length}건)`)
 
     for (const item of items) {
-      const perPerson = Math.round(item.amount / 2)
+      const payerLabel = PAYER_LABELS[item.payer]
       const memo = item.memo ? ` | ${item.memo}` : ''
       lines.push(
-        `  - ${item.amount.toLocaleString('ko-KR')}원 (인당 ${perPerson.toLocaleString('ko-KR')}원)${memo}`,
+        `  - ${item.amount.toLocaleString('ko-KR')}원 (${payerLabel})${memo}`,
       )
     }
   }
 
   const totalAmount = expenses.reduce((sum, e) => sum + e.amount, 0)
-  const totalPerPerson = Math.round(totalAmount / 2)
-  lines.push(
-    `\n💰 **총합:** ${totalAmount.toLocaleString('ko-KR')}원 (인당 ${totalPerPerson.toLocaleString('ko-KR')}원)`,
-  )
+  const songTotal = expenses
+    .filter((e) => e.payer === 'song_donggeon')
+    .reduce((sum, e) => sum + e.amount, 0)
+  const imTotal = expenses
+    .filter((e) => e.payer === 'im_jeongbin')
+    .reduce((sum, e) => sum + e.amount, 0)
+  const settlement = Math.round((songTotal - imTotal) / 2)
+
+  lines.push(`\n💰 **총합:** ${totalAmount.toLocaleString('ko-KR')}원`)
+  lines.push(`  송동건 결제: ${songTotal.toLocaleString('ko-KR')}원`)
+  lines.push(`  임정빈 결제: ${imTotal.toLocaleString('ko-KR')}원`)
+
+  if (settlement > 0) {
+    lines.push(`\n💸 **정산:** 임정빈 → 송동건 ${settlement.toLocaleString('ko-KR')}원`)
+  } else if (settlement < 0) {
+    lines.push(`\n💸 **정산:** 송동건 → 임정빈 ${Math.abs(settlement).toLocaleString('ko-KR')}원`)
+  } else {
+    lines.push(`\n💸 **정산:** 없음 (동일 금액)`)
+  }
 
   await sendDiscordAlert('expense', lines.join('\n'))
 }

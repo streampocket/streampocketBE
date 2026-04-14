@@ -51,6 +51,11 @@ enum ExpenseCategory {
   other
 }
 
+enum ExpensePayer {
+  song_donggeon
+  im_jeongbin
+}
+
 model Admin {
   id        String   @id @default(uuid()) @db.Uuid
   email     String   @unique @db.VarChar(320)
@@ -186,6 +191,7 @@ model Expense {
   id        String          @id @default(uuid()) @db.Uuid
   date      DateTime        @db.Timestamptz(6)
   category  ExpenseCategory
+  payer     ExpensePayer    @default(song_donggeon)
   amount    Int
   memo      String?         @db.VarChar(500)
   createdAt DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)

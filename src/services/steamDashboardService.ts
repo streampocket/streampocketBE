@@ -104,55 +104,135 @@ export async function getRevenueSummary(startDate: Date, endDate: Date): Promise
 }
 
 export async function getDashboardStats(period: Period = 'today') {
-  const todayStart = new Date()
-  todayStart.setHours(0, 0, 0, 0)
-
   const { start: periodStart, end: periodEnd } = getPeriodRange(period)
 
   const [
-    todayOrderCount,
-    pendingCount,
-    manualReviewCount,
-    failedCount,
-    stockByProduct,
+    totalOrderCount,
+    confirmedCount,
+    pendingDecisionCount,
+    returnedCount,
   ] = await Promise.all([
+    prisma.steamOrderItem.count(),
     prisma.steamOrderItem.count({
-      where: { createdAt: { gte: todayStart } },
+      where: { decisionDate: { not: null } },
     }),
-    prisma.steamOrderItem.count({ where: { fulfillmentStatus: 'pending' } }),
-    prisma.steamOrderItem.count({ where: { fulfillmentStatus: 'manual_review' } }),
-    prisma.steamOrderItem.count({ where: { fulfillmentStatus: 'failed' } }),
-    prisma.steamProduct.findMany({
-      where: { status: 'active' },
-      select: {
-        id: true,
-        name: true,
-        _count: {
-          select: {
-            accounts: { where: { status: 'available' } },
-          },
-        },
-      },
-      orderBy: { name: 'asc' },
+    prisma.steamOrderItem.count({
+      where: { fulfillmentStatus: 'completed', decisionDate: null },
+    }),
+    prisma.steamOrderItem.count({
+      where: { fulfillmentStatus: 'returned' },
     }),
   ])
 
   const revenue = await getRevenueSummary(periodStart, periodEnd)
 
   return {
-    today: {
-      orderCount: todayOrderCount,
+    cards: {
+      totalOrders: totalOrderCount,
+      confirmedOrders: confirmedCount,
+      pendingDecisionOrders: pendingDecisionCount,
+      returnedOrders: returnedCount,
     },
-    orders: {
-      pending: pendingCount,
-      manualReview: manualReviewCount,
-      failed: failedCount,
-    },
-    stock: stockByProduct.map((p) => ({
-      productId: p.id,
-      productName: p.name,
-      availableCodes: p._count.accounts,
-    })),
     revenue,
   }
+}
+
+export async function getRevenueChart(days: number) {
+  const startDate = new Date()
+  startDate.setDate(startDate.getDate() - days)
+  startDate.setHours(0, 0, 0, 0)
+
+  const revenueByDay = await prisma.$queryRaw<
+    Array<{ date: Date; total_revenue: bigint; total_settlement: bigint }>
+  >`
+    SELECT
+      DATE_TRUNC('day', decision_date) AS date,
+      COALESCE(SUM(unit_price), 0) AS total_revenue,
+      COALESCE(SUM(settlement_amount), 0) AS total_settlement
+    FROM steam_order_items
+    WHERE fulfillment_status = 'completed'
+      AND decision_date IS NOT NULL
+      AND decision_date >= ${startDate}
+    GROUP BY DATE_TRUNC('day', decision_date)
+    ORDER BY date
+  `
+
+  const expenseByDay = await prisma.$queryRaw<
+    Array<{ date: Date; total_expense: bigint }>
+  >`
+    SELECT
+      DATE_TRUNC('day', date) AS date,
+      COALESCE(SUM(amount), 0) AS total_expense
+    FROM expenses
+    WHERE date >= ${startDate}
+    GROUP BY DATE_TRUNC('day', date)
+  `
+
+  const expenseMap = new Map<string, number>()
+  for (const row of expenseByDay) {
+    const key = new Date(row.date).toISOString().slice(0, 10)
+    expenseMap.set(key, Number(row.total_expense))
+  }
+
+  const revenueMap = new Map<string, { totalRevenue: number; totalSettlement: number }>()
+  for (const row of revenueByDay) {
+    const key = new Date(row.date).toISOString().slice(0, 10)
+    revenueMap.set(key, {
+      totalRevenue: Number(row.total_revenue),
+      totalSettlement: Number(row.total_settlement),
+    })
+  }
+
+  const result: Array<{ date: string; totalRevenue: number; netProfit: number }> = []
+  const current = new Date(startDate)
+  const now = new Date()
+
+  while (current <= now) {
+    const key = current.toISOString().slice(0, 10)
+    const rev = revenueMap.get(key)
+    const expense = expenseMap.get(key) ?? 0
+    result.push({
+      date: key,
+      totalRevenue: rev?.totalRevenue ?? 0,
+      netProfit: (rev?.totalSettlement ?? 0) - expense,
+    })
+    current.setDate(current.getDate() + 1)
+  }
+
+  return result
+}
+
+export async function getProductRanking() {
+  const rankings = await prisma.steamOrderItem.groupBy({
+    by: ['productName'],
+    where: {
+      fulfillmentStatus: { not: 'returned' },
+    },
+    _count: { id: true },
+    _sum: { unitPrice: true },
+    orderBy: { _sum: { unitPrice: 'desc' } },
+    take: 5,
+  })
+
+  return rankings.map((r) => ({
+    productName: r.productName,
+    orderCount: r._count.id,
+    totalRevenue: r._sum.unitPrice ?? 0,
+  }))
+}
+
+export async function getAverageDecisionDays() {
+  const result = await prisma.$queryRaw<Array<{ avg_days: number | null }>>`
+    SELECT AVG(
+      EXTRACT(EPOCH FROM (decision_date - paid_at)) / 86400.0
+    ) AS avg_days
+    FROM steam_order_items
+    WHERE decision_date IS NOT NULL
+      AND paid_at IS NOT NULL
+  `
+
+  const avgDays = result[0]?.avg_days
+  return avgDays !== null && avgDays !== undefined
+    ? Math.round(avgDays * 10) / 10
+    : 0
 }

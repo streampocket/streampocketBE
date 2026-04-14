@@ -7,14 +7,6 @@ import {
   deleteExpense as deleteRepo,
   sumExpensesByCategory,
 } from '../repositories/expenseRepository'
-import { sendDiscordAlert } from '../lib/discord'
-
-const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
-  game_purchase: '게임 구매비',
-  country_change: '국가변경',
-  review_game: '리뷰 게임',
-  other: '기타',
-}
 
 type GetExpensesInput = {
   category?: ExpenseCategory
@@ -43,17 +35,7 @@ type CreateExpenseInput = {
 }
 
 export async function createExpenseEntry(input: CreateExpenseInput) {
-  const expense = await createRepo(input)
-
-  const perPerson = Math.round(expense.amount / 2)
-  const label = CATEGORY_LABELS[expense.category]
-  const memo = expense.memo ? `\n메모: ${expense.memo}` : ''
-  sendDiscordAlert(
-    'expense',
-    `📝 **비용 등록**\n분류: ${label}\n금액: ${expense.amount.toLocaleString('ko-KR')}원 (인당 ${perPerson.toLocaleString('ko-KR')}원)${memo}`,
-  ).catch(() => {})
-
-  return expense
+  return createRepo(input)
 }
 
 type UpdateExpenseInput = {

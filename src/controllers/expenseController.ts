@@ -43,9 +43,11 @@ const summaryQuerySchema = z.object({
 
 function yearMonthToRange(yearMonth: string): { startDate: Date; endDate: Date } {
   const [year, month] = yearMonth.split('-').map(Number)
-  const startDate = new Date(Date.UTC(year!, month! - 1, 1))
   const lastDay = new Date(Date.UTC(year!, month!, 0)).getUTCDate()
-  const endDate = new Date(Date.UTC(year!, month! - 1, lastDay, 23, 59, 59, 999))
+  const mm = String(month).padStart(2, '0')
+  // KST 기준 월의 시작~끝
+  const startDate = new Date(`${year}-${mm}-01T00:00:00.000+09:00`)
+  const endDate = new Date(`${year}-${mm}-${String(lastDay).padStart(2, '0')}T23:59:59.999+09:00`)
   return { startDate, endDate }
 }
 
@@ -93,8 +95,17 @@ export async function getExpenseSummaryHandler(req: Request, res: Response): Pro
 
 export async function createExpenseHandler(req: Request, res: Response): Promise<void> {
   const body = expenseBodySchema.parse(req.body)
+
+  // 사용자가 선택한 날짜 + 현재 KST 시간 결합
+  const now = new Date()
+  const [year, month, day] = body.date.split('-').map(Number)
+  const kstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000)
+  const date = new Date(
+    `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(kstNow.getUTCHours()).padStart(2, '0')}:${String(kstNow.getUTCMinutes()).padStart(2, '0')}:${String(kstNow.getUTCSeconds()).padStart(2, '0')}+09:00`,
+  )
+
   const expense = await createExpenseEntry({
-    date: new Date(body.date),
+    date,
     category: body.category,
     amount: body.amount,
     memo: body.memo,
@@ -105,9 +116,20 @@ export async function createExpenseHandler(req: Request, res: Response): Promise
 export async function updateExpenseHandler(req: Request, res: Response): Promise<void> {
   const { id } = idParamSchema.parse(req.params)
   const body = expenseUpdateBodySchema.parse(req.body)
+
+  let date: Date | undefined
+  if (body.date) {
+    const now = new Date()
+    const [year, month, day] = body.date.split('-').map(Number)
+    const kstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000)
+    date = new Date(
+      `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(kstNow.getUTCHours()).padStart(2, '0')}:${String(kstNow.getUTCMinutes()).padStart(2, '0')}:${String(kstNow.getUTCSeconds()).padStart(2, '0')}+09:00`,
+    )
+  }
+
   const expense = await updateExpenseEntry(id, {
     ...body,
-    date: body.date ? new Date(body.date) : undefined,
+    date,
   })
   res.json({ data: expense })
 }

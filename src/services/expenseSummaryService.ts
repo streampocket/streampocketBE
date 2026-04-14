@@ -21,7 +21,8 @@ export async function sendDailyExpenseSummary(): Promise<void> {
   const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000)
   const todayStr = kst.toISOString().slice(0, 10)
 
-  const startOfDay = new Date(`${todayStr}T00:00:00+09:00`)
+  // KST 기준 당일 00:00:00 ~ 23:59:59.999
+  const startOfDay = new Date(`${todayStr}T00:00:00.000+09:00`)
   const endOfDay = new Date(`${todayStr}T23:59:59.999+09:00`)
 
   const expenses = await findExpensesByDateRange(startOfDay, endOfDay)

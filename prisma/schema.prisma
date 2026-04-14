@@ -184,7 +184,7 @@ model ManualRevenue {
 
 model Expense {
   id        String          @id @default(uuid()) @db.Uuid
-  date      DateTime        @db.Date
+  date      DateTime        @db.Timestamptz(6)
   category  ExpenseCategory
   amount    Int
   memo      String?         @db.VarChar(500)

@@ -64,6 +64,15 @@ export async function deleteExpense(id: string) {
   await prisma.expense.delete({ where: { id } })
 }
 
+export async function findExpensesByDateRange(startOfDay: Date, endOfDay: Date) {
+  return prisma.expense.findMany({
+    where: {
+      date: { gte: startOfDay, lte: endOfDay },
+    },
+    orderBy: { createdAt: 'asc' },
+  })
+}
+
 export async function sumExpensesByCategory(startDate: Date, endDate: Date) {
   const results = await prisma.expense.groupBy({
     by: ['category'],

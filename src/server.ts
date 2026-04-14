@@ -4,6 +4,7 @@ import { runOrderPolling } from './services/steamFulfillmentService'
 import { naverOrderSource } from './services/platform/naverOrderSource'
 import { generateWeeklySettlement } from './services/settlementService'
 import { expireOldParties } from './services/own/ownProductService'
+import { sendDailyExpenseSummary } from './services/expenseSummaryService'
 
 const PORT = Number(process.env.PORT ?? 4000)
 const POLL_INTERVAL_MS = Number(process.env['ORDER_POLL_INTERVAL_SECONDS'] ?? 300) * 1000
@@ -63,4 +64,25 @@ app.listen(PORT, () => {
   }, 60_000)
 
   console.log('파티원 만료 스케줄러 시작: 매일 00:00')
+
+  // 일일 비용 요약 스케줄러 (매일 23:30 KST)
+  let lastExpenseSummaryDate = ''
+
+  setInterval(() => {
+    const now = new Date()
+    const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000)
+    const today = kst.toISOString().slice(0, 10)
+    const hour = kst.getUTCHours()
+    const minute = kst.getUTCMinutes()
+
+    if (hour === 23 && minute === 30 && lastExpenseSummaryDate !== today) {
+      lastExpenseSummaryDate = today
+      console.log('[EXPENSE_SUMMARY] 일일 비용 요약 전송')
+      sendDailyExpenseSummary().catch((err) => {
+        console.error('[EXPENSE_SUMMARY] 일일 비용 요약 전송 실패', err)
+      })
+    }
+  }, 60_000)
+
+  console.log('일일 비용 요약 스케줄러 시작: 매일 23:30')
 })

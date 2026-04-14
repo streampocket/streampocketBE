@@ -1,6 +1,6 @@
 import { Request, Response } from 'express'
 import { z } from 'zod'
-import { ExpenseCategory } from '@prisma/client'
+import { ExpenseCategory, ExpensePayer } from '@prisma/client'
 import {
   getExpenses,
   createExpenseEntry,
@@ -19,9 +19,12 @@ const expenseListQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 })
 
+const expensePayerSchema = z.nativeEnum(ExpensePayer)
+
 const expenseBodySchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   category: expenseCategorySchema,
+  payer: expensePayerSchema,
   amount: z.number().int().min(0),
   memo: z.string().max(500).optional(),
 })
@@ -29,6 +32,7 @@ const expenseBodySchema = z.object({
 const expenseUpdateBodySchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   category: expenseCategorySchema.optional(),
+  payer: expensePayerSchema.optional(),
   amount: z.number().int().min(0).optional(),
   memo: z.string().max(500).nullable().optional(),
 })
@@ -107,6 +111,7 @@ export async function createExpenseHandler(req: Request, res: Response): Promise
   const expense = await createExpenseEntry({
     date,
     category: body.category,
+    payer: body.payer,
     amount: body.amount,
     memo: body.memo,
   })

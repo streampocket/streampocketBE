@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma'
-import { ExpenseCategory, Prisma } from '@prisma/client'
+import { ExpenseCategory, ExpensePayer, Prisma } from '@prisma/client'
 
 type FindExpensesParams = {
   category?: ExpenseCategory
@@ -41,6 +41,7 @@ export async function findExpenseById(id: string) {
 type CreateExpenseData = {
   date: Date
   category: ExpenseCategory
+  payer: ExpensePayer
   amount: number
   memo?: string
 }
@@ -52,6 +53,7 @@ export async function createExpense(data: CreateExpenseData) {
 type UpdateExpenseData = {
   date?: Date
   category?: ExpenseCategory
+  payer?: ExpensePayer
   amount?: number
   memo?: string | null
 }

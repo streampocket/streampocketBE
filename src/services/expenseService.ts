@@ -1,4 +1,4 @@
-import { ExpenseCategory } from '@prisma/client'
+import { ExpenseCategory, ExpensePayer } from '@prisma/client'
 import {
   findExpenses,
   findExpenseById,
@@ -14,6 +14,11 @@ const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   country_change: '국가변경',
   review_game: '리뷰 게임',
   other: '기타',
+}
+
+const PAYER_LABELS: Record<ExpensePayer, string> = {
+  song_donggeon: '송동건',
+  im_jeongbin: '임정빈',
 }
 
 type GetExpensesInput = {
@@ -38,6 +43,7 @@ export async function getExpenseById(id: string) {
 type CreateExpenseInput = {
   date: Date
   category: ExpenseCategory
+  payer: ExpensePayer
   amount: number
   memo?: string
 }
@@ -47,10 +53,11 @@ export async function createExpenseEntry(input: CreateExpenseInput) {
 
   const perPerson = Math.round(expense.amount / 2)
   const label = CATEGORY_LABELS[expense.category]
+  const payerLabel = PAYER_LABELS[expense.payer]
   const memo = expense.memo ? `\n메모: ${expense.memo}` : ''
   sendDiscordAlert(
     'expense',
-    `📝 **비용 등록**\n분류: ${label}\n금액: ${expense.amount.toLocaleString('ko-KR')}원 (인당 ${perPerson.toLocaleString('ko-KR')}원)${memo}`,
+    `📝 **비용 등록**\n분류: ${label}\n결제자: ${payerLabel}\n금액: ${expense.amount.toLocaleString('ko-KR')}원 (인당 ${perPerson.toLocaleString('ko-KR')}원)${memo}`,
   ).catch(() => {})
 
   return expense
@@ -59,6 +66,7 @@ export async function createExpenseEntry(input: CreateExpenseInput) {
 type UpdateExpenseInput = {
   date?: Date
   category?: ExpenseCategory
+  payer?: ExpensePayer
   amount?: number
   memo?: string | null
 }

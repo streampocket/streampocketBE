@@ -65,7 +65,7 @@ app.listen(PORT, () => {
 
   console.log('파티원 만료 스케줄러 시작: 매일 00:00')
 
-  // 일일 비용 요약 스케줄러 (매일 23:30 KST)
+  // 일일 비용 요약 스케줄러 (매일 23:50 KST)
   let lastExpenseSummaryDate = ''
 
   setInterval(() => {
@@ -75,7 +75,7 @@ app.listen(PORT, () => {
     const hour = kst.getUTCHours()
     const minute = kst.getUTCMinutes()
 
-    if (hour === 23 && minute === 30 && lastExpenseSummaryDate !== today) {
+    if (hour === 23 && minute === 50 && lastExpenseSummaryDate !== today) {
       lastExpenseSummaryDate = today
       console.log('[EXPENSE_SUMMARY] 일일 비용 요약 전송')
       sendDailyExpenseSummary().catch((err) => {
@@ -84,5 +84,5 @@ app.listen(PORT, () => {
     }
   }, 60_000)
 
-  console.log('일일 비용 요약 스케줄러 시작: 매일 23:30')
+  console.log('일일 비용 요약 스케줄러 시작: 매일 23:50')
 })

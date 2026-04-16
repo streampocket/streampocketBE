@@ -61,6 +61,7 @@ const naverProductListResponseSchema = z.object({
             z.object({
               channelProductNo: z.number(),
               name: z.string().min(1),
+              salePrice: z.number().optional(),
             }),
           )
           .optional(),
@@ -190,7 +191,7 @@ export async function fetchProductOrderDetails(
   return body.data
 }
 
-export async function fetchNaverProducts(): Promise<{ productId: string; name: string }[]> {
+export async function fetchNaverProducts(): Promise<{ productId: string; name: string; price: number | null }[]> {
   const res = await naverApiRequest('/v1/products/search', {
     method: 'POST',
     body: JSON.stringify({
@@ -210,6 +211,7 @@ export async function fetchNaverProducts(): Promise<{ productId: string; name: s
   return body.contents.map((item) => ({
     productId: String(item.channelProducts?.[0]?.channelProductNo ?? item.originProductNo),
     name: item.channelProducts?.[0]?.name ?? `네이버 상품 ${item.originProductNo}`,
+    price: item.channelProducts?.[0]?.salePrice ?? null,
   }))
 }
 

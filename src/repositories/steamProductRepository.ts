@@ -4,6 +4,7 @@ import { ProductStatus, SteamProduct } from '@prisma/client'
 type CreateProductInput = {
   name: string
   naverProductId: string
+  price?: number | null
 }
 
 type UpdateProductInput = {
@@ -50,21 +51,21 @@ export async function findAllNaverProductIds(): Promise<string[]> {
   return products.map((p) => p.naverProductId)
 }
 
-export async function findProductNamesByNaverIds(
+export async function findProductFieldsByNaverIds(
   naverProductIds: string[],
-): Promise<{ naverProductId: string; name: string }[]> {
+): Promise<{ naverProductId: string; name: string; price: number | null }[]> {
   if (naverProductIds.length === 0) return []
   return prisma.steamProduct.findMany({
     where: { naverProductId: { in: naverProductIds } },
-    select: { naverProductId: true, name: true },
+    select: { naverProductId: true, name: true, price: true },
   })
 }
 
-export async function updateProductNameByNaverId(
+export async function updateProductByNaverId(
   naverProductId: string,
-  name: string,
+  data: { name?: string; price?: number | null },
 ): Promise<void> {
-  await prisma.steamProduct.update({ where: { naverProductId }, data: { name } })
+  await prisma.steamProduct.update({ where: { naverProductId }, data })
 }
 
 // naverProductId 목록으로 실제 productId 목록 반환

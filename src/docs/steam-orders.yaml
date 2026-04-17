@@ -115,12 +115,10 @@ paths:
               properties:
                 friendLink1:
                   type: string
-                  format: uri
                   nullable: true
                   maxLength: 500
                 friendLink2:
                   type: string
-                  format: uri
                   nullable: true
                   maxLength: 500
       responses:

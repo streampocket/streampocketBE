@@ -22,6 +22,9 @@ type UpdateOrderItemInput = {
   returnedAt?: Date
   decisionDate?: Date
   settlementAmount?: number
+  friendLink1?: string | null
+  friendLink2?: string | null
+  giftCompletedAt?: Date
 }
 
 type ListOrdersInput = {

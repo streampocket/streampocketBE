@@ -123,6 +123,47 @@ export async function retryOrder(id: string): Promise<void> {
   )
 }
 
+type UpdateFriendLinksInput = {
+  friendLink1?: string | null
+  friendLink2?: string | null
+}
+
+export async function updateFriendLinks(
+  id: string,
+  input: UpdateFriendLinksInput,
+): Promise<void> {
+  const order = await findOrderById(id)
+  if (!order) {
+    throw Object.assign(new Error('주문을 찾을 수 없습니다.'), { statusCode: 404 })
+  }
+
+  if (detectProductType(order.productName) !== 'AA') {
+    throw Object.assign(new Error('AA(선물형) 주문만 사용 가능합니다.'), { statusCode: 400 })
+  }
+
+  await updateOrderItem(id, {
+    friendLink1: input.friendLink1,
+    friendLink2: input.friendLink2,
+  })
+}
+
+export async function markGiftCompleted(id: string): Promise<void> {
+  const order = await findOrderById(id)
+  if (!order) {
+    throw Object.assign(new Error('주문을 찾을 수 없습니다.'), { statusCode: 404 })
+  }
+
+  if (detectProductType(order.productName) !== 'AA') {
+    throw Object.assign(new Error('AA(선물형) 주문만 사용 가능합니다.'), { statusCode: 400 })
+  }
+
+  if (order.giftCompletedAt) {
+    throw Object.assign(new Error('이미 선물 접수 완료 처리된 주문입니다.'), { statusCode: 400 })
+  }
+
+  await updateOrderItem(id, { giftCompletedAt: new Date() })
+}
+
 export async function manualReturnOrder(id: string): Promise<void> {
   const order = await findOrderById(id)
   if (!order) {

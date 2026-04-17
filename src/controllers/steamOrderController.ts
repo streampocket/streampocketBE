@@ -1,6 +1,14 @@
 import { Request, Response } from 'express'
 import { z } from 'zod'
-import { getOrders, getOrderDetail, retryOrder, manualReturnOrder, exportOrdersForExcel } from '../services/steamOrderService'
+import {
+  getOrders,
+  getOrderDetail,
+  retryOrder,
+  manualReturnOrder,
+  exportOrdersForExcel,
+  updateFriendLinks,
+  markGiftCompleted,
+} from '../services/steamOrderService'
 import { buildOrderExcelBuffer } from '../utils/excel'
 
 const listQuerySchema = z.object({
@@ -74,4 +82,28 @@ export async function manualReturnHandler(
   const { id } = req.params
   await manualReturnOrder(id)
   res.json({ message: '반품 처리 완료' })
+}
+
+const friendLinksBodySchema = z.object({
+  friendLink1: z.string().trim().max(500).nullable().optional(),
+  friendLink2: z.string().trim().max(500).nullable().optional(),
+})
+
+export async function updateFriendLinksHandler(
+  req: Request<{ id: string }>,
+  res: Response,
+): Promise<void> {
+  const { id } = req.params
+  const body = friendLinksBodySchema.parse(req.body)
+  await updateFriendLinks(id, body)
+  res.json({ message: '친구 링크가 저장되었습니다.' })
+}
+
+export async function markGiftCompletedHandler(
+  req: Request<{ id: string }>,
+  res: Response,
+): Promise<void> {
+  const { id } = req.params
+  await markGiftCompleted(id)
+  res.json({ message: '선물 접수 완료 처리되었습니다.' })
 }

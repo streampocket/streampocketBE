@@ -5,6 +5,8 @@ import {
   retryOrderHandler,
   manualReturnHandler,
   exportOrdersHandler,
+  updateFriendLinksHandler,
+  markGiftCompletedHandler,
 } from '../../controllers/steamOrderController'
 import { sendReviewGameHandler } from '../../controllers/reviewGameController'
 import { authMiddleware } from '../../middlewares/auth'
@@ -20,3 +22,5 @@ adminOrdersRouter.get('/:id', asyncHandler(getOrderDetailHandler))
 adminOrdersRouter.post('/:id/retry', asyncHandler(retryOrderHandler))
 adminOrdersRouter.post('/:id/return', asyncHandler(manualReturnHandler))
 adminOrdersRouter.post('/:id/review-game', asyncHandler(sendReviewGameHandler))
+adminOrdersRouter.patch('/:id/friend-links', asyncHandler(updateFriendLinksHandler))
+adminOrdersRouter.post('/:id/gift-complete', asyncHandler(markGiftCompletedHandler))

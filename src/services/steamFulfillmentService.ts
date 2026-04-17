@@ -42,7 +42,7 @@ export async function processOrder(
 
   await sendDiscordAlert(
     'order',
-    `🔔 신규 주문 감지\n상품: ${item.productName}\n주문: ${item.productOrderId}`,
+    `🔔 신규 주문 감지\n상품: ${item.productName}\n금액: ${item.unitPrice.toLocaleString('ko-KR')}원\n수신자: ${item.receiverName ?? '-'}\n주문: ${item.productOrderId}`,
   )
 
   const orderItem = await createOrderItem({

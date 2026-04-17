@@ -92,3 +92,60 @@ paths:
           description: 반품 불가 상태
         '404':
           description: 주문 없음
+
+  /steam/admin/orders/{id}/friend-links:
+    patch:
+      summary: AA 주문 친구 추가 링크 저장
+      description: AA(선물형) 주문의 스팀 친구 추가 URL 2개를 저장한다. null 전송 시 해당 링크 삭제.
+      tags: [SteamOrders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                friendLink1:
+                  type: string
+                  nullable: true
+                  maxLength: 500
+                friendLink2:
+                  type: string
+                  nullable: true
+                  maxLength: 500
+      responses:
+        '200':
+          description: 저장 완료
+        '400':
+          description: AA 주문 아님 또는 URL 형식 오류
+        '404':
+          description: 주문 없음
+
+  /steam/admin/orders/{id}/gift-complete:
+    post:
+      summary: AA 주문 선물 접수 완료 처리
+      description: AA(선물형) 주문의 `giftCompletedAt` 타임스탬프를 현재 시각으로 기록한다. 1회만 호출 가능.
+      tags: [SteamOrders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 선물 접수 완료 처리됨
+        '400':
+          description: AA 주문 아님 또는 이미 완료된 주문
+        '404':
+          description: 주문 없음

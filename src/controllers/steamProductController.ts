@@ -23,15 +23,24 @@ const updateProductSchema = z.object({
 const listQuerySchema = z.object({
   status: z.enum(['draft', 'active', 'inactive']).optional(),
   search: z.string().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(200).default(100),
 })
 
 export async function getProductsHandler(req: Request, res: Response): Promise<void> {
-  const { status, search } = listQuerySchema.parse(req.query)
+  const { status, search, page, pageSize } = listQuerySchema.parse(req.query)
   const [products, counts] = await Promise.all([
-    getProducts(status, search),
+    getProducts({ status, search, page, pageSize }),
     getProductCounts(search),
   ])
-  res.json({ data: products, total: products.length, counts })
+  res.json({
+    data: products.data,
+    total: products.total,
+    page: products.page,
+    pageSize: products.pageSize,
+    totalPages: products.totalPages,
+    counts,
+  })
 }
 
 export async function getProductDetailHandler(

@@ -16,15 +16,34 @@ type ProductWithAccountCount = SteamProduct & {
   _count: { accounts: number }
 }
 
-export async function findAllProducts(status?: ProductStatus, search?: string): Promise<ProductWithAccountCount[]> {
-  return prisma.steamProduct.findMany({
-    where: {
-      ...(status ? { status } : {}),
-      ...(search ? { name: { contains: search, mode: 'insensitive' as const } } : {}),
-    },
-    include: { _count: { select: { accounts: { where: { status: 'available' } } } } },
-    orderBy: { createdAt: 'desc' },
-  })
+type FindAllProductsParams = {
+  status?: ProductStatus
+  search?: string
+  page: number
+  pageSize: number
+}
+
+export async function findAllProducts(
+  params: FindAllProductsParams,
+): Promise<{ data: ProductWithAccountCount[]; total: number }> {
+  const { status, search, page, pageSize } = params
+  const where = {
+    ...(status ? { status } : {}),
+    ...(search ? { name: { contains: search, mode: 'insensitive' as const } } : {}),
+  }
+
+  const [data, total] = await Promise.all([
+    prisma.steamProduct.findMany({
+      where,
+      include: { _count: { select: { accounts: { where: { status: 'available' } } } } },
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.steamProduct.count({ where }),
+  ])
+
+  return { data, total }
 }
 
 export async function findProductById(id: string): Promise<ProductWithAccountCount | null> {

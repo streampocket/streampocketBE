@@ -26,9 +26,24 @@ type UpdateProductInput = {
   status?: ProductStatus
 }
 
-export async function getProducts(status?: ProductStatus, search?: string) {
-  const products = await findAllProducts(status, search)
-  return products.map(({ _count, ...rest }) => ({ ...rest, stockCount: _count.accounts }))
+type GetProductsInput = {
+  status?: ProductStatus
+  search?: string
+  page: number
+  pageSize: number
+}
+
+export async function getProducts(input: GetProductsInput) {
+  const { data, total } = await findAllProducts(input)
+  const items = data.map(({ _count, ...rest }) => ({ ...rest, stockCount: _count.accounts }))
+  const totalPages = total === 0 ? 1 : Math.ceil(total / input.pageSize)
+  return {
+    data: items,
+    total,
+    page: input.page,
+    pageSize: input.pageSize,
+    totalPages,
+  }
 }
 
 export async function getProductCounts(search?: string) {

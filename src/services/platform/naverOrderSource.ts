@@ -1,11 +1,15 @@
 import { z } from 'zod'
 import { naverApiRequest } from '../../lib/naverAuth'
+import { sendDiscordAlert } from '../../lib/discord'
 import {
   IOrderSource,
   IncomingOrderItem,
   ReturnedOrderInfo,
   PurchaseDecidedInfo,
 } from './IOrderSource'
+
+const NAVER_PRODUCT_PAGE_SIZE = 100
+const NAVER_PRODUCT_MAX_PAGES = 50
 
 const lastChangedStatusSchema = z.object({
   orderId: z.string().min(1),
@@ -68,7 +72,11 @@ const naverProductListResponseSchema = z.object({
       }),
     )
     .default([]),
+  totalElements: z.number().optional(),
+  totalPages: z.number().optional(),
 })
+
+type NaverProductListResponse = z.infer<typeof naverProductListResponseSchema>
 
 type NaverLastChangedStatus = z.infer<typeof lastChangedStatusSchema>
 type NaverQueryProductOrderItem = z.infer<typeof queryProductOrderItemSchema>
@@ -191,12 +199,12 @@ export async function fetchProductOrderDetails(
   return body.data
 }
 
-export async function fetchNaverProducts(): Promise<{ productId: string; name: string; price: number | null }[]> {
+async function fetchNaverProductsPage(page: number): Promise<NaverProductListResponse> {
   const res = await naverApiRequest('/v1/products/search', {
     method: 'POST',
     body: JSON.stringify({
-      page: 1,
-      size: 100,
+      page,
+      size: NAVER_PRODUCT_PAGE_SIZE,
       productStatusTypes: ['SALE', 'OUTOFSTOCK', 'WAIT'],
     }),
   })
@@ -206,9 +214,37 @@ export async function fetchNaverProducts(): Promise<{ productId: string; name: s
     throw buildNaverError('네이버 상품 목록 조회 실패', res.status, text)
   }
 
-  const body = naverProductListResponseSchema.parse(await res.json())
+  return naverProductListResponseSchema.parse(await res.json())
+}
 
-  return body.contents.map((item) => ({
+export async function fetchNaverProducts(): Promise<{ productId: string; name: string; price: number | null }[]> {
+  const collected: NaverProductListResponse['contents'] = []
+  let page = 1
+  let totalPages: number | undefined
+
+  while (page <= NAVER_PRODUCT_MAX_PAGES) {
+    const body = await fetchNaverProductsPage(page)
+    collected.push(...body.contents)
+
+    totalPages = body.totalPages
+    const reachedEndByCount = body.totalElements !== undefined && collected.length >= body.totalElements
+    const reachedEndByPages = totalPages !== undefined && page >= totalPages
+    const reachedEndByEmpty = body.contents.length < NAVER_PRODUCT_PAGE_SIZE
+
+    if (reachedEndByCount || reachedEndByPages || reachedEndByEmpty) {
+      break
+    }
+
+    page += 1
+  }
+
+  if (totalPages !== undefined && totalPages > NAVER_PRODUCT_MAX_PAGES) {
+    const message = `네이버 상품 동기화 상한 초과 — totalPages=${totalPages}, 수집=${collected.length}, 상한=${NAVER_PRODUCT_MAX_PAGES * NAVER_PRODUCT_PAGE_SIZE}`
+    console.warn('[NAVER_PRODUCT_SYNC]', message)
+    await sendDiscordAlert('error', `⚠️ ${message}`)
+  }
+
+  return collected.map((item) => ({
     productId: String(item.channelProducts?.[0]?.channelProductNo ?? item.originProductNo),
     name: item.channelProducts?.[0]?.name ?? `네이버 상품 ${item.originProductNo}`,
     price: item.channelProducts?.[0]?.salePrice ?? null,

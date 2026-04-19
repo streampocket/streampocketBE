@@ -283,14 +283,29 @@ export const naverOrderSource: IOrderSource = {
     const changedStatuses = await fetchLastChangedStatuses('CLAIM_REQUESTED')
     const productOrderIds = changedStatuses.map((status) => status.productOrderId)
     const details = await fetchProductOrderDetails(productOrderIds)
+    const changedStatusByProductOrderId = new Map(
+      changedStatuses.map((status) => [status.productOrderId, status]),
+    )
 
     return details
       .filter((detail) => detail.productOrder.claimType === 'RETURN')
-      .map((detail) => ({
-        productOrderId: detail.productOrder.productOrderId,
-        claimType: detail.productOrder.claimType ?? 'RETURN',
-        claimStatus: detail.productOrder.claimStatus ?? '',
-      }))
+      .map((detail) => {
+        const changedStatus = changedStatusByProductOrderId.get(detail.productOrder.productOrderId)
+        const paidAt = detail.order.paymentDate ?? changedStatus?.paymentDate
+
+        return {
+          productOrderId: detail.productOrder.productOrderId,
+          claimType: detail.productOrder.claimType ?? 'RETURN',
+          claimStatus: detail.productOrder.claimStatus ?? '',
+          externalOrderId: detail.order.orderId,
+          productName: detail.productOrder.productName,
+          naverProductId: detail.productOrder.productId,
+          unitPrice: detail.productOrder.unitPrice,
+          paidAt: paidAt ? new Date(paidAt) : new Date(),
+          receiverPhoneNumber: detail.order.ordererTel ?? null,
+          receiverName: detail.order.ordererName ?? null,
+        }
+      })
   },
 
   async fetchPurchaseDecidedOrders(): Promise<PurchaseDecidedInfo[]> {

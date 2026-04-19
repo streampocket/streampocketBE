@@ -285,7 +285,31 @@ export async function processReturnedOrders(orderSource: IOrderSource): Promise<
   for (const item of returnedItems) {
     try {
       const existing = await findOrderByProductOrderId(item.productOrderId)
-      if (!existing || existing.fulfillmentStatus === 'returned') continue
+
+      if (!existing) {
+        const created = await createOrderItem({
+          productOrderId: item.productOrderId,
+          naverOrderId: item.externalOrderId,
+          productName: item.productName,
+          unitPrice: item.unitPrice,
+          receiverPhoneNumber: item.receiverPhoneNumber ?? undefined,
+          receiverName: item.receiverName ?? undefined,
+          paidAt: item.paidAt,
+        })
+        await updateOrderItem(created.id, {
+          fulfillmentStatus: 'returned',
+          returnedAt: new Date(),
+        })
+        returnedCount += 1
+
+        await sendDiscordAlert(
+          'order',
+          `🔁 사후 포착된 반품 주문 (PAYED 지연으로 신규 알림 미발송)\n주문: ${item.productOrderId}\n상품: ${item.productName}\n수신자: ${item.receiverName ?? '-'}\n클레임 상태: ${item.claimStatus}`,
+        )
+        continue
+      }
+
+      if (existing.fulfillmentStatus === 'returned') continue
 
       await updateOrderItem(existing.id, {
         fulfillmentStatus: 'returned',

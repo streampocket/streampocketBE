@@ -14,6 +14,13 @@ export type ReturnedOrderInfo = {
   productOrderId: string
   claimType: string
   claimStatus: string
+  externalOrderId: string
+  productName: string
+  naverProductId: string
+  unitPrice: number
+  paidAt: Date
+  receiverPhoneNumber: string | null
+  receiverName: string | null
 }
 
 export type PurchaseDecidedInfo = {

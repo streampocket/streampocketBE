@@ -24,6 +24,8 @@ type CreateProductInput = {
 type UpdateProductInput = {
   name?: string
   status?: ProductStatus
+  goofishMonitorEnabled?: boolean
+  goofishSearchQuery?: string | null
 }
 
 type GetProductsInput = {

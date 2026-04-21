@@ -20,6 +20,7 @@ import { adminReviewCodesRouter } from './routes/admin/reviewCodes'
 import { adminExpensesRouter } from './routes/admin/expenses'
 import { adminBackfillRouter } from './routes/admin/backfill'
 import { adminManualRevenuesRouter } from './routes/admin/manualRevenues'
+import { adminGoofishMonitorRouter } from './routes/admin/goofishMonitor'
 import { ownAuthRouter } from './routes/own/auth'
 import { ownUsersRouter } from './routes/own/users'
 import { ownCategoriesRouter } from './routes/own/categories'
@@ -80,6 +81,7 @@ app.use('/steam/admin/review-codes', adminReviewCodesRouter)
 app.use('/steam/admin/expenses', adminExpensesRouter)
 app.use('/steam/admin/backfill', adminBackfillRouter)
 app.use('/steam/admin/manual-revenues', adminManualRevenuesRouter)
+app.use('/steam/admin/goofish', adminGoofishMonitorRouter)
 
 // ───────────────────────── Own (OTTALL) ─────────────────────────
 app.use('/own/auth', ownAuthRouter)

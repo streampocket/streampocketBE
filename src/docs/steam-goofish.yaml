@@ -1,0 +1,165 @@
+paths:
+  /steam/admin/goofish/targets:
+    get:
+      summary: Goofish 모니터링 대상 상품 및 필터 설정 조회
+      tags: [GoofishMonitor]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 수집 대상과 필터 규칙
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  targets:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        productId:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        query:
+                          type: string
+                  config:
+                    type: object
+                    properties:
+                      maxItemsPerProduct:
+                        type: integer
+                      minPriceYuan:
+                        type: number
+                      suspectKeywords:
+                        type: array
+                        items:
+                          type: string
+        '401':
+          description: 인증 필요
+
+  /steam/admin/goofish/snapshots:
+    post:
+      summary: Goofish 매물 스냅샷 일괄 전송
+      description: 유저스크립트가 수집한 각 상품의 매물을 서버에 전송하면 today/prev 롤오버와 전일비 Discord 알림이 수행됩니다.
+      tags: [GoofishMonitor]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [collectedAt, products]
+              properties:
+                collectedAt:
+                  type: string
+                  format: date-time
+                products:
+                  type: array
+                  maxItems: 200
+                  items:
+                    type: object
+                    required: [productId, items]
+                    properties:
+                      productId:
+                        type: string
+                        format: uuid
+                      items:
+                        type: array
+                        maxItems: 50
+                        items:
+                          type: object
+                          required: [goofishItemId, title, priceYuan, sellerName, itemUrl, isSuspectFake]
+                          properties:
+                            goofishItemId:
+                              type: string
+                            title:
+                              type: string
+                            priceYuan:
+                              type: number
+                            sellerName:
+                              type: string
+                              nullable: true
+                            itemUrl:
+                              type: string
+                              format: uri
+                            isSuspectFake:
+                              type: boolean
+      responses:
+        '201':
+          description: 처리 결과
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  processed:
+                    type: integer
+                  changed:
+                    type: integer
+                  discordSent:
+                    type: boolean
+                  changes:
+                    type: array
+                    items:
+                      type: object
+        '400':
+          description: 요청 본문 검증 실패
+        '401':
+          description: 인증 필요
+
+  /steam/admin/goofish/report:
+    get:
+      summary: Goofish 모니터링 오늘 리포트 조회
+      tags: [GoofishMonitor]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 상품별 today/prev 최저가·변동 상태
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fetchedAt:
+                    type: string
+                    format: date-time
+                  products:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        productId:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        price:
+                          type: integer
+                          nullable: true
+                        todayMinYuan:
+                          type: number
+                          nullable: true
+                        todayCheckedAt:
+                          type: string
+                          format: date-time
+                          nullable: true
+                        prevMinYuan:
+                          type: number
+                          nullable: true
+                        prevCheckedAt:
+                          type: string
+                          format: date-time
+                          nullable: true
+                        deltaYuan:
+                          type: number
+                          nullable: true
+                        status:
+                          type: string
+                          enum: [down, up, same, new, gone, first]
+        '401':
+          description: 인증 필요

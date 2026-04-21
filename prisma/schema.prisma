@@ -71,6 +71,12 @@ model SteamProduct {
   naverProductId String           @unique @map("naver_product_id") @db.VarChar(100)
   price          Int?             @map("price")
   status         ProductStatus    @default(draft)
+  goofishMonitorEnabled Boolean   @default(false) @map("goofish_monitor_enabled")
+  goofishSearchQuery    String?   @map("goofish_search_query") @db.VarChar(255)
+  goofishTodayMinYuan   Decimal?  @map("goofish_today_min_yuan") @db.Decimal(10, 2)
+  goofishTodayCheckedAt DateTime? @map("goofish_today_checked_at") @db.Timestamptz(6)
+  goofishPrevMinYuan    Decimal?  @map("goofish_prev_min_yuan") @db.Decimal(10, 2)
+  goofishPrevCheckedAt  DateTime? @map("goofish_prev_checked_at") @db.Timestamptz(6)
   createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
   accounts       SteamAccount[]

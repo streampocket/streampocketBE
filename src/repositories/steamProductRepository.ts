@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma'
 import { ProductStatus, SteamProduct } from '@prisma/client'
+import { isSameKstDate } from '../utils/kst'
 
 type CreateProductInput = {
   name: string
@@ -10,6 +11,33 @@ type CreateProductInput = {
 type UpdateProductInput = {
   name?: string
   status?: ProductStatus
+  goofishMonitorEnabled?: boolean
+  goofishSearchQuery?: string | null
+}
+
+export type GoofishTarget = {
+  productId: string
+  name: string
+  query: string
+}
+
+export type GoofishRolloverResult = {
+  productId: string
+  name: string
+  todayMinYuan: number | null
+  todayCheckedAt: Date | null
+  prevMinYuan: number | null
+  prevCheckedAt: Date | null
+}
+
+export type GoofishMonitoredProduct = {
+  productId: string
+  name: string
+  price: number | null
+  goofishTodayMinYuan: number | null
+  goofishTodayCheckedAt: Date | null
+  goofishPrevMinYuan: number | null
+  goofishPrevCheckedAt: Date | null
 }
 
 type ProductWithAccountCount = SteamProduct & {
@@ -133,4 +161,104 @@ export async function bulkDeleteProductsByNaverIds(naverProductIds: string[]): P
     where: { naverProductId: { in: naverProductIds } },
   })
   return result.count
+}
+
+// ───── Goofish 모니터링 ─────
+
+export async function findGoofishTargets(): Promise<GoofishTarget[]> {
+  const products = await prisma.steamProduct.findMany({
+    where: { goofishMonitorEnabled: true, status: { not: 'inactive' } },
+    select: { id: true, name: true, goofishSearchQuery: true },
+    orderBy: { name: 'asc' },
+  })
+  return products.map((p) => ({
+    productId: p.id,
+    name: p.name,
+    query: (p.goofishSearchQuery ?? p.name).trim(),
+  }))
+}
+
+// today ↔ prev 롤오버 로직을 트랜잭션으로 원자 처리
+// - 기존 today.checkedAt이 null이거나 KST 날짜가 collectedAt의 KST 날짜와 다르면 → today → prev로 밀어내고 새 값을 today에
+// - KST 날짜가 같으면 → today만 덮어쓰기 (prev 보존)
+export async function updateGoofishPriceWithRollover(
+  productId: string,
+  newMinYuan: number | null,
+  collectedAt: Date,
+): Promise<GoofishRolloverResult | null> {
+  return prisma.$transaction(async (tx) => {
+    const current = await tx.steamProduct.findUnique({
+      where: { id: productId },
+      select: {
+        name: true,
+        goofishTodayMinYuan: true,
+        goofishTodayCheckedAt: true,
+        goofishPrevMinYuan: true,
+        goofishPrevCheckedAt: true,
+      },
+    })
+    if (!current) return null
+
+    const shouldRollover =
+      current.goofishTodayCheckedAt === null ||
+      !isSameKstDate(current.goofishTodayCheckedAt, collectedAt)
+
+    const data = shouldRollover
+      ? {
+          goofishPrevMinYuan: current.goofishTodayMinYuan,
+          goofishPrevCheckedAt: current.goofishTodayCheckedAt,
+          goofishTodayMinYuan: newMinYuan,
+          goofishTodayCheckedAt: collectedAt,
+        }
+      : {
+          goofishTodayMinYuan: newMinYuan,
+          goofishTodayCheckedAt: collectedAt,
+        }
+
+    const updated = await tx.steamProduct.update({
+      where: { id: productId },
+      data,
+      select: {
+        name: true,
+        goofishTodayMinYuan: true,
+        goofishTodayCheckedAt: true,
+        goofishPrevMinYuan: true,
+        goofishPrevCheckedAt: true,
+      },
+    })
+
+    return {
+      productId,
+      name: updated.name,
+      todayMinYuan: updated.goofishTodayMinYuan !== null ? Number(updated.goofishTodayMinYuan) : null,
+      todayCheckedAt: updated.goofishTodayCheckedAt,
+      prevMinYuan: updated.goofishPrevMinYuan !== null ? Number(updated.goofishPrevMinYuan) : null,
+      prevCheckedAt: updated.goofishPrevCheckedAt,
+    }
+  })
+}
+
+export async function findAllGoofishMonitored(): Promise<GoofishMonitoredProduct[]> {
+  const products = await prisma.steamProduct.findMany({
+    where: { goofishMonitorEnabled: true, status: { not: 'inactive' } },
+    select: {
+      id: true,
+      name: true,
+      price: true,
+      goofishTodayMinYuan: true,
+      goofishTodayCheckedAt: true,
+      goofishPrevMinYuan: true,
+      goofishPrevCheckedAt: true,
+    },
+    orderBy: { name: 'asc' },
+  })
+  return products.map((p) => ({
+    productId: p.id,
+    name: p.name,
+    price: p.price,
+    goofishTodayMinYuan: p.goofishTodayMinYuan !== null ? Number(p.goofishTodayMinYuan) : null,
+    goofishTodayCheckedAt: p.goofishTodayCheckedAt,
+    goofishPrevMinYuan: p.goofishPrevMinYuan !== null ? Number(p.goofishPrevMinYuan) : null,
+    goofishPrevCheckedAt: p.goofishPrevCheckedAt,
+  }))
 }

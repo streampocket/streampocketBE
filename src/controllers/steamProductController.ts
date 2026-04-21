@@ -18,6 +18,8 @@ const createProductSchema = z.object({
 const updateProductSchema = z.object({
   name: z.string().min(1).optional(),
   status: z.enum(['draft', 'active', 'inactive']).optional(),
+  goofishMonitorEnabled: z.boolean().optional(),
+  goofishSearchQuery: z.string().max(255).nullable().optional(),
 })
 
 const listQuerySchema = z.object({

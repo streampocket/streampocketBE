@@ -1,18 +1,19 @@
+import { prisma } from '../../lib/prisma'
 import { findOwnProductById } from '../../repositories/own/ownProductRepository'
 import {
   findActiveApplication,
-  createApplication,
   findApplicationsByUserId,
   findApplicationWithProduct,
 } from '../../repositories/own/partyApplicationRepository'
-import { createPayment } from '../../repositories/own/paymentRepository'
-import { sendDiscordAlert } from '../../lib/discord'
 import { decrypt } from '../../utils/crypto'
 import { isPartyJoinable, calculateCurrentPrice } from '../../utils/partyPricing'
 
 const FEE_RATE = 0.1
 
-export async function applyToParty(productId: string, userId: string) {
+export const PAY_METHOD_VALUES = ['kakaopay', 'card', 'transfer', 'virtualAccount', 'mobile'] as const
+export type PayMethod = (typeof PAY_METHOD_VALUES)[number]
+
+export async function applyToParty(productId: string, userId: string, payMethod: PayMethod) {
   const product = await findOwnProductById(productId)
   if (!product) {
     throw Object.assign(new Error('파티를 찾을 수 없습니다.'), { statusCode: 404 })
@@ -28,36 +29,96 @@ export async function applyToParty(productId: string, userId: string) {
   }
 
   const existing = await findActiveApplication(productId, userId)
-  if (existing) {
-    throw Object.assign(new Error('이미 신청한 파티입니다.'), { statusCode: 409 })
+  if (existing && existing.status === 'confirmed') {
+    throw Object.assign(new Error('이미 확정된 파티입니다.'), { statusCode: 409 })
   }
 
   const currentPrice = calculateCurrentPrice(product)
   const fee = Math.round(currentPrice * FEE_RATE)
   const totalAmount = currentPrice + fee
+  const pgProvider = payMethod === 'kakaopay' ? 'kakaopay' : 'galaxia'
 
-  const application = await createApplication({
-    productId,
-    userId,
-    price: currentPrice,
-    fee,
-    totalAmount,
+  const isRetry = existing?.status === 'pending'
+
+  const result = await prisma.$transaction(async (tx) => {
+    // 재시도(이미 슬롯 선점됨)가 아닌 경우에만 슬롯 선점
+    if (!isRetry) {
+      const slotUpdate = await tx.ownProduct.updateMany({
+        where: {
+          id: productId,
+          status: 'recruiting',
+          deletedAt: null,
+          filledSlots: { lt: product.totalSlots },
+        },
+        data: { filledSlots: { increment: 1 } },
+      })
+      if (slotUpdate.count === 0) {
+        throw Object.assign(new Error('모집이 마감되었습니다.'), { statusCode: 409 })
+      }
+    }
+
+    // 기존 신청이 있으면 재사용(pending/cancelled/expired 모두), 없으면 새로 생성
+    const prior = await tx.partyApplication.findUnique({
+      where: { productId_userId: { productId, userId } },
+    })
+
+    let applicationId: string
+    if (prior) {
+      const updated = await tx.partyApplication.update({
+        where: { id: prior.id },
+        data: {
+          status: 'pending',
+          price: currentPrice,
+          fee,
+          totalAmount,
+          startedAt: null,
+          expiresAt: null,
+        },
+      })
+      applicationId = updated.id
+      // 재시도: 기존 pending 결제는 모두 cancelled 로 정리 (PG 에 실제 제출된 건이 아니므로 DB만 정리)
+      await tx.payment.updateMany({
+        where: { applicationId, status: 'pending' },
+        data: { status: 'cancelled' },
+      })
+    } else {
+      const created = await tx.partyApplication.create({
+        data: {
+          productId,
+          userId,
+          price: currentPrice,
+          fee,
+          totalAmount,
+          status: 'pending',
+        },
+      })
+      applicationId = created.id
+    }
+
+    const payment = await tx.payment.create({
+      data: {
+        applicationId,
+        amount: totalAmount,
+        method: 'pg',
+        status: 'pending',
+        payMethod,
+        pgProvider,
+      },
+    })
+
+    return { applicationId, payment }
   })
 
-  await createPayment({
-    applicationId: application.id,
-    amount: totalAmount,
-    method: 'manual',
-    status: 'pending',
-  })
-
-  // Discord 알림 — 결제 요청 (비동기 — 실패해도 신청 성공)
-  sendDiscordAlert(
-    'paymentRequest',
-    `**파티명:** ${product.name}\n**신청자:** 사용자\n**가격:** ${currentPrice.toLocaleString()}원${currentPrice < product.price ? ` (원가 ${product.price.toLocaleString()}원)` : ''}\n**수수료:** ${fee.toLocaleString()}원\n**합계:** ${totalAmount.toLocaleString()}원`,
-  ).catch(() => {})
-
-  return { data: application }
+  return {
+    data: {
+      applicationId: result.applicationId,
+      paymentId: result.payment.id,
+      amount: totalAmount,
+      orderName: `${product.name} (${product.durationDays}일)`,
+      payMethod,
+      pgProvider,
+    },
+  }
 }
 
 export async function getMyApplications(userId: string) {

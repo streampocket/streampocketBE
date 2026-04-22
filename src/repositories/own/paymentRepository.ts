@@ -6,6 +6,8 @@ type CreatePaymentInput = {
   amount: number
   method: PaymentMethod
   status: PaymentStatus
+  payMethod?: string | null
+  pgProvider?: string | null
 }
 
 type ListPaymentsInput = {

@@ -349,6 +349,7 @@ model Payment {
   amount          Int
   method          PaymentMethod @default(manual)
   status          PaymentStatus @default(pending)
+  payMethod       String?       @map("pay_method") @db.VarChar(30)
   pgTransactionId String?       @map("pg_transaction_id") @db.VarChar(255)
   pgProvider      String?       @map("pg_provider") @db.VarChar(50)
   paidAt          DateTime?     @map("paid_at") @db.Timestamptz(6)

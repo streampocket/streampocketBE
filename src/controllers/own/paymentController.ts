@@ -6,6 +6,8 @@ import {
   approvePayment,
   rejectPayment,
   deletePayment,
+  verifyPgPayment,
+  abortPendingPayment,
 } from '../../services/own/paymentService'
 
 // ───────────────────────── Zod 스키마 ─────────────────────────
@@ -58,4 +60,20 @@ export async function adminDeletePaymentHandler(req: Request, res: Response): Pr
   const { id } = idParamSchema.parse(req.params)
   await deletePayment(id)
   res.json({ data: { message: 'ok' } })
+}
+
+// ───────────────────────── 사용자용 핸들러 (PG 검증) ─────────────────────────
+
+export async function userVerifyPaymentHandler(req: Request, res: Response): Promise<void> {
+  const { id } = idParamSchema.parse(req.params)
+  const userId = req.user!.id
+  const result = await verifyPgPayment(id, userId)
+  res.json(result)
+}
+
+export async function userAbortPaymentHandler(req: Request, res: Response): Promise<void> {
+  const { id } = idParamSchema.parse(req.params)
+  const userId = req.user!.id
+  const result = await abortPendingPayment(id, userId)
+  res.json(result)
 }

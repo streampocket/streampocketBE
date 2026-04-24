@@ -6,7 +6,7 @@ import {
   updateOrderItem,
 } from '../repositories/steamOrderRepository'
 import { findAccountById, markAccountAsSent } from '../repositories/steamAccountRepository'
-import { isAlimtalkEnabled, sendOrderAlimtalk } from './alimtalkService'
+import { isAlimtalkEnabled, sendGiftCompletedAlimtalk, sendOrderAlimtalk } from './alimtalkService'
 import { sendDiscordAlert } from '../lib/discord'
 import { detectProductType } from '../utils/productType'
 
@@ -160,6 +160,18 @@ export async function markGiftCompleted(id: string): Promise<void> {
   if (order.giftCompletedAt) {
     throw Object.assign(new Error('이미 선물 접수 완료 처리된 주문입니다.'), { statusCode: 400 })
   }
+
+  if (!order.receiverPhoneNumber) {
+    throw Object.assign(new Error('수신자 전화번호가 없어 알림톡을 전송할 수 없습니다.'), {
+      statusCode: 400,
+    })
+  }
+
+  await sendGiftCompletedAlimtalk({
+    orderItemId: order.id,
+    recipientPhoneNumber: order.receiverPhoneNumber,
+    recipientName: order.receiverName,
+  })
 
   await updateOrderItem(id, { giftCompletedAt: new Date() })
 }

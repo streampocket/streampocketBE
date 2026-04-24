@@ -61,6 +61,8 @@ export type AlimtalkSettingsView = {
     templateCodeNA: string | null
     templateCodeAA: string | null
     templateCodeNASecondary: string | null
+    templateCodeReviewGame: string | null
+    templateCodeGiftCompleted: string | null
     sender: string | null
     providerConnected: boolean
     providerMessage: string
@@ -101,6 +103,7 @@ type EnvConfig = {
   templateCodeAA: string
   templateCodeNASecondary: string
   templateCodeReviewGame: string
+  templateCodeGiftCompleted: string
   sender: string
 }
 
@@ -188,6 +191,7 @@ export function getEnvConfig(): EnvConfig {
     templateCodeAA: process.env['ALIGO_TEMPLATE_CODE_AA'] ?? '',
     templateCodeNASecondary: process.env['ALIGO_TEMPLATE_CODE_NA_SECONDARY'] ?? '',
     templateCodeReviewGame: process.env['ALIGO_TEMPLATE_CODE_REVIEW_GAME'] ?? '',
+    templateCodeGiftCompleted: process.env['ALIGO_TEMPLATE_CODE_GIFT_COMPLETED'] ?? '',
     sender: process.env['ALIGO_SENDER'] ?? '',
   }
 }
@@ -441,6 +445,8 @@ export async function getAlimtalkSettings(): Promise<AlimtalkSettingsView> {
       templateCodeNA: config.templateCodeNA || null,
       templateCodeAA: config.templateCodeAA || null,
       templateCodeNASecondary: config.templateCodeNASecondary || null,
+      templateCodeReviewGame: config.templateCodeReviewGame || null,
+      templateCodeGiftCompleted: config.templateCodeGiftCompleted || null,
       sender: config.sender || null,
       providerConnected: provider.providerConnected,
       providerMessage: provider.providerMessage,
@@ -487,6 +493,7 @@ export async function sendOrderAlimtalk(
     orderItemId: input.orderItemId,
     channel: 'alimtalk',
     recipient: input.recipientPhoneNumber,
+    templateCode,
   })
 
   try {
@@ -569,6 +576,62 @@ export async function sendAlimtalkTest(): Promise<AlimtalkTestResult> {
   }
 }
 
+type SendGiftCompletedAlimtalkInput = {
+  orderItemId: string
+  recipientPhoneNumber: string
+  recipientName: string | null
+}
+
+export async function sendGiftCompletedAlimtalk(
+  input: SendGiftCompletedAlimtalkInput,
+): Promise<void> {
+  const config = getEnvConfig()
+  if (!isConfigured(config)) {
+    throw new Error('알리고 환경변수가 모두 설정되지 않았습니다.')
+  }
+
+  if (!config.templateCodeGiftCompleted) {
+    throw new Error(
+      '선물 접수 완료 알림톡 템플릿 코드(ALIGO_TEMPLATE_CODE_GIFT_COMPLETED)가 설정되지 않았습니다.',
+    )
+  }
+
+  const template = await getActiveTemplateOrThrow(config, config.templateCodeGiftCompleted)
+  const buttonJson = buildButtonPayload(template)
+  const templateContent = template.templateContent ?? ''
+
+  const deliveryLog = await createDeliveryLog({
+    orderItemId: input.orderItemId,
+    channel: 'alimtalk',
+    recipient: input.recipientPhoneNumber,
+    templateCode: config.templateCodeGiftCompleted,
+  })
+
+  try {
+    const json = await sendAlimtalkMessage({
+      templateCode: config.templateCodeGiftCompleted,
+      recipientPhoneNumber: input.recipientPhoneNumber,
+      recipientName: input.recipientName,
+      message: templateContent,
+      buttonJson,
+    })
+
+    await updateDeliveryLog(deliveryLog.id, {
+      status: 'sent',
+      providerMessageId: getProviderMessageId(json),
+      sentAt: new Date(),
+      errorMessage: null,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    await updateDeliveryLog(deliveryLog.id, {
+      status: 'failed',
+      errorMessage: message,
+    })
+    throw error
+  }
+}
+
 export async function sendReviewGameAlimtalk(
   input: SendReviewGameAlimtalkInput,
 ): Promise<void> {
@@ -597,6 +660,7 @@ export async function sendReviewGameAlimtalk(
     orderItemId: input.orderItemId,
     channel: 'alimtalk',
     recipient: input.recipientPhoneNumber,
+    templateCode: config.templateCodeReviewGame,
   })
 
   try {

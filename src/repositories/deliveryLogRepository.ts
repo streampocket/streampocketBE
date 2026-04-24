@@ -5,6 +5,7 @@ type CreateDeliveryLogInput = {
   orderItemId: string
   channel: DeliveryChannel
   recipient: string
+  templateCode?: string | null
 }
 
 type UpdateDeliveryLogInput = {

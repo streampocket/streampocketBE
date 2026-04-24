@@ -136,6 +136,7 @@ model DeliveryLog {
   orderItemId       String            @map("order_item_id") @db.Uuid
   channel           DeliveryChannel   @map("channel")
   recipient         String            @map("recipient") @db.VarChar(100)
+  templateCode      String?           @map("template_code") @db.VarChar(50)
   status            DeliveryLogStatus @default(queued)
   errorMessage      String?           @map("error_message")
   providerMessageId String?           @map("provider_message_id") @db.VarChar(100)

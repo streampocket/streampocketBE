@@ -40,6 +40,14 @@ const ACTIVE_PRODUCT_ORDER_STATUSES = [
   'PURCHASE_DECIDED',
 ]
 
+const IN_PROGRESS_CLAIM_STATUSES = [
+  'RETURN_REQUESTED',
+  'COLLECT_REQUESTED',
+  'COLLECT_DONE',
+  'EXCHANGE_REQUESTED',
+  'CANCEL_REQUESTED',
+]
+
 function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
@@ -441,7 +449,8 @@ export async function runBackupOrderScan(
           before &&
           before.fulfillmentStatus === 'returned' &&
           item.naverProductOrderStatus &&
-          ACTIVE_PRODUCT_ORDER_STATUSES.includes(item.naverProductOrderStatus)
+          ACTIVE_PRODUCT_ORDER_STATUSES.includes(item.naverProductOrderStatus) &&
+          !IN_PROGRESS_CLAIM_STATUSES.includes(item.naverClaimStatus ?? '')
         ) {
           await updateOrderItem(before.id, {
             fulfillmentStatus: 'completed',
@@ -529,7 +538,8 @@ export async function runDailyOrderReconciliation(
     (item) =>
       dbReturnedIds.has(item.productOrderId) &&
       item.naverProductOrderStatus !== undefined &&
-      ACTIVE_PRODUCT_ORDER_STATUSES.includes(item.naverProductOrderStatus),
+      ACTIVE_PRODUCT_ORDER_STATUSES.includes(item.naverProductOrderStatus) &&
+      !IN_PROGRESS_CLAIM_STATUSES.includes(item.naverClaimStatus ?? ''),
   )
 
   if (missing.length > 0) {

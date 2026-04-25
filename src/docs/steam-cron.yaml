@@ -7,6 +7,24 @@ paths:
         '200':
           description: 폴링 완료
 
+  /steam/cron/backup-scan:
+    post:
+      summary: 네이버 주문 보조 스캔 (PAYED 상태 기반)
+      description: 최근 6시간 내 PAYED 상태 주문 전체를 조회하여 누락된 주문을 자동 처리한다. 멱등 가드로 중복 처리 방지.
+      tags: [SteamCron]
+      responses:
+        '200':
+          description: 보조 스캔 완료
+
+  /steam/cron/daily-reconcile:
+    post:
+      summary: 어제 주문 누락 대조 알람
+      description: 네이버에서 어제 결제된 주문 전체 vs DB 어제 주문을 비교하여 차이가 있으면 Discord에 경고만 발송 (자동 처리 X).
+      tags: [SteamCron]
+      responses:
+        '200':
+          description: 대조 완료
+
   /steam/cron/weekly-settlement:
     post:
       summary: 주간 정산 실행

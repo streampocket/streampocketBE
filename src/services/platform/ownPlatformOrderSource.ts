@@ -21,6 +21,16 @@ export const ownPlatformOrderSource: IOrderSource = {
     return []
   },
 
+  async fetchPaidOrdersInWindow(_hoursBack: number): Promise<IncomingOrderItem[]> {
+    // TODO: 자체 플랫폼 보조 스캔 (추후 구현)
+    return []
+  },
+
+  async fetchPaidOrdersForDay(_dateKST: string): Promise<IncomingOrderItem[]> {
+    // TODO: 자체 플랫폼 일일 대조 조회 (추후 구현)
+    return []
+  },
+
   async confirmOrder(_productOrderId: string): Promise<void> {
     // TODO: 자체 플랫폼 발주 확인 (추후 구현)
   },

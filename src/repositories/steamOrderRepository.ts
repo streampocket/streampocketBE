@@ -74,7 +74,7 @@ export async function listOrders(input: ListOrdersInput): Promise<ListOrdersResu
   const [items, total] = await prisma.$transaction([
     prisma.steamOrderItem.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ paidAt: 'desc' }, { createdAt: 'desc' }],
       skip: (input.page - 1) * input.pageSize,
       take: input.pageSize,
     }),
@@ -116,13 +116,26 @@ export async function exportOrders(input: ExportOrdersInput): Promise<SteamOrder
         }
       : {}),
   }
-  return prisma.steamOrderItem.findMany({ where, orderBy: { createdAt: 'desc' } })
+  return prisma.steamOrderItem.findMany({
+    where,
+    orderBy: [{ paidAt: 'desc' }, { createdAt: 'desc' }],
+  })
 }
 
 export async function findOrderByProductOrderId(
   productOrderId: string,
 ): Promise<SteamOrderItem | null> {
   return prisma.steamOrderItem.findUnique({ where: { productOrderId } })
+}
+
+export async function listOrdersPaidBetween(
+  from: Date,
+  to: Date,
+): Promise<{ productOrderId: string }[]> {
+  return prisma.steamOrderItem.findMany({
+    where: { paidAt: { gte: from, lt: to } },
+    select: { productOrderId: true },
+  })
 }
 
 export async function createOrderItem(data: CreateOrderItemInput): Promise<SteamOrderItem> {

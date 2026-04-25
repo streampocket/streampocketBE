@@ -286,6 +286,8 @@ function detailToIncomingOrderItem(detail: NaverQueryProductOrderItem): Incoming
     receiverPhoneNumber: detail.order.ordererTel ?? null,
     receiverName: detail.order.ordererName ?? null,
     platform: 'NAVER',
+    naverProductOrderStatus: detail.productOrder.productOrderStatus,
+    naverClaimStatus: detail.productOrder.claimStatus ?? null,
   }
 }
 

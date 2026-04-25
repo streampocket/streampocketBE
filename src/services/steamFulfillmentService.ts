@@ -2,6 +2,7 @@ import { sendDiscordAlert } from '../lib/discord'
 import {
   createOrderItem,
   findOrderByProductOrderId,
+  listOrdersPaidBetween,
   updateOrderItem,
 } from '../repositories/steamOrderRepository'
 import { findProductByNaverId } from '../repositories/steamProductRepository'
@@ -18,7 +19,9 @@ const LOW_STOCK_THRESHOLD = Number(process.env['LOW_STOCK_THRESHOLD'] ?? 2)
 
 let isPollingInProgress = false
 
-export type OrderPollingTrigger = 'startup' | 'interval' | 'manual'
+export type OrderPollingTrigger = 'startup' | 'interval' | 'manual' | 'backup-scan'
+
+export type OrderSource = 'main' | 'backup'
 
 export type OrderPollingResult = {
   fetchedCount: number
@@ -36,13 +39,15 @@ function toErrorMessage(error: unknown): string {
 export async function processOrder(
   item: IncomingOrderItem,
   orderSource: IOrderSource,
+  source: OrderSource = 'main',
 ): Promise<void> {
   const existing = await findOrderByProductOrderId(item.productOrderId)
   if (existing) return
 
+  const sourceTag = source === 'backup' ? ' (보조 스캔으로 사후 포착)' : ''
   await sendDiscordAlert(
     'order',
-    `🔔 신규 주문 감지\n상품: ${item.productName}\n금액: ${item.unitPrice.toLocaleString('ko-KR')}원\n수신자: ${item.receiverName ?? '-'}\n주문: ${item.productOrderId}`,
+    `🔔 신규 주문 감지${sourceTag}\n상품: ${item.productName}\n금액: ${item.unitPrice.toLocaleString('ko-KR')}원\n수신자: ${item.receiverName ?? '-'}\n주문: ${item.productOrderId}`,
   )
 
   const orderItem = await createOrderItem({
@@ -389,6 +394,125 @@ export async function pollAndProcess(orderSource: IOrderSource): Promise<OrderPo
     returnedCount,
     decidedCount,
     skipped: false,
+  }
+}
+
+export async function runBackupOrderScan(
+  orderSource: IOrderSource,
+  hoursBack: number,
+): Promise<OrderPollingResult> {
+  if (isPollingInProgress) {
+    console.log('[BACKUP_SCAN] skip reason=in_progress')
+    return {
+      fetchedCount: 0,
+      processedCount: 0,
+      failedCount: 0,
+      returnedCount: 0,
+      decidedCount: 0,
+      skipped: true,
+    }
+  }
+
+  isPollingInProgress = true
+  const startedAt = Date.now()
+  console.log(`[BACKUP_SCAN] start hoursBack=${hoursBack}`)
+
+  try {
+    const items = await orderSource.fetchPaidOrdersInWindow(hoursBack)
+    let processedCount = 0
+    let failedCount = 0
+
+    for (const item of items) {
+      try {
+        const before = await findOrderByProductOrderId(item.productOrderId)
+        await processOrder(item, orderSource, 'backup')
+        if (!before) processedCount += 1
+      } catch (error) {
+        failedCount += 1
+        const message = toErrorMessage(error)
+        await sendDiscordAlert(
+          'error',
+          `❌ 보조 스캔 처리 중 예외 발생\n주문: ${item.productOrderId}\n오류: ${message}`,
+        )
+      }
+    }
+
+    const durationMs = Date.now() - startedAt
+    console.log(
+      `[BACKUP_SCAN] done fetched=${items.length} processed=${processedCount} failed=${failedCount} duration_ms=${durationMs}`,
+    )
+
+    return {
+      fetchedCount: items.length,
+      processedCount,
+      failedCount,
+      returnedCount: 0,
+      decidedCount: 0,
+      skipped: false,
+    }
+  } catch (error) {
+    const message = toErrorMessage(error)
+    const durationMs = Date.now() - startedAt
+    console.error(`[BACKUP_SCAN] failed duration_ms=${durationMs}`, error)
+    await sendDiscordAlert('error', `❌ 보조 스캔 실패\n오류: ${message}`)
+    throw error
+  } finally {
+    isPollingInProgress = false
+  }
+}
+
+export type DailyReconciliationResult = {
+  dateKST: string
+  naverCount: number
+  dbCount: number
+  missingCount: number
+  missingProductOrderIds: string[]
+}
+
+export async function runDailyOrderReconciliation(
+  orderSource: IOrderSource,
+): Promise<DailyReconciliationResult> {
+  const yesterdayKstMs = Date.now() - 24 * 60 * 60 * 1000 + 9 * 60 * 60 * 1000
+  const yesterday = new Date(yesterdayKstMs).toISOString().slice(0, 10)
+  const startedAt = Date.now()
+  console.log(`[DAILY_RECONCILE] start dateKST=${yesterday}`)
+
+  const naverItems = await orderSource.fetchPaidOrdersForDay(yesterday)
+  const naverProductOrderIds = naverItems.map((item) => item.productOrderId)
+
+  const dayStartUtcMs = new Date(`${yesterday}T00:00:00.000+09:00`).getTime()
+  const dayEndUtcMs = dayStartUtcMs + 24 * 60 * 60 * 1000
+
+  const dbRows = await listOrdersPaidBetween(new Date(dayStartUtcMs), new Date(dayEndUtcMs))
+  const dbProductOrderIds = new Set(dbRows.map((row) => row.productOrderId))
+
+  const missing = naverItems.filter((item) => !dbProductOrderIds.has(item.productOrderId))
+
+  if (missing.length > 0) {
+    const lines = missing
+      .slice(0, 20)
+      .map(
+        (item) =>
+          `- ${item.productOrderId} / ${item.productName} / ${item.receiverName ?? '-'}`,
+      )
+    const moreLine = missing.length > 20 ? `\n... 외 ${missing.length - 20}건` : ''
+    await sendDiscordAlert(
+      'error',
+      `⚠️ ${yesterday} 누락 주문 ${missing.length}건 발견 — 수동 확인 필요\n${lines.join('\n')}${moreLine}`,
+    )
+  }
+
+  const durationMs = Date.now() - startedAt
+  console.log(
+    `[DAILY_RECONCILE] done dateKST=${yesterday} naver=${naverItems.length} db=${dbRows.length} missing=${missing.length} duration_ms=${durationMs}`,
+  )
+
+  return {
+    dateKST: yesterday,
+    naverCount: naverItems.length,
+    dbCount: dbRows.length,
+    missingCount: missing.length,
+    missingProductOrderIds: missing.map((item) => item.productOrderId),
   }
 }
 

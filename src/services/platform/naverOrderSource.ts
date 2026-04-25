@@ -10,6 +10,7 @@ import {
 
 const NAVER_PRODUCT_PAGE_SIZE = 100
 const NAVER_PRODUCT_MAX_PAGES = 50
+const PAID_ORDERS_MAX_PAGES = 20
 
 const lastChangedStatusSchema = z.object({
   orderId: z.string().min(1),
@@ -53,6 +54,28 @@ const queryProductOrderItemSchema = z.object({
 
 const queryProductOrdersResponseSchema = z.object({
   data: z.array(queryProductOrderItemSchema).default([]),
+})
+
+const paidOrdersSearchResponseSchema = z.object({
+  data: z
+    .object({
+      contents: z
+        .array(
+          z.object({
+            productOrderId: z.string().min(1),
+            content: queryProductOrderItemSchema,
+          }),
+        )
+        .default([]),
+      pagination: z
+        .object({
+          page: z.number(),
+          size: z.number(),
+          hasNext: z.boolean(),
+        })
+        .optional(),
+    })
+    .optional(),
 })
 
 const naverProductListResponseSchema = z.object({
@@ -251,6 +274,72 @@ export async function fetchNaverProducts(): Promise<{ productId: string; name: s
   }))
 }
 
+function detailToIncomingOrderItem(detail: NaverQueryProductOrderItem): IncomingOrderItem {
+  const paidAt = detail.order.paymentDate
+  return {
+    externalOrderId: detail.order.orderId,
+    productOrderId: detail.productOrder.productOrderId,
+    productName: detail.productOrder.productName,
+    naverProductId: detail.productOrder.productId,
+    unitPrice: detail.productOrder.unitPrice,
+    paidAt: paidAt ? new Date(paidAt) : new Date(),
+    receiverPhoneNumber: detail.order.ordererTel ?? null,
+    receiverName: detail.order.ordererName ?? null,
+    platform: 'NAVER',
+  }
+}
+
+async function fetchPaidOrdersSearchPage(
+  fromIso: string,
+  page: number,
+): Promise<{
+  contents: { productOrderId: string; content: NaverQueryProductOrderItem }[]
+  hasNext: boolean
+}> {
+  const query = new URLSearchParams({
+    from: fromIso,
+    rangeType: 'PAYED_DATETIME',
+    page: String(page),
+  })
+
+  const res = await naverApiRequest(
+    `/v1/pay-order/seller/product-orders?${query.toString()}`,
+  )
+
+  if (!res.ok) {
+    const text = await res.text()
+    throw buildNaverError('네이버 보조 주문 조회 실패', res.status, text)
+  }
+
+  const body = paidOrdersSearchResponseSchema.parse(await res.json())
+  return {
+    contents: body.data?.contents ?? [],
+    hasNext: body.data?.pagination?.hasNext ?? false,
+  }
+}
+
+async function fetchPaidOrdersSince(fromIso: string): Promise<NaverQueryProductOrderItem[]> {
+  const collected: NaverQueryProductOrderItem[] = []
+  let page = 1
+
+  while (page <= PAID_ORDERS_MAX_PAGES) {
+    const { contents, hasNext } = await fetchPaidOrdersSearchPage(fromIso, page)
+    for (const entry of contents) {
+      collected.push(entry.content)
+    }
+    if (!hasNext) break
+    page += 1
+  }
+
+  if (page > PAID_ORDERS_MAX_PAGES) {
+    const message = `네이버 보조 주문 조회 페이지 상한 초과 — 수집=${collected.length}, 상한=${PAID_ORDERS_MAX_PAGES}페이지`
+    console.warn('[NAVER_PAID_SEARCH]', message)
+    await sendDiscordAlert('error', `⚠️ ${message}`)
+  }
+
+  return collected
+}
+
 export const naverOrderSource: IOrderSource = {
   async fetchNewOrders(): Promise<IncomingOrderItem[]> {
     const changedStatuses = await fetchLastChangedStatuses('PAYED')
@@ -262,21 +351,35 @@ export const naverOrderSource: IOrderSource = {
 
     return details.map((detail) => {
       const changedStatus = changedStatusByProductOrderId.get(detail.productOrder.productOrderId)
-      const paidAt = detail.order.paymentDate ?? changedStatus?.paymentDate
       logFetchedOrderFields(changedStatus, detail)
-
-      return {
-        externalOrderId: detail.order.orderId,
-        productOrderId: detail.productOrder.productOrderId,
-        productName: detail.productOrder.productName,
-        naverProductId: detail.productOrder.productId,
-        unitPrice: detail.productOrder.unitPrice,
-        paidAt: paidAt ? new Date(paidAt) : new Date(),
-        receiverPhoneNumber: detail.order.ordererTel ?? null,
-        receiverName: detail.order.ordererName ?? null,
-        platform: 'NAVER',
+      const item = detailToIncomingOrderItem(detail)
+      const fallbackPaidAt = changedStatus?.paymentDate
+      if (!detail.order.paymentDate && fallbackPaidAt) {
+        item.paidAt = new Date(fallbackPaidAt)
       }
+      return item
     })
+  },
+
+  async fetchPaidOrdersInWindow(hoursBack: number): Promise<IncomingOrderItem[]> {
+    const fromIso = new Date(Date.now() - hoursBack * 60 * 60 * 1000).toISOString()
+    const details = await fetchPaidOrdersSince(fromIso)
+    return details.map(detailToIncomingOrderItem)
+  },
+
+  async fetchPaidOrdersForDay(dateKST: string): Promise<IncomingOrderItem[]> {
+    const fromIso = `${dateKST}T00:00:00.000+09:00`
+    const dayStartUtc = new Date(fromIso).getTime()
+    const dayEndUtc = dayStartUtc + 24 * 60 * 60 * 1000
+    const details = await fetchPaidOrdersSince(fromIso)
+    return details
+      .filter((detail) => {
+        const paymentDate = detail.order.paymentDate
+        if (!paymentDate) return false
+        const paidMs = new Date(paymentDate).getTime()
+        return paidMs >= dayStartUtc && paidMs < dayEndUtc
+      })
+      .map(detailToIncomingOrderItem)
   },
 
   async fetchReturnedOrders(): Promise<ReturnedOrderInfo[]> {

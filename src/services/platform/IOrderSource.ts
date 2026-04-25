@@ -33,6 +33,8 @@ export type IOrderSource = {
   fetchNewOrders(): Promise<IncomingOrderItem[]>
   fetchReturnedOrders(): Promise<ReturnedOrderInfo[]>
   fetchPurchaseDecidedOrders(): Promise<PurchaseDecidedInfo[]>
+  fetchPaidOrdersInWindow(hoursBack: number): Promise<IncomingOrderItem[]>
+  fetchPaidOrdersForDay(dateKST: string): Promise<IncomingOrderItem[]>
   confirmOrder(productOrderId: string): Promise<void>
   dispatchOrder(productOrderId: string): Promise<void>
 }

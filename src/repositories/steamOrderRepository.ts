@@ -19,7 +19,7 @@ type UpdateOrderItemInput = {
   receiverName?: string
   productId?: string
   errorMessage?: string
-  returnedAt?: Date
+  returnedAt?: Date | null
   decisionDate?: Date
   settlementAmount?: number
   friendLink1?: string | null
@@ -131,10 +131,10 @@ export async function findOrderByProductOrderId(
 export async function listOrdersPaidBetween(
   from: Date,
   to: Date,
-): Promise<{ productOrderId: string }[]> {
+): Promise<{ productOrderId: string; fulfillmentStatus: FulfillmentStatus }[]> {
   return prisma.steamOrderItem.findMany({
     where: { paidAt: { gte: from, lt: to } },
-    select: { productOrderId: true },
+    select: { productOrderId: true, fulfillmentStatus: true },
   })
 }
 

@@ -8,6 +8,8 @@ export type IncomingOrderItem = {
   receiverPhoneNumber: string | null
   receiverName: string | null
   platform: 'NAVER' | 'OWN'
+  naverProductOrderStatus?: string
+  naverClaimStatus?: string | null
 }
 
 export type ReturnedOrderInfo = {

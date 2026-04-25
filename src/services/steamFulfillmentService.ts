@@ -29,8 +29,24 @@ export type OrderPollingResult = {
   failedCount: number
   returnedCount: number
   decidedCount: number
+  recoveredCount: number
   skipped: boolean
 }
+
+const ACTIVE_PRODUCT_ORDER_STATUSES = [
+  'PAYED',
+  'DISPATCHED',
+  'DELIVERED',
+  'PURCHASE_DECIDED',
+]
+
+const IN_PROGRESS_CLAIM_STATUSES = [
+  'RETURN_REQUESTED',
+  'COLLECT_REQUESTED',
+  'COLLECT_DONE',
+  'EXCHANGE_REQUESTED',
+  'CANCEL_REQUESTED',
+]
 
 function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -393,6 +409,7 @@ export async function pollAndProcess(orderSource: IOrderSource): Promise<OrderPo
     failedCount,
     returnedCount,
     decidedCount,
+    recoveredCount: 0,
     skipped: false,
   }
 }
@@ -409,6 +426,7 @@ export async function runBackupOrderScan(
       failedCount: 0,
       returnedCount: 0,
       decidedCount: 0,
+      recoveredCount: 0,
       skipped: true,
     }
   }
@@ -421,10 +439,32 @@ export async function runBackupOrderScan(
     const items = await orderSource.fetchPaidOrdersInWindow(hoursBack)
     let processedCount = 0
     let failedCount = 0
+    let recoveredCount = 0
 
     for (const item of items) {
       try {
         const before = await findOrderByProductOrderId(item.productOrderId)
+
+        if (
+          before &&
+          before.fulfillmentStatus === 'returned' &&
+          item.naverProductOrderStatus &&
+          ACTIVE_PRODUCT_ORDER_STATUSES.includes(item.naverProductOrderStatus) &&
+          !IN_PROGRESS_CLAIM_STATUSES.includes(item.naverClaimStatus ?? '')
+        ) {
+          await updateOrderItem(before.id, {
+            fulfillmentStatus: 'completed',
+            returnedAt: null,
+            errorMessage: '반품 클레임 종료 후 자동 복귀',
+          })
+          await sendDiscordAlert(
+            'order',
+            `↩️ 반품 클레임 종료 → 정상 복귀\n주문: ${item.productOrderId}\n상품: ${item.productName}\n네이버 상태: ${item.naverProductOrderStatus}${item.naverClaimStatus ? ` (claimStatus: ${item.naverClaimStatus})` : ''}`,
+          )
+          recoveredCount += 1
+          continue
+        }
+
         await processOrder(item, orderSource, 'backup')
         if (!before) processedCount += 1
       } catch (error) {
@@ -439,7 +479,7 @@ export async function runBackupOrderScan(
 
     const durationMs = Date.now() - startedAt
     console.log(
-      `[BACKUP_SCAN] done fetched=${items.length} processed=${processedCount} failed=${failedCount} duration_ms=${durationMs}`,
+      `[BACKUP_SCAN] done fetched=${items.length} processed=${processedCount} recovered=${recoveredCount} failed=${failedCount} duration_ms=${durationMs}`,
     )
 
     return {
@@ -448,6 +488,7 @@ export async function runBackupOrderScan(
       failedCount,
       returnedCount: 0,
       decidedCount: 0,
+      recoveredCount,
       skipped: false,
     }
   } catch (error) {
@@ -467,6 +508,8 @@ export type DailyReconciliationResult = {
   dbCount: number
   missingCount: number
   missingProductOrderIds: string[]
+  staleReturnedCount: number
+  staleReturnedProductOrderIds: string[]
 }
 
 export async function runDailyOrderReconciliation(
@@ -485,8 +528,19 @@ export async function runDailyOrderReconciliation(
 
   const dbRows = await listOrdersPaidBetween(new Date(dayStartUtcMs), new Date(dayEndUtcMs))
   const dbProductOrderIds = new Set(dbRows.map((row) => row.productOrderId))
+  const dbReturnedIds = new Set(
+    dbRows.filter((row) => row.fulfillmentStatus === 'returned').map((row) => row.productOrderId),
+  )
 
   const missing = naverItems.filter((item) => !dbProductOrderIds.has(item.productOrderId))
+
+  const staleReturned = naverItems.filter(
+    (item) =>
+      dbReturnedIds.has(item.productOrderId) &&
+      item.naverProductOrderStatus !== undefined &&
+      ACTIVE_PRODUCT_ORDER_STATUSES.includes(item.naverProductOrderStatus) &&
+      !IN_PROGRESS_CLAIM_STATUSES.includes(item.naverClaimStatus ?? ''),
+  )
 
   if (missing.length > 0) {
     const lines = missing
@@ -502,9 +556,23 @@ export async function runDailyOrderReconciliation(
     )
   }
 
+  if (staleReturned.length > 0) {
+    const lines = staleReturned
+      .slice(0, 20)
+      .map(
+        (item) =>
+          `- ${item.productOrderId} / ${item.productName} / ${item.naverProductOrderStatus ?? '-'}`,
+      )
+    const moreLine = staleReturned.length > 20 ? `\n... 외 ${staleReturned.length - 20}건` : ''
+    await sendDiscordAlert(
+      'error',
+      `⚠️ ${yesterday} DB는 returned인데 네이버는 정상 상태인 주문 ${staleReturned.length}건 — 보조 스캔이 못 잡았는지 확인 필요\n${lines.join('\n')}${moreLine}`,
+    )
+  }
+
   const durationMs = Date.now() - startedAt
   console.log(
-    `[DAILY_RECONCILE] done dateKST=${yesterday} naver=${naverItems.length} db=${dbRows.length} missing=${missing.length} duration_ms=${durationMs}`,
+    `[DAILY_RECONCILE] done dateKST=${yesterday} naver=${naverItems.length} db=${dbRows.length} missing=${missing.length} staleReturned=${staleReturned.length} duration_ms=${durationMs}`,
   )
 
   return {
@@ -513,6 +581,8 @@ export async function runDailyOrderReconciliation(
     dbCount: dbRows.length,
     missingCount: missing.length,
     missingProductOrderIds: missing.map((item) => item.productOrderId),
+    staleReturnedCount: staleReturned.length,
+    staleReturnedProductOrderIds: staleReturned.map((item) => item.productOrderId),
   }
 }
 
@@ -528,6 +598,7 @@ export async function runOrderPolling(
       failedCount: 0,
       returnedCount: 0,
       decidedCount: 0,
+      recoveredCount: 0,
       skipped: true,
     }
   }

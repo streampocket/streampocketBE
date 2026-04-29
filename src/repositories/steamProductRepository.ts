@@ -5,6 +5,8 @@ type CreateProductInput = {
   name: string
   naverProductId: string
   price?: number | null
+  discountPricePc?: number | null
+  discountPriceMobile?: number | null
 }
 
 type UpdateProductInput = {
@@ -72,17 +74,34 @@ export async function findAllNaverProductIds(): Promise<string[]> {
 
 export async function findProductFieldsByNaverIds(
   naverProductIds: string[],
-): Promise<{ naverProductId: string; name: string; price: number | null }[]> {
+): Promise<{
+  naverProductId: string
+  name: string
+  price: number | null
+  discountPricePc: number | null
+  discountPriceMobile: number | null
+}[]> {
   if (naverProductIds.length === 0) return []
   return prisma.steamProduct.findMany({
     where: { naverProductId: { in: naverProductIds } },
-    select: { naverProductId: true, name: true, price: true },
+    select: {
+      naverProductId: true,
+      name: true,
+      price: true,
+      discountPricePc: true,
+      discountPriceMobile: true,
+    },
   })
 }
 
 export async function updateProductByNaverId(
   naverProductId: string,
-  data: { name?: string; price?: number | null },
+  data: {
+    name?: string
+    price?: number | null
+    discountPricePc?: number | null
+    discountPriceMobile?: number | null
+  },
 ): Promise<void> {
   await prisma.steamProduct.update({ where: { naverProductId }, data })
 }

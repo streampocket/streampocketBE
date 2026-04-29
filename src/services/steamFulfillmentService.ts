@@ -1,3 +1,4 @@
+import { SteamProduct } from '@prisma/client'
 import { sendDiscordAlert } from '../lib/discord'
 import {
   createOrderItem,
@@ -52,6 +53,34 @@ function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+function formatOrderPriceLines(unitPrice: number, product: SteamProduct | null): string[] {
+  const fmt = (n: number): string => `${n.toLocaleString('ko-KR')}원`
+
+  if (!product) {
+    return [`금액: ${fmt(unitPrice)}`]
+  }
+
+  const regular = product.price ?? unitPrice
+  const pc = product.discountPricePc
+  const mobile = product.discountPriceMobile
+
+  // 할인 미설정
+  if (pc == null && mobile == null) {
+    return [`금액(정가): ${fmt(regular)}`]
+  }
+
+  // PC/모바일 동일 할인
+  if (pc != null && mobile != null && pc === mobile) {
+    return [`금액(정가): ${fmt(regular)}`, `할인가: ${fmt(pc)}`]
+  }
+
+  // PC/모바일 다른 할인 (한쪽만 설정된 경우 포함)
+  const lines = [`금액(정가): ${fmt(regular)}`]
+  if (pc != null) lines.push(`할인가(PC): ${fmt(pc)}`)
+  if (mobile != null) lines.push(`할인가(모바일): ${fmt(mobile)}`)
+  return lines
+}
+
 export async function processOrder(
   item: IncomingOrderItem,
   orderSource: IOrderSource,
@@ -60,10 +89,13 @@ export async function processOrder(
   const existing = await findOrderByProductOrderId(item.productOrderId)
   if (existing) return
 
+  const product = await findProductByNaverId(item.naverProductId)
+
   const sourceTag = source === 'backup' ? ' (보조 스캔으로 사후 포착)' : ''
+  const priceLines = formatOrderPriceLines(item.unitPrice, product).join('\n')
   await sendDiscordAlert(
     'order',
-    `🔔 신규 주문 감지${sourceTag}\n상품: ${item.productName}\n금액: ${item.unitPrice.toLocaleString('ko-KR')}원\n수신자: ${item.receiverName ?? '-'}\n주문: ${item.productOrderId}`,
+    `🔔 신규 주문 감지${sourceTag}\n상품: ${item.productName}\n${priceLines}\n수신자: ${item.receiverName ?? '-'}\n주문: ${item.productOrderId}`,
   )
 
   const orderItem = await createOrderItem({
@@ -88,7 +120,6 @@ export async function processOrder(
     return
   }
 
-  const product = await findProductByNaverId(item.naverProductId)
   if (!product) {
     await updateOrderItem(orderItem.id, {
       fulfillmentStatus: 'manual_review',

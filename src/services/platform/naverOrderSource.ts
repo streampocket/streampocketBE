@@ -89,6 +89,8 @@ const naverProductListResponseSchema = z.object({
               channelProductNo: z.number(),
               name: z.string().min(1),
               salePrice: z.number().optional(),
+              discountedPrice: z.number().optional(),
+              mobileDiscountedPrice: z.number().optional(),
             }),
           )
           .optional(),
@@ -240,7 +242,13 @@ async function fetchNaverProductsPage(page: number): Promise<NaverProductListRes
   return naverProductListResponseSchema.parse(await res.json())
 }
 
-export async function fetchNaverProducts(): Promise<{ productId: string; name: string; price: number | null }[]> {
+export async function fetchNaverProducts(): Promise<{
+  productId: string
+  name: string
+  price: number | null
+  discountPricePc: number | null
+  discountPriceMobile: number | null
+}[]> {
   const collected: NaverProductListResponse['contents'] = []
   let page = 1
   let totalPages: number | undefined
@@ -267,11 +275,22 @@ export async function fetchNaverProducts(): Promise<{ productId: string; name: s
     await sendDiscordAlert('error', `⚠️ ${message}`)
   }
 
-  return collected.map((item) => ({
-    productId: String(item.channelProducts?.[0]?.channelProductNo ?? item.originProductNo),
-    name: item.channelProducts?.[0]?.name ?? `네이버 상품 ${item.originProductNo}`,
-    price: item.channelProducts?.[0]?.salePrice ?? null,
-  }))
+  return collected.map((item) => {
+    const channel = item.channelProducts?.[0]
+    const salePrice = channel?.salePrice ?? null
+    const normalizeDiscount = (value: number | undefined): number | null => {
+      if (value == null) return null
+      if (salePrice != null && value === salePrice) return null
+      return value
+    }
+    return {
+      productId: String(channel?.channelProductNo ?? item.originProductNo),
+      name: channel?.name ?? `네이버 상품 ${item.originProductNo}`,
+      price: salePrice,
+      discountPricePc: normalizeDiscount(channel?.discountedPrice),
+      discountPriceMobile: normalizeDiscount(channel?.mobileDiscountedPrice),
+    }
+  })
 }
 
 function detailToIncomingOrderItem(detail: NaverQueryProductOrderItem): IncomingOrderItem {

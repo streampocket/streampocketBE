@@ -70,6 +70,8 @@ model SteamProduct {
   name           String           @db.VarChar(255)
   naverProductId String           @unique @map("naver_product_id") @db.VarChar(100)
   price          Int?             @map("price")
+  discountPricePc     Int?        @map("discount_price_pc")
+  discountPriceMobile Int?        @map("discount_price_mobile")
   status         ProductStatus    @default(draft)
   createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)

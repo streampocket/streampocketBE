@@ -104,21 +104,53 @@ export async function syncNaverProducts(): Promise<{
   const existingSet = new Set(existingIds)
   const newProducts = naverProducts.filter((p) => !existingSet.has(p.productId))
   const created = await Promise.all(
-    newProducts.map((p) => createProduct({ name: p.name, naverProductId: p.productId, price: p.price })),
+    newProducts.map((p) =>
+      createProduct({
+        name: p.name,
+        naverProductId: p.productId,
+        price: p.price,
+        discountPricePc: p.discountPricePc,
+        discountPriceMobile: p.discountPriceMobile,
+      }),
+    ),
   )
 
-  // 이름/가격 업데이트: 이미 존재하는 상품 중 네이버 상품명 또는 가격이 변경된 것
+  // 이름/가격/할인가 업데이트: 이미 존재하는 상품 중 네이버 상품명 또는 가격이 변경된 것
   const existingNaverIds = naverProducts
     .filter((p) => existingSet.has(p.productId))
     .map((p) => p.productId)
   const dbProducts = await findProductFieldsByNaverIds(existingNaverIds)
-  const dbFieldMap = new Map(dbProducts.map((p) => [p.naverProductId, { name: p.name, price: p.price }]))
+  const dbFieldMap = new Map(
+    dbProducts.map((p) => [
+      p.naverProductId,
+      {
+        name: p.name,
+        price: p.price,
+        discountPricePc: p.discountPricePc,
+        discountPriceMobile: p.discountPriceMobile,
+      },
+    ]),
+  )
   const toUpdate = naverProducts.filter((p) => {
     const existing = dbFieldMap.get(p.productId)
     if (!existing) return false
-    return existing.name !== p.name || existing.price !== p.price
+    return (
+      existing.name !== p.name ||
+      existing.price !== p.price ||
+      existing.discountPricePc !== p.discountPricePc ||
+      existing.discountPriceMobile !== p.discountPriceMobile
+    )
   })
-  await Promise.all(toUpdate.map((p) => updateProductByNaverId(p.productId, { name: p.name, price: p.price })))
+  await Promise.all(
+    toUpdate.map((p) =>
+      updateProductByNaverId(p.productId, {
+        name: p.name,
+        price: p.price,
+        discountPricePc: p.discountPricePc,
+        discountPriceMobile: p.discountPriceMobile,
+      }),
+    ),
+  )
 
   // 삭제 처리: active/draft 상품 중 네이버에 없는 것
   const naverSet = new Set(naverProducts.map((p) => p.productId))

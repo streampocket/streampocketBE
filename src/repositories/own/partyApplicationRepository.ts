@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma'
+import type { PartyApplicationStatus, Prisma } from '@prisma/client'
 
 type CreateApplicationInput = {
   productId: string
@@ -14,12 +15,6 @@ export function findActiveApplication(productId: string, userId: string) {
       productId,
       userId,
       status: { in: ['pending', 'confirmed'] },
-    },
-    include: {
-      payments: {
-        orderBy: { createdAt: 'desc' as const },
-        take: 1,
-      },
     },
   })
 }
@@ -54,10 +49,6 @@ export function findApplicationsByUserId(userId: string) {
           status: true,
           category: { select: { id: true, name: true } },
         },
-      },
-      payments: {
-        orderBy: { createdAt: 'desc' as const },
-        take: 1,
       },
     },
     orderBy: { createdAt: 'desc' },
@@ -95,6 +86,72 @@ export function findApplicationWithProduct(applicationId: string) {
           status: true,
           accountId: true,
           accountPassword: true,
+        },
+      },
+    },
+  })
+}
+
+// ─────────────── 관리자용 ───────────────
+
+type AdminListInput = {
+  status?: PartyApplicationStatus
+  search?: string
+  page: number
+  pageSize: number
+}
+
+export async function findApplicationsForAdmin(input: AdminListInput) {
+  const where: Prisma.PartyApplicationWhereInput = {
+    ...(input.status ? { status: input.status } : {}),
+    ...(input.search
+      ? {
+          OR: [
+            { user: { name: { contains: input.search, mode: 'insensitive' } } },
+            { user: { phone: { contains: input.search } } },
+            { product: { name: { contains: input.search, mode: 'insensitive' } } },
+          ],
+        }
+      : {}),
+  }
+
+  const [items, total] = await Promise.all([
+    prisma.partyApplication.findMany({
+      where,
+      include: {
+        user: { select: { id: true, name: true, email: true, phone: true } },
+        product: {
+          select: {
+            id: true,
+            name: true,
+            durationDays: true,
+            category: { select: { id: true, name: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      skip: (input.page - 1) * input.pageSize,
+      take: input.pageSize,
+    }),
+    prisma.partyApplication.count({ where }),
+  ])
+
+  return { items, total }
+}
+
+export function findApplicationDetailForAdmin(applicationId: string) {
+  return prisma.partyApplication.findUnique({
+    where: { id: applicationId },
+    include: {
+      user: { select: { id: true, name: true, email: true, phone: true } },
+      product: {
+        select: {
+          id: true,
+          name: true,
+          durationDays: true,
+          totalSlots: true,
+          filledSlots: true,
+          category: { select: { id: true, name: true } },
         },
       },
     },

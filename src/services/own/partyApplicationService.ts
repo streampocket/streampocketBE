@@ -1,19 +1,20 @@
+import type { PartyApplicationStatus } from '@prisma/client'
 import { prisma } from '../../lib/prisma'
 import { findOwnProductById } from '../../repositories/own/ownProductRepository'
 import {
   findActiveApplication,
   findApplicationsByUserId,
   findApplicationWithProduct,
+  findApplicationsForAdmin,
+  findApplicationDetailForAdmin,
 } from '../../repositories/own/partyApplicationRepository'
 import { decrypt } from '../../utils/crypto'
 import { isPartyJoinable, calculateCurrentPrice } from '../../utils/partyPricing'
+import { sendDiscordAlert } from '../../lib/discord'
 
 const FEE_RATE = 0.1
 
-export const PAY_METHOD_VALUES = ['kakaopay', 'card', 'transfer', 'virtualAccount', 'mobile'] as const
-export type PayMethod = (typeof PAY_METHOD_VALUES)[number]
-
-export async function applyToParty(productId: string, userId: string, payMethod: PayMethod) {
+export async function applyToParty(productId: string, userId: string) {
   const product = await findOwnProductById(productId)
   if (!product) {
     throw Object.assign(new Error('파티를 찾을 수 없습니다.'), { statusCode: 404 })
@@ -32,37 +33,32 @@ export async function applyToParty(productId: string, userId: string, payMethod:
   if (existing && existing.status === 'confirmed') {
     throw Object.assign(new Error('이미 확정된 파티입니다.'), { statusCode: 409 })
   }
+  if (existing && existing.status === 'pending') {
+    throw Object.assign(new Error('이미 신청 대기 중입니다.'), { statusCode: 409 })
+  }
 
   const currentPrice = calculateCurrentPrice(product)
   const fee = Math.round(currentPrice * FEE_RATE)
   const totalAmount = currentPrice + fee
-  const pgProvider = payMethod === 'kakaopay' ? 'kakaopay' : 'galaxia'
-
-  const isRetry = existing?.status === 'pending'
 
   const result = await prisma.$transaction(async (tx) => {
-    // 재시도(이미 슬롯 선점됨)가 아닌 경우에만 슬롯 선점
-    if (!isRetry) {
-      const slotUpdate = await tx.ownProduct.updateMany({
-        where: {
-          id: productId,
-          status: 'recruiting',
-          deletedAt: null,
-          filledSlots: { lt: product.totalSlots },
-        },
-        data: { filledSlots: { increment: 1 } },
-      })
-      if (slotUpdate.count === 0) {
-        throw Object.assign(new Error('모집이 마감되었습니다.'), { statusCode: 409 })
-      }
+    const slotUpdate = await tx.ownProduct.updateMany({
+      where: {
+        id: productId,
+        status: 'recruiting',
+        deletedAt: null,
+        filledSlots: { lt: product.totalSlots },
+      },
+      data: { filledSlots: { increment: 1 } },
+    })
+    if (slotUpdate.count === 0) {
+      throw Object.assign(new Error('모집이 마감되었습니다.'), { statusCode: 409 })
     }
 
-    // 기존 신청이 있으면 재사용(pending/cancelled/expired 모두), 없으면 새로 생성
     const prior = await tx.partyApplication.findUnique({
       where: { productId_userId: { productId, userId } },
     })
 
-    let applicationId: string
     if (prior) {
       const updated = await tx.partyApplication.update({
         where: { id: prior.id },
@@ -75,50 +71,164 @@ export async function applyToParty(productId: string, userId: string, payMethod:
           expiresAt: null,
         },
       })
-      applicationId = updated.id
-      // 재시도: 기존 pending 결제는 모두 cancelled 로 정리 (PG 에 실제 제출된 건이 아니므로 DB만 정리)
-      await tx.payment.updateMany({
-        where: { applicationId, status: 'pending' },
-        data: { status: 'cancelled' },
-      })
-    } else {
-      const created = await tx.partyApplication.create({
-        data: {
-          productId,
-          userId,
-          price: currentPrice,
-          fee,
-          totalAmount,
-          status: 'pending',
-        },
-      })
-      applicationId = created.id
+      return { applicationId: updated.id }
     }
 
-    const payment = await tx.payment.create({
+    const created = await tx.partyApplication.create({
       data: {
-        applicationId,
-        amount: totalAmount,
-        method: 'pg',
+        productId,
+        userId,
+        price: currentPrice,
+        fee,
+        totalAmount,
         status: 'pending',
-        payMethod,
-        pgProvider,
       },
     })
+    return { applicationId: created.id }
+  })
 
-    return { applicationId, payment }
+  await notifyApplicationCreated({
+    productName: product.name,
+    categoryName: product.category.name,
+    userId,
+    price: currentPrice,
+    fee,
+    totalAmount,
+  }).catch((err) => {
+    console.error('[partyApply] Discord 알림 실패:', err)
   })
 
   return {
     data: {
       applicationId: result.applicationId,
-      paymentId: result.payment.id,
-      amount: totalAmount,
-      orderName: `${product.name} (${product.durationDays}일)`,
-      payMethod,
-      pgProvider,
+      price: currentPrice,
+      fee,
+      totalAmount,
     },
   }
+}
+
+type NotifyInput = {
+  productName: string
+  categoryName: string
+  userId: string
+  price: number
+  fee: number
+  totalAmount: number
+}
+
+async function notifyApplicationCreated(input: NotifyInput): Promise<void> {
+  const user = await prisma.user.findUnique({
+    where: { id: input.userId },
+    select: { name: true, phone: true },
+  })
+
+  const now = new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date())
+
+  const message = [
+    '[신규 파티 참여 신청]',
+    `파티: ${input.productName} (${input.categoryName})`,
+    `신청자: ${user?.name ?? '(알 수 없음)'} / ${user?.phone ?? '-'}`,
+    `금액: ${input.price.toLocaleString()}원 + 수수료 ${input.fee.toLocaleString()}원 = ${input.totalAmount.toLocaleString()}원`,
+    `신청일시: ${now} (KST)`,
+  ].join('\n')
+
+  await sendDiscordAlert('partyApply', message)
+}
+
+// ─────────────── 관리자용 ───────────────
+
+type AdminListInput = {
+  status?: PartyApplicationStatus
+  search?: string
+  page: number
+  pageSize: number
+}
+
+export async function adminGetApplications(input: AdminListInput) {
+  const { items, total } = await findApplicationsForAdmin(input)
+  return {
+    data: {
+      items,
+      total,
+      page: input.page,
+      pageSize: input.pageSize,
+      totalPages: Math.ceil(total / input.pageSize),
+    },
+  }
+}
+
+export async function adminGetApplicationDetail(applicationId: string) {
+  const application = await findApplicationDetailForAdmin(applicationId)
+  if (!application) {
+    throw Object.assign(new Error('신청 내역을 찾을 수 없습니다.'), { statusCode: 404 })
+  }
+  return { data: application }
+}
+
+export async function adminApproveApplication(applicationId: string) {
+  const application = await prisma.partyApplication.findUnique({
+    where: { id: applicationId },
+    include: { product: { select: { durationDays: true } } },
+  })
+  if (!application) {
+    throw Object.assign(new Error('신청 내역을 찾을 수 없습니다.'), { statusCode: 404 })
+  }
+  if (application.status !== 'pending') {
+    throw Object.assign(new Error('대기 중인 신청만 승인할 수 있습니다.'), { statusCode: 409 })
+  }
+
+  const startedAt = new Date()
+  const expiresAt = new Date(startedAt.getTime() + application.product.durationDays * 24 * 60 * 60 * 1000)
+
+  const updated = await prisma.partyApplication.update({
+    where: { id: applicationId },
+    data: {
+      status: 'confirmed',
+      startedAt,
+      expiresAt,
+    },
+  })
+
+  return { data: updated }
+}
+
+export async function adminRejectApplication(applicationId: string) {
+  const result = await prisma.$transaction(async (tx) => {
+    const application = await tx.partyApplication.findUnique({
+      where: { id: applicationId },
+      select: { id: true, status: true, productId: true },
+    })
+    if (!application) {
+      throw Object.assign(new Error('신청 내역을 찾을 수 없습니다.'), { statusCode: 404 })
+    }
+    if (application.status !== 'pending') {
+      throw Object.assign(new Error('대기 중인 신청만 거절할 수 있습니다.'), { statusCode: 409 })
+    }
+
+    const updated = await tx.partyApplication.update({
+      where: { id: applicationId },
+      data: { status: 'cancelled' },
+    })
+
+    // 슬롯 원복 (음수 방지)
+    await tx.ownProduct.updateMany({
+      where: { id: application.productId, filledSlots: { gt: 0 } },
+      data: { filledSlots: { decrement: 1 } },
+    })
+
+    return updated
+  })
+
+  return { data: result }
 }
 
 export async function getMyApplications(userId: string) {
@@ -156,14 +266,12 @@ export async function getApplicationCredentials(applicationId: string, userId: s
 export async function checkApplication(productId: string, userId: string) {
   const application = await findActiveApplication(productId, userId)
   if (!application) {
-    return { data: { applied: false, applicationStatus: null, paymentStatus: null } }
+    return { data: { applied: false, applicationStatus: null } }
   }
-  const latestPayment = application.payments[0] ?? null
   return {
     data: {
       applied: true,
       applicationStatus: application.status,
-      paymentStatus: latestPayment ? latestPayment.status : null,
     },
   }
 }

@@ -112,17 +112,6 @@ export function findUserDetailById(id: string) {
               durationDays: true,
             },
           },
-          payments: {
-            select: {
-              id: true,
-              amount: true,
-              status: true,
-              method: true,
-              paidAt: true,
-              createdAt: true,
-            },
-            orderBy: { createdAt: 'desc' },
-          },
         },
         orderBy: { createdAt: 'desc' },
       },

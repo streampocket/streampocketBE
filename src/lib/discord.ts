@@ -1,4 +1,4 @@
-export type DiscordChannel = 'order' | 'stock' | 'error' | 'expense' | 'settlement' | 'partner' | 'partyApply' | 'paymentRequest'
+export type DiscordChannel = 'order' | 'stock' | 'error' | 'expense' | 'settlement' | 'partner' | 'partyApply'
 
 const CHANNEL_META: Record<DiscordChannel, { title: string; color: number }> = {
   order: { title: '주문 알림', color: 0x57f287 },
@@ -8,13 +8,12 @@ const CHANNEL_META: Record<DiscordChannel, { title: string; color: number }> = {
   settlement: { title: '주간 정산', color: 0x5865f2 },
   partner: { title: '파트너 신청 알림', color: 0x3498db },
   partyApply: { title: '파티원 참여 알림', color: 0x2ecc71 },
-  paymentRequest: { title: '결제 요청 알림', color: 0xf1c40f },
 }
 
 function getWebhookUrl(channel: DiscordChannel): string | undefined {
   if (channel === 'expense') return process.env['DISCORD_EXPENSE_WEBHOOK_URL']
   if (channel === 'settlement') return process.env['DISCORD_SETTLEMENT_WEBHOOK_URL']
-  if (channel === 'partner' || channel === 'partyApply' || channel === 'paymentRequest') return process.env['DISCORD_PARTNER_WEBHOOK_URL']
+  if (channel === 'partner' || channel === 'partyApply') return process.env['DISCORD_PARTNER_WEBHOOK_URL']
   return process.env['DISCORD_WEBHOOK_URL']
 }
 

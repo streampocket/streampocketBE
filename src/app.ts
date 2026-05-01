@@ -9,7 +9,6 @@ import { requestLogger } from './middlewares/requestLogger'
 import { errorHandler } from './middlewares/errorHandler'
 import { authRouter } from './routes/auth'
 import { cronRouter } from './routes/cron'
-import { webhookRouter } from './routes/webhook'
 import { adminOrdersRouter } from './routes/admin/orders'
 import { adminProductsRouter } from './routes/admin/products'
 import { adminAccountsRouter } from './routes/admin/accounts'
@@ -26,11 +25,10 @@ import { ownCategoriesRouter } from './routes/own/categories'
 import { ownProductsRouter } from './routes/own/products'
 import { ownPartnersRouter } from './routes/own/partners'
 import { ownApplicationsRouter } from './routes/own/applications'
-import { ownPaymentsRouter } from './routes/own/payments'
 import { adminOwnCategoriesRouter } from './routes/admin/ownCategories'
 import { adminOwnProductsRouter } from './routes/admin/ownProducts'
 import { adminOwnPartnersRouter } from './routes/admin/ownPartners'
-import { adminOwnPaymentsRouter } from './routes/admin/ownPayments'
+import { adminOwnApplicationsRouter } from './routes/admin/ownApplications'
 import { adminOwnUsersRouter } from './routes/admin/ownUsers'
 
 const app = express()
@@ -70,7 +68,6 @@ app.use(requestLogger)
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
 app.use('/auth', authRouter)
 app.use('/steam/cron', cronRouter)
-app.use('/steam/webhook', webhookRouter)
 app.use('/steam/admin/orders', adminOrdersRouter)
 app.use('/steam/admin/products', adminProductsRouter)
 app.use('/steam/admin/accounts', adminAccountsRouter)
@@ -89,11 +86,10 @@ app.use('/own/categories', ownCategoriesRouter)
 app.use('/own/products', ownProductsRouter)
 app.use('/own/partners', ownPartnersRouter)
 app.use('/own/applications', ownApplicationsRouter)
-app.use('/own/payments', ownPaymentsRouter)
 app.use('/own/admin/categories', adminOwnCategoriesRouter)
 app.use('/own/admin/products', adminOwnProductsRouter)
 app.use('/own/admin/partners', adminOwnPartnersRouter)
-app.use('/own/admin/payments', adminOwnPaymentsRouter)
+app.use('/own/admin/applications', adminOwnApplicationsRouter)
 app.use('/own/admin/users', adminOwnUsersRouter)
 
 // ───────────────────────── Health ─────────────────────────

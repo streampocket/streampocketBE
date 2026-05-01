@@ -40,10 +40,7 @@ export async function getUserDetail(id: string) {
   }
 
   const totalPaidAmount = user.partyApplications.reduce((sum, app) => {
-    const paidSum = app.payments
-      .filter((p) => p.status === 'paid')
-      .reduce((s, p) => s + p.amount, 0)
-    return sum + paidSum
+    return app.status === 'confirmed' ? sum + app.totalAmount : sum
   }, 0)
 
   const now = new Date()

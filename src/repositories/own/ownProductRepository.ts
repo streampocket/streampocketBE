@@ -191,10 +191,6 @@ export function findOwnProductWithApplications(id: string) {
       applications: {
         include: {
           user: { select: { id: true, name: true, email: true, phone: true } },
-          payments: {
-            orderBy: { createdAt: 'desc' as const },
-            take: 1,
-          },
         },
         orderBy: { createdAt: 'desc' as const },
       },

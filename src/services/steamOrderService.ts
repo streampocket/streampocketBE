@@ -14,6 +14,7 @@ type ListOrdersInput = {
   status?: FulfillmentStatus
   from?: Date
   to?: Date
+  receiverName?: string
   page: number
   pageSize: number
 }

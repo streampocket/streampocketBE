@@ -24,6 +24,7 @@ type UpdateOrderItemInput = {
   settlementAmount?: number
   friendLink1?: string | null
   friendLink2?: string | null
+  giftCode?: string | null
   giftCompletedAt?: Date
 }
 

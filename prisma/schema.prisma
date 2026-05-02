@@ -121,6 +121,7 @@ model SteamOrderItem {
   reviewGameSentAt    DateTime?         @map("review_game_sent_at") @db.Timestamptz(6)
   friendLink1         String?           @map("friend_link1") @db.VarChar(500)
   friendLink2         String?           @map("friend_link2") @db.VarChar(500)
+  giftCode            String?           @map("gift_code") @db.VarChar(200)
   giftCompletedAt     DateTime?         @map("gift_completed_at") @db.Timestamptz(6)
   createdAt           DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)

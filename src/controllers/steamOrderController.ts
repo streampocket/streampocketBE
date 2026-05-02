@@ -87,6 +87,7 @@ export async function manualReturnHandler(
 const friendLinksBodySchema = z.object({
   friendLink1: z.string().trim().max(500).nullable().optional(),
   friendLink2: z.string().trim().max(500).nullable().optional(),
+  giftCode: z.string().trim().max(200).nullable().optional(),
 })
 
 export async function updateFriendLinksHandler(

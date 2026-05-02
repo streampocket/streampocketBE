@@ -126,6 +126,7 @@ export async function retryOrder(id: string): Promise<void> {
 type UpdateFriendLinksInput = {
   friendLink1?: string | null
   friendLink2?: string | null
+  giftCode?: string | null
 }
 
 export async function updateFriendLinks(
@@ -144,6 +145,7 @@ export async function updateFriendLinks(
   await updateOrderItem(id, {
     friendLink1: input.friendLink1,
     friendLink2: input.friendLink2,
+    giftCode: input.giftCode,
   })
 }
 

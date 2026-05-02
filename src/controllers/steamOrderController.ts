@@ -15,6 +15,7 @@ const listQuerySchema = z.object({
   status: z.enum(['pending', 'completed', 'manual_review', 'failed', 'returned']).optional(),
   from: z.string().datetime({ offset: true }).optional(),
   to: z.string().datetime({ offset: true }).optional(),
+  receiverName: z.string().trim().optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 })
@@ -25,6 +26,7 @@ export async function getOrdersHandler(req: Request, res: Response): Promise<voi
     status: query.status,
     from: query.from ? new Date(query.from) : undefined,
     to: query.to ? new Date(query.to) : undefined,
+    receiverName: query.receiverName,
     page: query.page,
     pageSize: query.pageSize,
   })
@@ -87,6 +89,7 @@ export async function manualReturnHandler(
 const friendLinksBodySchema = z.object({
   friendLink1: z.string().trim().max(500).nullable().optional(),
   friendLink2: z.string().trim().max(500).nullable().optional(),
+  giftCode: z.string().trim().max(200).nullable().optional(),
 })
 
 export async function updateFriendLinksHandler(

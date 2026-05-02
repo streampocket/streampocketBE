@@ -24,6 +24,7 @@ type UpdateOrderItemInput = {
   settlementAmount?: number
   friendLink1?: string | null
   friendLink2?: string | null
+  giftCode?: string | null
   giftCompletedAt?: Date
 }
 
@@ -31,6 +32,7 @@ type ListOrdersInput = {
   status?: FulfillmentStatus
   from?: Date
   to?: Date
+  receiverName?: string
   page: number
   pageSize: number
 }
@@ -69,6 +71,9 @@ export async function listOrders(input: ListOrdersInput): Promise<ListOrdersResu
             ...(input.to ? { lte: input.to } : {}),
           },
         }
+      : {}),
+    ...(input.receiverName
+      ? { receiverName: { contains: input.receiverName, mode: 'insensitive' as const } }
       : {}),
   }
   const [items, total] = await prisma.$transaction([

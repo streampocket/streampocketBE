@@ -25,6 +25,8 @@ type UpdateOrderItemInput = {
   friendLink1?: string | null
   friendLink2?: string | null
   giftCode?: string | null
+  gameUrl?: string | null
+  memo?: string | null
   giftCompletedAt?: Date
 }
 

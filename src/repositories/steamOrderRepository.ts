@@ -6,6 +6,7 @@ type CreateOrderItemInput = {
   naverOrderId: string
   productName: string
   unitPrice: number
+  paymentAmount?: number | null
   receiverPhoneNumber?: string
   receiverName?: string
   productId?: string
@@ -22,6 +23,7 @@ type UpdateOrderItemInput = {
   returnedAt?: Date | null
   decisionDate?: Date
   settlementAmount?: number
+  paymentAmount?: number
   friendLink1?: string | null
   friendLink2?: string | null
   giftCode?: string | null

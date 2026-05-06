@@ -103,6 +103,7 @@ export async function processOrder(
     naverOrderId: item.externalOrderId,
     productName: item.productName,
     unitPrice: item.unitPrice,
+    paymentAmount: item.paymentAmount,
     receiverPhoneNumber: item.receiverPhoneNumber ?? undefined,
     receiverName: item.receiverName ?? undefined,
     paidAt: item.paidAt,

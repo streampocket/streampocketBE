@@ -49,23 +49,26 @@ type RevenueSummary = {
 }
 
 export async function getRevenueSummary(startDate: Date, endDate: Date): Promise<RevenueSummary> {
-  const [decidedAggregate, pendingAggregate, alimtalkCount, expenseSums, manualRevenueTotal] =
+  const [decidedTotals, pendingTotals, alimtalkCount, expenseSums, manualRevenueTotal] =
     await Promise.all([
-      prisma.steamOrderItem.aggregate({
-        where: {
-          fulfillmentStatus: 'completed',
-          decisionDate: { not: null, gte: startDate, lte: endDate },
-        },
-        _sum: { unitPrice: true, settlementAmount: true },
-      }),
-      prisma.steamOrderItem.aggregate({
-        where: {
-          fulfillmentStatus: 'completed',
-          decisionDate: null,
-          paidAt: { gte: startDate, lte: endDate },
-        },
-        _sum: { unitPrice: true },
-      }),
+      prisma.$queryRaw<{ revenue: bigint; settlement: bigint }[]>`
+        SELECT
+          COALESCE(SUM(COALESCE(payment_amount, unit_price)), 0)::bigint AS revenue,
+          COALESCE(SUM(settlement_amount), 0)::bigint AS settlement
+        FROM steam_order_items
+        WHERE fulfillment_status = 'completed'
+          AND decision_date IS NOT NULL
+          AND decision_date >= ${startDate}
+          AND decision_date <= ${endDate}
+      `,
+      prisma.$queryRaw<{ revenue: bigint }[]>`
+        SELECT COALESCE(SUM(COALESCE(payment_amount, unit_price)), 0)::bigint AS revenue
+        FROM steam_order_items
+        WHERE fulfillment_status = 'completed'
+          AND decision_date IS NULL
+          AND paid_at >= ${startDate}
+          AND paid_at <= ${endDate}
+      `,
       prisma.deliveryLog.count({
         where: {
           status: 'sent',
@@ -76,10 +79,10 @@ export async function getRevenueSummary(startDate: Date, endDate: Date): Promise
       sumManualRevenue(startDate, endDate),
     ])
 
-  const naverRevenue = decidedAggregate._sum.unitPrice ?? 0
-  const naverSettlement = decidedAggregate._sum.settlementAmount ?? 0
+  const naverRevenue = Number(decidedTotals[0]?.revenue ?? 0n)
+  const naverSettlement = Number(decidedTotals[0]?.settlement ?? 0n)
   const naverCommission = naverRevenue - naverSettlement
-  const pendingSettlement = pendingAggregate._sum.unitPrice ?? 0
+  const pendingSettlement = Number(pendingTotals[0]?.revenue ?? 0n)
 
   const totalRevenue = naverRevenue + manualRevenueTotal
   const totalSettlement = naverSettlement + manualRevenueTotal

@@ -112,6 +112,7 @@ model SteamOrderItem {
   receiverPhoneNumber String?           @map("receiver_phone_number") @db.VarChar(30)
   receiverName        String?           @map("receiver_name") @db.VarChar(100)
   unitPrice           Int               @map("unit_price")
+  paymentAmount       Int?              @map("payment_amount")
   settlementAmount    Int?              @map("settlement_amount")
   decisionDate        DateTime?         @map("decision_date") @db.Timestamptz(6)
   fulfillmentStatus   FulfillmentStatus @default(pending) @map("fulfillment_status")

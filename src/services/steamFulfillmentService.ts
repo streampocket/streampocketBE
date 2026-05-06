@@ -14,7 +14,7 @@ import {
 } from '../repositories/steamAccountRepository'
 import { detectProductType } from '../utils/productType'
 import { IOrderSource, IncomingOrderItem } from './platform/IOrderSource'
-import { isAlimtalkEnabled, sendOrderAlimtalk } from './alimtalkService'
+import { isAlimtalkEnabled, sendOrderAlimtalk, sendOutOfStockAlimtalk } from './alimtalkService'
 
 const LOW_STOCK_THRESHOLD = Number(process.env['LOW_STOCK_THRESHOLD'] ?? 2)
 
@@ -223,13 +223,73 @@ export async function processOrder(
 
   const account = await reserveNextAvailableAccount(product.id)
   if (!account) {
-    await updateOrderItem(orderItem.id, {
-      fulfillmentStatus: 'failed',
-      errorMessage: `재고 부족: ${product.name}`,
-    })
+    try {
+      await orderSource.confirmOrder(item.productOrderId)
+    } catch (error) {
+      const message = toErrorMessage(error)
+      await updateOrderItem(orderItem.id, {
+        fulfillmentStatus: 'failed',
+        errorMessage: `발주 확인 실패: ${message}`,
+      })
+      await sendDiscordAlert(
+        'error',
+        `❌ 발주 확인 실패\n주문: ${item.productOrderId}\n오류: ${message}`,
+      )
+      return
+    }
+
+    try {
+      await orderSource.dispatchOrder(item.productOrderId)
+    } catch (error) {
+      const message = toErrorMessage(error)
+      await updateOrderItem(orderItem.id, {
+        fulfillmentStatus: 'failed',
+        errorMessage: `발송 처리 실패: ${message}`,
+      })
+      await sendDiscordAlert(
+        'error',
+        `❌ 발송 처리 실패\n주문: ${item.productOrderId}\n오류: ${message}`,
+      )
+      return
+    }
+
+    try {
+      const alimtalkEnabled = await isAlimtalkEnabled()
+      if (!alimtalkEnabled) {
+        await updateOrderItem(orderItem.id, {
+          fulfillmentStatus: 'manual_review',
+          errorMessage: '알림톡 발송이 비활성화되어 수동 처리로 전환됨',
+        })
+        await sendDiscordAlert(
+          'error',
+          `⚠️ 알림톡 발송 비활성화 및 수동 처리 필요\n주문: ${item.productOrderId}\n수신번호: ${item.receiverPhoneNumber}`,
+        )
+        return
+      }
+
+      await sendOutOfStockAlimtalk({
+        orderItemId: orderItem.id,
+        recipientPhoneNumber: item.receiverPhoneNumber,
+        recipientName: item.receiverName,
+      })
+    } catch (error) {
+      const message = toErrorMessage(error)
+      await updateOrderItem(orderItem.id, {
+        fulfillmentStatus: 'manual_review',
+        errorMessage: `재고없음 안내 알림톡 발송 실패: ${message}`,
+      })
+      await sendDiscordAlert(
+        'error',
+        `❌ 재고없음 안내 알림톡 발송 실패 및 수동 개입 필요\n주문: ${item.productOrderId}\n수신번호: ${item.receiverPhoneNumber}`,
+      )
+      return
+    }
+
+    await updateOrderItem(orderItem.id, { fulfillmentStatus: 'completed' })
+
     await sendDiscordAlert(
       'stock',
-      `🚨 재고 부족. 즉시 보충 필요\n상품: ${product.name}\n주문: ${item.productOrderId}`,
+      `🚨 재고 부족 — 안내 알림톡 발송 완료. 카톡 응대 + 코드 수동 발송 필요\n상품: ${product.name}\n주문: ${item.productOrderId}\n수신번호: ${item.receiverPhoneNumber}`,
     )
     return
   }

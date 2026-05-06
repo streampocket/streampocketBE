@@ -77,6 +77,7 @@ docker compose restart be
 | `ALIGO_SENDER_KEY` | 알리고 발신키 |
 | `ALIGO_TEMPLATE_CODE_NA` | NA 알림톡 템플릿 코드 |
 | `ALIGO_TEMPLATE_CODE_AA` | AA 알림톡 템플릿 코드 |
+| `ALIGO_TEMPLATE_CODE_NA_OUT_OF_STOCK` | NA 재고 0 시 안내 알림톡 템플릿 코드 |
 | `ALIGO_SENDER` | 발신 전화번호 |
 | `DISCORD_WEBHOOK_URL` | Discord 알림 Webhook URL |
 | `JWT_SECRET` | JWT 서명 시크릿 |

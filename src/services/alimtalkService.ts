@@ -61,6 +61,7 @@ export type AlimtalkSettingsView = {
     templateCodeNA: string | null
     templateCodeAA: string | null
     templateCodeNASecondary: string | null
+    templateCodeNAOutOfStock: string | null
     templateCodeReviewGame: string | null
     templateCodeGiftCompleted: string | null
     sender: string | null
@@ -102,6 +103,7 @@ type EnvConfig = {
   templateCodeNA: string
   templateCodeAA: string
   templateCodeNASecondary: string
+  templateCodeNAOutOfStock: string
   templateCodeReviewGame: string
   templateCodeGiftCompleted: string
   sender: string
@@ -190,6 +192,7 @@ export function getEnvConfig(): EnvConfig {
     templateCodeNA: process.env['ALIGO_TEMPLATE_CODE_NA'] ?? '',
     templateCodeAA: process.env['ALIGO_TEMPLATE_CODE_AA'] ?? '',
     templateCodeNASecondary: process.env['ALIGO_TEMPLATE_CODE_NA_SECONDARY'] ?? '',
+    templateCodeNAOutOfStock: process.env['ALIGO_TEMPLATE_CODE_NA_OUT_OF_STOCK'] ?? '',
     templateCodeReviewGame: process.env['ALIGO_TEMPLATE_CODE_REVIEW_GAME'] ?? '',
     templateCodeGiftCompleted: process.env['ALIGO_TEMPLATE_CODE_GIFT_COMPLETED'] ?? '',
     sender: process.env['ALIGO_SENDER'] ?? '',
@@ -445,6 +448,7 @@ export async function getAlimtalkSettings(): Promise<AlimtalkSettingsView> {
       templateCodeNA: config.templateCodeNA || null,
       templateCodeAA: config.templateCodeAA || null,
       templateCodeNASecondary: config.templateCodeNASecondary || null,
+      templateCodeNAOutOfStock: config.templateCodeNAOutOfStock || null,
       templateCodeReviewGame: config.templateCodeReviewGame || null,
       templateCodeGiftCompleted: config.templateCodeGiftCompleted || null,
       sender: config.sender || null,
@@ -669,6 +673,62 @@ export async function sendReviewGameAlimtalk(
       recipientPhoneNumber: input.recipientPhoneNumber,
       recipientName: input.recipientName,
       message: applyTemplate(templateContent, normalizeTemplateVars(vars)),
+      buttonJson,
+    })
+
+    await updateDeliveryLog(deliveryLog.id, {
+      status: 'sent',
+      providerMessageId: getProviderMessageId(json),
+      sentAt: new Date(),
+      errorMessage: null,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    await updateDeliveryLog(deliveryLog.id, {
+      status: 'failed',
+      errorMessage: message,
+    })
+    throw error
+  }
+}
+
+type SendOutOfStockAlimtalkInput = {
+  orderItemId: string
+  recipientPhoneNumber: string
+  recipientName: string | null
+}
+
+export async function sendOutOfStockAlimtalk(
+  input: SendOutOfStockAlimtalkInput,
+): Promise<void> {
+  const config = getEnvConfig()
+  if (!isConfigured(config)) {
+    throw new Error('알리고 환경변수가 모두 설정되지 않았습니다.')
+  }
+
+  if (!config.templateCodeNAOutOfStock) {
+    throw new Error(
+      'NA 재고없음 안내 알림톡 템플릿 코드(ALIGO_TEMPLATE_CODE_NA_OUT_OF_STOCK)가 설정되지 않았습니다.',
+    )
+  }
+
+  const template = await getActiveTemplateOrThrow(config, config.templateCodeNAOutOfStock)
+  const buttonJson = buildButtonPayload(template)
+  const templateContent = template.templateContent ?? ''
+
+  const deliveryLog = await createDeliveryLog({
+    orderItemId: input.orderItemId,
+    channel: 'alimtalk',
+    recipient: input.recipientPhoneNumber,
+    templateCode: config.templateCodeNAOutOfStock,
+  })
+
+  try {
+    const json = await sendAlimtalkMessage({
+      templateCode: config.templateCodeNAOutOfStock,
+      recipientPhoneNumber: input.recipientPhoneNumber,
+      recipientName: input.recipientName,
+      message: templateContent,
       buttonJson,
     })
 

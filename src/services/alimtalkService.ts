@@ -30,6 +30,14 @@ type SendOrderAlimtalkInput =
       productName: string
       paidAt: Date
     }
+  | {
+      productType: 'BG'
+      orderItemId: string
+      recipientPhoneNumber: string
+      recipientName: string | null
+      productName: string
+      paidAt: Date
+    }
 
 type AligoTemplateView = {
   senderKey: string | null
@@ -64,6 +72,7 @@ export type AlimtalkSettingsView = {
     templateCodeNAOutOfStock: string | null
     templateCodeReviewGame: string | null
     templateCodeGiftCompleted: string | null
+    templateCodeBG: string | null
     sender: string | null
     providerConnected: boolean
     providerMessage: string
@@ -106,6 +115,7 @@ type EnvConfig = {
   templateCodeNAOutOfStock: string
   templateCodeReviewGame: string
   templateCodeGiftCompleted: string
+  templateCodeBG: string
   sender: string
 }
 
@@ -195,6 +205,7 @@ export function getEnvConfig(): EnvConfig {
     templateCodeNAOutOfStock: process.env['ALIGO_TEMPLATE_CODE_NA_OUT_OF_STOCK'] ?? '',
     templateCodeReviewGame: process.env['ALIGO_TEMPLATE_CODE_REVIEW_GAME'] ?? '',
     templateCodeGiftCompleted: process.env['ALIGO_TEMPLATE_CODE_GIFT_COMPLETED'] ?? '',
+    templateCodeBG: process.env['ALIGO_TEMPLATE_CODE_BG'] ?? '',
     sender: process.env['ALIGO_SENDER'] ?? '',
   }
 }
@@ -451,6 +462,7 @@ export async function getAlimtalkSettings(): Promise<AlimtalkSettingsView> {
       templateCodeNAOutOfStock: config.templateCodeNAOutOfStock || null,
       templateCodeReviewGame: config.templateCodeReviewGame || null,
       templateCodeGiftCompleted: config.templateCodeGiftCompleted || null,
+      templateCodeBG: config.templateCodeBG || null,
       sender: config.sender || null,
       providerConnected: provider.providerConnected,
       providerMessage: provider.providerMessage,
@@ -487,10 +499,16 @@ export async function sendOrderAlimtalk(
     throw new Error('2차 이메일 알림톡 템플릿 코드(ALIGO_TEMPLATE_CODE_NA_SECONDARY)가 설정되지 않았습니다.')
   }
 
+  if (input.productType === 'BG' && !config.templateCodeBG) {
+    throw new Error('배틀그라운드 알림톡 템플릿 코드(ALIGO_TEMPLATE_CODE_BG)가 설정되지 않았습니다.')
+  }
+
   const templateCode =
     input.productType === 'NA'
       ? (hasSecondaryEmail ? config.templateCodeNASecondary : config.templateCodeNA)
-      : config.templateCodeAA
+      : input.productType === 'BG'
+        ? config.templateCodeBG
+        : config.templateCodeAA
   const template = await getActiveTemplateOrThrow(config, templateCode)
   const buttonJson = buildButtonPayload(template)
   const deliveryLog = await createDeliveryLog({

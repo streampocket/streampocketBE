@@ -148,6 +148,79 @@ export async function processOrder(
     return
   }
 
+  if (productType === 'BG') {
+    try {
+      await orderSource.confirmOrder(item.productOrderId)
+    } catch (error) {
+      const message = toErrorMessage(error)
+      await updateOrderItem(orderItem.id, {
+        fulfillmentStatus: 'failed',
+        errorMessage: `발주 확인 실패: ${message}`,
+      })
+      await sendDiscordAlert(
+        'error',
+        `❌ 발주 확인 실패\n주문: ${item.productOrderId}\n오류: ${message}`,
+      )
+      return
+    }
+
+    try {
+      await orderSource.dispatchOrder(item.productOrderId)
+    } catch (error) {
+      const message = toErrorMessage(error)
+      await updateOrderItem(orderItem.id, {
+        fulfillmentStatus: 'failed',
+        errorMessage: `발송 처리 실패: ${message}`,
+      })
+      await sendDiscordAlert(
+        'error',
+        `❌ 발송 처리 실패\n주문: ${item.productOrderId}\n오류: ${message}`,
+      )
+      return
+    }
+
+    try {
+      const alimtalkEnabled = await isAlimtalkEnabled()
+      if (!alimtalkEnabled) {
+        await updateOrderItem(orderItem.id, {
+          fulfillmentStatus: 'manual_review',
+          errorMessage: '알림톡 발송이 비활성화되어 수동 처리로 전환됨',
+        })
+        await sendDiscordAlert(
+          'error',
+          `⚠️ 알림톡 발송 비활성화 및 수동 처리 필요\n주문: ${item.productOrderId}\n수신번호: ${item.receiverPhoneNumber}`,
+        )
+        return
+      }
+
+      await sendOrderAlimtalk({
+        productType: 'BG',
+        orderItemId: orderItem.id,
+        recipientPhoneNumber: item.receiverPhoneNumber,
+        recipientName: item.receiverName,
+        productName: item.productName,
+        paidAt: item.paidAt,
+      })
+
+      await updateOrderItem(orderItem.id, { fulfillmentStatus: 'completed' })
+      await sendDiscordAlert(
+        'order',
+        `🎮 BG 코드 주문\n상품: ${item.productName}\n주문번호: ${item.productOrderId}\n알림톡: ✅ 발송 성공`,
+      )
+    } catch (error) {
+      const message = toErrorMessage(error)
+      await updateOrderItem(orderItem.id, {
+        fulfillmentStatus: 'manual_review',
+        errorMessage: `알림톡 발송 실패: ${message}`,
+      })
+      await sendDiscordAlert(
+        'error',
+        `🎮 BG 코드 주문 — 알림톡 발송 실패\n상품: ${item.productName}\n주문번호: ${item.productOrderId}\n알림톡: ❌ ${message}`,
+      )
+    }
+    return
+  }
+
   if (productType === 'AA') {
     try {
       await orderSource.confirmOrder(item.productOrderId)

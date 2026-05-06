@@ -4,6 +4,7 @@ export type IncomingOrderItem = {
   productName: string
   naverProductId: string
   unitPrice: number
+  paymentAmount: number | null
   paidAt: Date
   receiverPhoneNumber: string | null
   receiverName: string | null

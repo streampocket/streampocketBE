@@ -51,12 +51,19 @@ type RevenueSummary = {
 export async function getRevenueSummary(startDate: Date, endDate: Date): Promise<RevenueSummary> {
   const [decidedTotals, pendingTotals, alimtalkCount, expenseSums, manualRevenueTotal] =
     await Promise.all([
-      prisma.$queryRaw<{ revenue: bigint; settlement: bigint }[]>`
+      prisma.$queryRaw<{ revenue: bigint; settlement: bigint; commission: bigint }[]>`
         SELECT
           COALESCE(SUM(COALESCE(payment_amount, unit_price)), 0)::bigint AS revenue,
-          COALESCE(SUM(settlement_amount), 0)::bigint AS settlement
+          COALESCE(SUM(
+            CASE WHEN fulfillment_status = 'purchase_decided'
+                 THEN settlement_amount ELSE 0 END
+          ), 0)::bigint AS settlement,
+          COALESCE(SUM(
+            CASE WHEN fulfillment_status = 'purchase_decided'
+                 THEN COALESCE(payment_amount, unit_price) - settlement_amount ELSE 0 END
+          ), 0)::bigint AS commission
         FROM steam_order_items
-        WHERE fulfillment_status = 'completed'
+        WHERE fulfillment_status IN ('completed', 'purchase_decided')
           AND decision_date IS NOT NULL
           AND decision_date >= ${startDate}
           AND decision_date <= ${endDate}
@@ -81,7 +88,7 @@ export async function getRevenueSummary(startDate: Date, endDate: Date): Promise
 
   const naverRevenue = Number(decidedTotals[0]?.revenue ?? 0n)
   const naverSettlement = Number(decidedTotals[0]?.settlement ?? 0n)
-  const naverCommission = naverRevenue - naverSettlement
+  const naverCommission = Number(decidedTotals[0]?.commission ?? 0n)
   const pendingSettlement = Number(pendingTotals[0]?.revenue ?? 0n)
 
   const totalRevenue = naverRevenue + manualRevenueTotal
@@ -153,10 +160,13 @@ export async function getRevenueChart(days: number) {
   >`
     SELECT
       DATE_TRUNC('day', decision_date) AS date,
-      COALESCE(SUM(unit_price), 0) AS total_revenue,
-      COALESCE(SUM(settlement_amount), 0) AS total_settlement
+      COALESCE(SUM(COALESCE(payment_amount, unit_price)), 0) AS total_revenue,
+      COALESCE(SUM(
+        CASE WHEN fulfillment_status = 'purchase_decided'
+             THEN settlement_amount ELSE 0 END
+      ), 0) AS total_settlement
     FROM steam_order_items
-    WHERE fulfillment_status = 'completed'
+    WHERE fulfillment_status IN ('completed', 'purchase_decided')
       AND decision_date IS NOT NULL
       AND decision_date >= ${startDate}
     GROUP BY DATE_TRUNC('day', decision_date)

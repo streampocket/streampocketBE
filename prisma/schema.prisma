@@ -24,6 +24,7 @@ enum AccountStatus {
 enum FulfillmentStatus {
   pending
   completed
+  purchase_decided
   manual_review
   failed
   returned

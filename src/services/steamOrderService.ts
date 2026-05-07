@@ -79,7 +79,7 @@ export async function retryOrder(id: string): Promise<void> {
       productName: order.productName,
       paidAt: order.paidAt ?? order.createdAt,
     })
-    await updateOrderItem(order.id, { fulfillmentStatus: 'completed', errorMessage: undefined })
+    await updateOrderItem(order.id, { fulfillmentStatus: 'pending', errorMessage: undefined })
     await sendDiscordAlert(
       'order',
       `✅ 재시도 처리 완료\n상품: ${order.productName}\n수신번호: ${order.receiverPhoneNumber}`,
@@ -116,7 +116,7 @@ export async function retryOrder(id: string): Promise<void> {
   })
 
   await markAccountAsSent(account.id)
-  await updateOrderItem(order.id, { fulfillmentStatus: 'completed', errorMessage: undefined })
+  await updateOrderItem(order.id, { fulfillmentStatus: 'pending', errorMessage: undefined })
 
   await sendDiscordAlert(
     'order',
@@ -183,6 +183,22 @@ export async function markGiftCompleted(id: string): Promise<void> {
   await updateOrderItem(id, { giftCompletedAt: new Date() })
 }
 
+export async function manualCompleteOrder(id: string): Promise<void> {
+  const order = await findOrderById(id)
+  if (!order) {
+    throw Object.assign(new Error('주문을 찾을 수 없습니다.'), { statusCode: 404 })
+  }
+
+  if (order.fulfillmentStatus !== 'pending') {
+    throw Object.assign(
+      new Error(`대기 상태 주문만 완료 처리할 수 있습니다. 현재 상태: ${order.fulfillmentStatus}`),
+      { statusCode: 400 },
+    )
+  }
+
+  await updateOrderItem(order.id, { fulfillmentStatus: 'completed' })
+}
+
 export async function manualReturnOrder(id: string): Promise<void> {
   const order = await findOrderById(id)
   if (!order) {
@@ -191,12 +207,6 @@ export async function manualReturnOrder(id: string): Promise<void> {
 
   if (order.fulfillmentStatus === 'returned') {
     throw Object.assign(new Error('이미 반품 처리된 주문입니다.'), { statusCode: 400 })
-  }
-
-  if (order.fulfillmentStatus === 'pending') {
-    throw Object.assign(new Error('아직 처리되지 않은 주문은 반품할 수 없습니다.'), {
-      statusCode: 400,
-    })
   }
 
   await updateOrderItem(order.id, {

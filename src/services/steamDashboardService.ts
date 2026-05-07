@@ -120,7 +120,10 @@ export async function getDashboardStats(period: Period = 'today') {
       where: { decisionDate: { not: null } },
     }),
     prisma.steamOrderItem.count({
-      where: { fulfillmentStatus: 'completed', decisionDate: null },
+      where: {
+        fulfillmentStatus: { in: ['pending', 'completed'] },
+        decisionDate: null,
+      },
     }),
     prisma.steamOrderItem.count({
       where: { fulfillmentStatus: 'returned' },

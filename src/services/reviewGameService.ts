@@ -15,12 +15,8 @@ export async function sendReviewGame(orderItemId: string): Promise<SendReviewGam
     throw Object.assign(new Error('주문을 찾을 수 없습니다.'), { statusCode: 404 })
   }
 
-  if (order.fulfillmentStatus !== 'completed') {
-    throw Object.assign(new Error('처리 완료된 주문만 리뷰게임을 발송할 수 있습니다.'), { statusCode: 400 })
-  }
-
-  if (!order.decisionDate) {
-    throw Object.assign(new Error('구매확정되지 않은 주문입니다.'), { statusCode: 400 })
+  if (order.fulfillmentStatus !== 'purchase_decided') {
+    throw Object.assign(new Error('구매확정된 주문만 리뷰게임을 발송할 수 있습니다.'), { statusCode: 400 })
   }
 
   if (order.reviewGameSentAt) {

@@ -49,10 +49,10 @@ export async function backfillPaymentAmounts(): Promise<{ updated: number; skipp
 export async function backfillDecisionDates(): Promise<{ updated: number; skipped: number }> {
   const pendingOrders = await prisma.steamOrderItem.findMany({
     where: {
-      fulfillmentStatus: 'completed',
+      fulfillmentStatus: { in: ['pending', 'completed'] },
       decisionDate: null,
     },
-    select: { id: true, productOrderId: true },
+    select: { id: true, productOrderId: true, fulfillmentStatus: true },
     orderBy: { createdAt: 'asc' },
   })
 
@@ -80,6 +80,7 @@ export async function backfillDecisionDates(): Promise<{ updated: number; skippe
           data: {
             decisionDate: new Date(detail.productOrder.decisionDate),
             settlementAmount: detail.productOrder.expectedSettlementAmount,
+            fulfillmentStatus: 'purchase_decided',
           },
         })
         updated += 1

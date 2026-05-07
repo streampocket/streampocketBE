@@ -202,7 +202,7 @@ export async function processOrder(
         paidAt: item.paidAt,
       })
 
-      await updateOrderItem(orderItem.id, { fulfillmentStatus: 'completed' })
+      await updateOrderItem(orderItem.id, { fulfillmentStatus: 'pending' })
       await sendDiscordAlert(
         'order',
         `🎮 BG 코드 주문\n상품: ${item.productName}\n주문번호: ${item.productOrderId}\n알림톡: ✅ 발송 성공`,
@@ -275,7 +275,7 @@ export async function processOrder(
         paidAt: item.paidAt,
       })
 
-      await updateOrderItem(orderItem.id, { fulfillmentStatus: 'completed' })
+      await updateOrderItem(orderItem.id, { fulfillmentStatus: 'pending' })
       await sendDiscordAlert(
         'order',
         `🛒 AA 계정 주문\n상품: ${item.productName}\n주문번호: ${item.productOrderId}\n알림톡: ✅ 발송 성공`,
@@ -358,7 +358,7 @@ export async function processOrder(
       return
     }
 
-    await updateOrderItem(orderItem.id, { fulfillmentStatus: 'completed' })
+    await updateOrderItem(orderItem.id, { fulfillmentStatus: 'pending' })
 
     await sendDiscordAlert(
       'stock',
@@ -456,7 +456,7 @@ export async function processOrder(
   }
 
   await markAccountAsSent(account.id)
-  await updateOrderItem(orderItem.id, { fulfillmentStatus: 'completed' })
+  await updateOrderItem(orderItem.id, { fulfillmentStatus: 'pending' })
 
   await sendDiscordAlert(
     'order',
@@ -528,9 +528,13 @@ export async function processPurchaseDecidedOrders(orderSource: IOrderSource): P
       const existing = await findOrderByProductOrderId(item.productOrderId)
       if (!existing || existing.decisionDate) continue
 
+      const shouldTransitionStatus =
+        existing.fulfillmentStatus === 'pending' || existing.fulfillmentStatus === 'completed'
+
       await updateOrderItem(existing.id, {
         decisionDate: item.decisionDate,
         settlementAmount: item.settlementAmount,
+        ...(shouldTransitionStatus ? { fulfillmentStatus: 'purchase_decided' as const } : {}),
       })
       decidedCount += 1
 
@@ -618,7 +622,7 @@ export async function runBackupOrderScan(
           !IN_PROGRESS_CLAIM_STATUSES.includes(item.naverClaimStatus ?? '')
         ) {
           await updateOrderItem(before.id, {
-            fulfillmentStatus: 'completed',
+            fulfillmentStatus: 'pending',
             returnedAt: null,
             errorMessage: '반품 클레임 종료 후 자동 복귀',
           })

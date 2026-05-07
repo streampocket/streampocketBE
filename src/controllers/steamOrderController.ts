@@ -4,6 +4,7 @@ import {
   getOrders,
   getOrderDetail,
   retryOrder,
+  manualCompleteOrder,
   manualReturnOrder,
   exportOrdersForExcel,
   updateFriendLinks,
@@ -12,7 +13,9 @@ import {
 import { buildOrderExcelBuffer } from '../utils/excel'
 
 const listQuerySchema = z.object({
-  status: z.enum(['pending', 'completed', 'manual_review', 'failed', 'returned']).optional(),
+  status: z
+    .enum(['pending', 'completed', 'purchase_decided', 'manual_review', 'failed', 'returned'])
+    .optional(),
   from: z.string().datetime({ offset: true }).optional(),
   to: z.string().datetime({ offset: true }).optional(),
   receiverName: z.string().trim().optional(),
@@ -49,7 +52,9 @@ export async function getOrderDetailHandler(
 }
 
 const exportQuerySchema = z.object({
-  status: z.enum(['pending', 'completed', 'manual_review', 'failed', 'returned']).optional(),
+  status: z
+    .enum(['pending', 'completed', 'purchase_decided', 'manual_review', 'failed', 'returned'])
+    .optional(),
   from: z.string().datetime({ offset: true }).optional(),
   to: z.string().datetime({ offset: true }).optional(),
 })
@@ -75,6 +80,15 @@ export async function retryOrderHandler(
   const { id } = req.params
   await retryOrder(id)
   res.json({ message: '재시도 완료' })
+}
+
+export async function manualCompleteHandler(
+  req: Request<{ id: string }>,
+  res: Response,
+): Promise<void> {
+  const { id } = req.params
+  await manualCompleteOrder(id)
+  res.json({ message: '완료 처리되었습니다.' })
 }
 
 export async function manualReturnHandler(

@@ -4,6 +4,7 @@ import {
   exportOrders,
   findOrderById,
   updateOrderItem,
+  groupOrderCountsByStatus,
 } from '../repositories/steamOrderRepository'
 import { findAccountById, markAccountAsSent } from '../repositories/steamAccountRepository'
 import { isAlimtalkEnabled, sendGiftCompletedAlimtalk, sendOrderAlimtalk } from './alimtalkService'
@@ -25,8 +26,32 @@ type ExportOrdersInput = {
   to?: Date
 }
 
+type GetOrderCountsInput = {
+  from?: Date
+  to?: Date
+  receiverName?: string
+}
+
 export async function getOrders(input: ListOrdersInput) {
   return listOrders(input)
+}
+
+export async function getOrderCounts(input: GetOrderCountsInput) {
+  const rows = await groupOrderCountsByStatus(input)
+  const counts = {
+    total: 0,
+    pending: 0,
+    completed: 0,
+    purchase_decided: 0,
+    manual_review: 0,
+    failed: 0,
+    returned: 0,
+  }
+  for (const r of rows) {
+    counts[r.fulfillmentStatus] = r._count._all
+    counts.total += r._count._all
+  }
+  return counts
 }
 
 export async function exportOrdersForExcel(input: ExportOrdersInput) {

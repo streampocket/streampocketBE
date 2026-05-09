@@ -2,6 +2,7 @@ import { Request, Response } from 'express'
 import { z } from 'zod'
 import {
   getOrders,
+  getOrderCounts,
   getOrderDetail,
   retryOrder,
   manualCompleteOrder,
@@ -25,20 +26,26 @@ const listQuerySchema = z.object({
 
 export async function getOrdersHandler(req: Request, res: Response): Promise<void> {
   const query = listQuerySchema.parse(req.query)
-  const result = await getOrders({
-    status: query.status,
-    from: query.from ? new Date(query.from) : undefined,
-    to: query.to ? new Date(query.to) : undefined,
-    receiverName: query.receiverName,
-    page: query.page,
-    pageSize: query.pageSize,
-  })
+  const from = query.from ? new Date(query.from) : undefined
+  const to = query.to ? new Date(query.to) : undefined
+  const [result, counts] = await Promise.all([
+    getOrders({
+      status: query.status,
+      from,
+      to,
+      receiverName: query.receiverName,
+      page: query.page,
+      pageSize: query.pageSize,
+    }),
+    getOrderCounts({ from, to, receiverName: query.receiverName }),
+  ])
   res.json({
     data: result.items,
     total: result.total,
     page: query.page,
     pageSize: query.pageSize,
     totalPages: Math.ceil(result.total / query.pageSize),
+    counts,
   })
 }
 

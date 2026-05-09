@@ -92,6 +92,33 @@ export async function listOrders(input: ListOrdersInput): Promise<ListOrdersResu
   return { items, total }
 }
 
+type CountOrdersInput = {
+  from?: Date
+  to?: Date
+  receiverName?: string
+}
+
+export async function groupOrderCountsByStatus(input: CountOrdersInput) {
+  const where = {
+    ...(input.from || input.to
+      ? {
+          createdAt: {
+            ...(input.from ? { gte: input.from } : {}),
+            ...(input.to ? { lte: input.to } : {}),
+          },
+        }
+      : {}),
+    ...(input.receiverName
+      ? { receiverName: { contains: input.receiverName, mode: 'insensitive' as const } }
+      : {}),
+  }
+  return prisma.steamOrderItem.groupBy({
+    by: ['fulfillmentStatus'],
+    where,
+    _count: { _all: true },
+  })
+}
+
 export async function findOrderById(id: string): Promise<OrderItemWithRelations | null> {
   return prisma.steamOrderItem.findUnique({
     where: { id },

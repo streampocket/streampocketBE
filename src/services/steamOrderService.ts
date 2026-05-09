@@ -206,6 +206,11 @@ export async function markGiftCompleted(id: string): Promise<void> {
   })
 
   await updateOrderItem(id, { giftCompletedAt: new Date() })
+
+  await sendDiscordAlert(
+    'order',
+    `🎁 선물 접수 완료\n상품: ${order.productName}\n수신자명: ${order.receiverName ?? '미확인'}\n수신번호: ${order.receiverPhoneNumber}`,
+  )
 }
 
 export async function manualCompleteOrder(id: string): Promise<void> {

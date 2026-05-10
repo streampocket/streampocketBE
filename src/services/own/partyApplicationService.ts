@@ -38,16 +38,19 @@ export async function applyToParty(productId: string, userId: string) {
   const totalAmount = currentPrice + fee
 
   const result = await prisma.$transaction(async (tx) => {
-    const slotUpdate = await tx.ownProduct.updateMany({
+    // 신청 가능 여부 재검증 (트랜잭션 내, race condition 안전망).
+    // filledSlots는 이제 "승인된(confirmed) 인원 수"의 의미를 가지며,
+    // 이 값이 totalSlots 미만일 때만 신규 신청을 받는다. pending 신청은 슬롯을 점유하지 않는다.
+    const fresh = await tx.ownProduct.findFirst({
       where: {
         id: productId,
         status: 'recruiting',
         deletedAt: null,
         filledSlots: { lt: product.totalSlots },
       },
-      data: { filledSlots: { increment: 1 } },
+      select: { id: true },
     })
-    if (slotUpdate.count === 0) {
+    if (!fresh) {
       throw Object.assign(new Error('모집이 마감되었습니다.'), { statusCode: 409 })
     }
 
@@ -171,60 +174,77 @@ export async function adminGetApplicationDetail(applicationId: string) {
 }
 
 export async function adminApproveApplication(applicationId: string) {
-  const application = await prisma.partyApplication.findUnique({
-    where: { id: applicationId },
-    include: { product: { select: { durationDays: true } } },
-  })
-  if (!application) {
-    throw Object.assign(new Error('신청 내역을 찾을 수 없습니다.'), { statusCode: 404 })
-  }
-  if (application.status !== 'pending') {
-    throw Object.assign(new Error('대기 중인 신청만 승인할 수 있습니다.'), { statusCode: 409 })
-  }
-
-  const startedAt = new Date()
-  const expiresAt = new Date(startedAt.getTime() + application.product.durationDays * 24 * 60 * 60 * 1000)
-
-  const updated = await prisma.partyApplication.update({
-    where: { id: applicationId },
-    data: {
-      status: 'confirmed',
-      startedAt,
-      expiresAt,
-    },
-  })
-
-  return { data: updated }
-}
-
-export async function adminRejectApplication(applicationId: string) {
   const result = await prisma.$transaction(async (tx) => {
     const application = await tx.partyApplication.findUnique({
       where: { id: applicationId },
-      select: { id: true, status: true, productId: true },
+      include: { product: { select: { id: true, durationDays: true, totalSlots: true, filledSlots: true } } },
     })
     if (!application) {
       throw Object.assign(new Error('신청 내역을 찾을 수 없습니다.'), { statusCode: 404 })
     }
     if (application.status !== 'pending') {
-      throw Object.assign(new Error('대기 중인 신청만 거절할 수 있습니다.'), { statusCode: 409 })
+      throw Object.assign(new Error('대기 중인 신청만 승인할 수 있습니다.'), { statusCode: 409 })
     }
 
-    const updated = await tx.partyApplication.update({
+    // 슬롯이 가득 차 있으면 자동 거절(cancelled) 처리.
+    if (application.product.filledSlots >= application.product.totalSlots) {
+      const cancelled = await tx.partyApplication.update({
+        where: { id: applicationId },
+        data: { status: 'cancelled' },
+      })
+      return { application: cancelled, autoRejected: true }
+    }
+
+    const startedAt = new Date()
+    const expiresAt = new Date(startedAt.getTime() + application.product.durationDays * 24 * 60 * 60 * 1000)
+
+    const confirmed = await tx.partyApplication.update({
       where: { id: applicationId },
-      data: { status: 'cancelled' },
+      data: {
+        status: 'confirmed',
+        startedAt,
+        expiresAt,
+      },
     })
 
-    // 슬롯 원복 (음수 방지)
-    await tx.ownProduct.updateMany({
-      where: { id: application.productId, filledSlots: { gt: 0 } },
-      data: { filledSlots: { decrement: 1 } },
+    // 승인 시점에 슬롯 +1. 동시 승인 race를 막기 위해 filledSlots < totalSlots 가드를 updateMany 조건으로 사용.
+    const slotUpdate = await tx.ownProduct.updateMany({
+      where: {
+        id: application.product.id,
+        filledSlots: { lt: application.product.totalSlots },
+      },
+      data: { filledSlots: { increment: 1 } },
     })
+    if (slotUpdate.count === 0) {
+      // 동시 승인으로 슬롯이 가득 찬 경우: 트랜잭션 롤백을 위해 명시적으로 throw.
+      throw Object.assign(new Error('승인 처리 중 슬롯이 가득 찼습니다. 다시 시도해주세요.'), { statusCode: 409 })
+    }
 
-    return updated
+    return { application: confirmed, autoRejected: false }
   })
 
-  return { data: result }
+  return { data: result.application, autoRejected: result.autoRejected }
+}
+
+export async function adminRejectApplication(applicationId: string) {
+  // pending 상태에서는 슬롯을 점유하지 않으므로 슬롯 원복이 필요 없다.
+  const application = await prisma.partyApplication.findUnique({
+    where: { id: applicationId },
+    select: { id: true, status: true },
+  })
+  if (!application) {
+    throw Object.assign(new Error('신청 내역을 찾을 수 없습니다.'), { statusCode: 404 })
+  }
+  if (application.status !== 'pending') {
+    throw Object.assign(new Error('대기 중인 신청만 거절할 수 있습니다.'), { statusCode: 409 })
+  }
+
+  const updated = await prisma.partyApplication.update({
+    where: { id: applicationId },
+    data: { status: 'cancelled' },
+  })
+
+  return { data: updated }
 }
 
 export async function getMyApplications(userId: string) {

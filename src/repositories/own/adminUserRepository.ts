@@ -36,7 +36,7 @@ export async function findUsers(input: ListUsersInput) {
         updatedAt: true,
         _count: {
           select: {
-            partyApplications: true,
+            partyApplications: { where: { status: 'confirmed' } },
           },
         },
       },

@@ -62,7 +62,7 @@ export async function getUserDetail(id: string) {
     termsAgreements: user.termsAgreements,
     stats: {
       totalPaidAmount,
-      partyCount: user.partyApplications.length,
+      partyCount: user.partyApplications.filter((app) => app.status === 'confirmed').length,
       activePartyCount,
     },
   }

@@ -34,10 +34,8 @@ export async function findUsers(input: ListUsersInput) {
         provider: true,
         createdAt: true,
         updatedAt: true,
-        partner: { select: { id: true } },
         _count: {
           select: {
-            ownProducts: { where: { deletedAt: null } },
             partyApplications: true,
           },
         },
@@ -64,35 +62,9 @@ export function findUserDetailById(id: string) {
       provider: true,
       createdAt: true,
       updatedAt: true,
-      partner: {
-        select: {
-          id: true,
-          name: true,
-          phone: true,
-          bankName: true,
-          bankAccount: true,
-          status: true,
-          createdAt: true,
-        },
-      },
       termsAgreements: {
         select: { type: true, agreedAt: true },
         orderBy: { agreedAt: 'desc' },
-      },
-      ownProducts: {
-        where: { deletedAt: null },
-        select: {
-          id: true,
-          name: true,
-          status: true,
-          price: true,
-          totalSlots: true,
-          filledSlots: true,
-          durationDays: true,
-          createdAt: true,
-          category: { select: { id: true, name: true } },
-        },
-        orderBy: { createdAt: 'desc' },
       },
       partyApplications: {
         select: {

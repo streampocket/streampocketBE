@@ -3,12 +3,7 @@ import type { Request, Response } from 'express'
 import {
   createOwnProductItem,
   getOwnProducts,
-  getMyOwnProducts,
   getOwnProductDetail,
-  updateOwnProductItem,
-  closeOwnProduct,
-  deleteOwnProductItem,
-  getOwnProductCredentials,
   adminUpdateOwnProduct,
   adminDeleteOwnProduct,
   adminGetOwnProductDetailWithApplications,
@@ -18,7 +13,7 @@ import {
 
 // ───────────────────────── Zod 스키마 ─────────────────────────
 
-const createOwnProductSchema = z.object({
+const adminCreateOwnProductSchema = z.object({
   name: z.string().min(1).max(255),
   durationDays: z.number().int().positive(),
   price: z.number().int().positive(),
@@ -28,9 +23,10 @@ const createOwnProductSchema = z.object({
   notes: z.string().optional().nullable(),
   accountId: z.string().max(255).optional().nullable(),
   accountPassword: z.string().max(255).optional().nullable(),
+  leaderName: z.string().min(1).max(100),
 })
 
-const updateOwnProductSchema = z.object({
+const adminUpdateOwnProductSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   durationDays: z.number().int().positive().optional(),
   price: z.number().int().positive().optional(),
@@ -40,6 +36,7 @@ const updateOwnProductSchema = z.object({
   notes: z.string().optional().nullable(),
   accountId: z.string().max(255).optional().nullable(),
   accountPassword: z.string().max(255).optional().nullable(),
+  leaderName: z.string().min(1).max(100).optional(),
 })
 
 const listQuerySchema = z.object({
@@ -65,25 +62,12 @@ const idParamSchema = z.object({
   id: z.string().uuid(),
 })
 
-// ───────────────────────── 유저용 핸들러 ─────────────────────────
-
-export async function createOwnProductHandler(req: Request, res: Response): Promise<void> {
-  const body = createOwnProductSchema.parse(req.body)
-  const userId = req.user!.id
-  const product = await createOwnProductItem({ ...body, userId })
-  res.status(201).json({ data: product })
-}
+// ───────────────────────── 사용자(공개) 핸들러 ─────────────────────────
 
 export async function getOwnProductsHandler(req: Request, res: Response): Promise<void> {
   const query = listQuerySchema.parse(req.query)
   const result = await getOwnProducts(query)
   res.json({ data: result.data })
-}
-
-export async function getMyOwnProductsHandler(req: Request, res: Response): Promise<void> {
-  const userId = req.user!.id
-  const products = await getMyOwnProducts(userId)
-  res.json({ data: products })
 }
 
 export async function getOwnProductDetailHandler(req: Request, res: Response): Promise<void> {
@@ -92,36 +76,13 @@ export async function getOwnProductDetailHandler(req: Request, res: Response): P
   res.json({ data: product })
 }
 
-export async function updateOwnProductHandler(req: Request, res: Response): Promise<void> {
-  const { id } = idParamSchema.parse(req.params)
-  const body = updateOwnProductSchema.parse(req.body)
-  const userId = req.user!.id
-  const product = await updateOwnProductItem(id, userId, body)
-  res.json({ data: product })
-}
-
-export async function closeOwnProductHandler(req: Request, res: Response): Promise<void> {
-  const { id } = idParamSchema.parse(req.params)
-  const userId = req.user!.id
-  const product = await closeOwnProduct(id, userId)
-  res.json({ data: product })
-}
-
-export async function deleteOwnProductHandler(req: Request, res: Response): Promise<void> {
-  const { id } = idParamSchema.parse(req.params)
-  const userId = req.user!.id
-  await deleteOwnProductItem(id, userId)
-  res.status(204).send()
-}
-
-export async function getOwnProductCredentialsHandler(req: Request, res: Response): Promise<void> {
-  const { id } = idParamSchema.parse(req.params)
-  const userId = req.user!.id
-  const credentials = await getOwnProductCredentials(id, userId)
-  res.json({ data: credentials })
-}
-
 // ───────────────────────── 관리자용 핸들러 ─────────────────────────
+
+export async function adminCreateOwnProductHandler(req: Request, res: Response): Promise<void> {
+  const body = adminCreateOwnProductSchema.parse(req.body)
+  const product = await createOwnProductItem(body)
+  res.status(201).json({ data: product })
+}
 
 export async function adminGetOwnProductsHandler(req: Request, res: Response): Promise<void> {
   const query = adminListQuerySchema.parse(req.query)
@@ -150,7 +111,7 @@ export async function adminUpdatePartyStatusHandler(req: Request, res: Response)
 
 export async function adminUpdateOwnProductHandler(req: Request, res: Response): Promise<void> {
   const { id } = idParamSchema.parse(req.params)
-  const body = updateOwnProductSchema.parse(req.body)
+  const body = adminUpdateOwnProductSchema.parse(req.body)
   const product = await adminUpdateOwnProduct(id, body)
   res.json({ data: product })
 }

@@ -20,7 +20,6 @@ export async function getUsers(input: ListUsersInput) {
     provider: user.provider,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
-    hasPartner: !!user.partner,
     _count: user._count,
   }))
 
@@ -59,15 +58,12 @@ export async function getUserDetail(id: string) {
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     },
-    partner: user.partner,
-    ownProducts: user.ownProducts,
     partyApplications: user.partyApplications,
     termsAgreements: user.termsAgreements,
     stats: {
       totalPaidAmount,
       partyCount: user.partyApplications.length,
       activePartyCount,
-      ownProductCount: user.ownProducts.length,
     },
   }
 }

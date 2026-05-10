@@ -23,11 +23,9 @@ import { ownAuthRouter } from './routes/own/auth'
 import { ownUsersRouter } from './routes/own/users'
 import { ownCategoriesRouter } from './routes/own/categories'
 import { ownProductsRouter } from './routes/own/products'
-import { ownPartnersRouter } from './routes/own/partners'
 import { ownApplicationsRouter } from './routes/own/applications'
 import { adminOwnCategoriesRouter } from './routes/admin/ownCategories'
 import { adminOwnProductsRouter } from './routes/admin/ownProducts'
-import { adminOwnPartnersRouter } from './routes/admin/ownPartners'
 import { adminOwnApplicationsRouter } from './routes/admin/ownApplications'
 import { adminOwnUsersRouter } from './routes/admin/ownUsers'
 
@@ -84,11 +82,9 @@ app.use('/own/auth', ownAuthRouter)
 app.use('/own/users', ownUsersRouter)
 app.use('/own/categories', ownCategoriesRouter)
 app.use('/own/products', ownProductsRouter)
-app.use('/own/partners', ownPartnersRouter)
 app.use('/own/applications', ownApplicationsRouter)
 app.use('/own/admin/categories', adminOwnCategoriesRouter)
 app.use('/own/admin/products', adminOwnProductsRouter)
-app.use('/own/admin/partners', adminOwnPartnersRouter)
 app.use('/own/admin/applications', adminOwnApplicationsRouter)
 app.use('/own/admin/users', adminOwnUsersRouter)
 

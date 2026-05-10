@@ -25,10 +25,6 @@ export async function applyToParty(productId: string, userId: string) {
     throw Object.assign(new Error(joinCheck.reason ?? '참여가 불가합니다.'), { statusCode: 400 })
   }
 
-  if (product.userId === userId) {
-    throw Object.assign(new Error('본인의 파티에는 신청할 수 없습니다.'), { statusCode: 403 })
-  }
-
   const existing = await findActiveApplication(productId, userId)
   if (existing && existing.status === 'confirmed') {
     throw Object.assign(new Error('이미 확정된 파티입니다.'), { statusCode: 409 })

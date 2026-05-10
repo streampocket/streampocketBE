@@ -67,37 +67,37 @@ model Admin {
 }
 
 model SteamProduct {
-  id             String           @id @default(uuid()) @db.Uuid
-  name           String           @db.VarChar(255)
-  naverProductId String           @unique @map("naver_product_id") @db.VarChar(100)
-  price          Int?             @map("price")
-  discountPricePc     Int?        @map("discount_price_pc")
-  discountPriceMobile Int?        @map("discount_price_mobile")
-  status         ProductStatus    @default(draft)
-  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
-  accounts       SteamAccount[]
-  orderItems     SteamOrderItem[]
+  id                  String           @id @default(uuid()) @db.Uuid
+  name                String           @db.VarChar(255)
+  naverProductId      String           @unique @map("naver_product_id") @db.VarChar(100)
+  price               Int?             @map("price")
+  discountPricePc     Int?             @map("discount_price_pc")
+  discountPriceMobile Int?             @map("discount_price_mobile")
+  status              ProductStatus    @default(draft)
+  createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  accounts            SteamAccount[]
+  orderItems          SteamOrderItem[]
 
   @@map("steam_products")
 }
 
 model SteamAccount {
-  id            String        @id @default(uuid()) @db.Uuid
-  productId            String?       @map("product_id") @db.Uuid
-  productNameSnapshot  String?       @map("product_name_snapshot") @db.VarChar(255)
-  username      String
-  password      String
-  email         String        @map("email") @db.VarChar(320)
-  emailPassword String        @map("email_password")
-  emailSiteUrl  String        @map("email_site_url") @db.VarChar(2048)
-  secondaryEmail         String?  @map("secondary_email") @db.VarChar(320)
-  secondaryEmailPassword String?  @map("secondary_email_password")
-  secondaryEmailSiteUrl  String?  @map("secondary_email_site_url") @db.VarChar(2048)
-  status        AccountStatus @default(available)
-  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  product       SteamProduct? @relation(fields: [productId], references: [id], onDelete: SetNull)
-  orderItems    SteamOrderItem[]
+  id                     String           @id @default(uuid()) @db.Uuid
+  productId              String?          @map("product_id") @db.Uuid
+  productNameSnapshot    String?          @map("product_name_snapshot") @db.VarChar(255)
+  username               String
+  password               String
+  email                  String           @map("email") @db.VarChar(320)
+  emailPassword          String           @map("email_password")
+  emailSiteUrl           String           @map("email_site_url") @db.VarChar(2048)
+  secondaryEmail         String?          @map("secondary_email") @db.VarChar(320)
+  secondaryEmailPassword String?          @map("secondary_email_password")
+  secondaryEmailSiteUrl  String?          @map("secondary_email_site_url") @db.VarChar(2048)
+  status                 AccountStatus    @default(available)
+  createdAt              DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  product                SteamProduct?    @relation(fields: [productId], references: [id], onDelete: SetNull)
+  orderItems             SteamOrderItem[]
 
   @@index([productId, status, createdAt])
   @@map("steam_accounts")
@@ -234,10 +234,8 @@ model User {
   createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  ownProducts        OwnProduct[]
-  partner            Partner?
-  termsAgreements    TermsAgreement[]
-  partyApplications  PartyApplication[]
+  termsAgreements   TermsAgreement[]
+  partyApplications PartyApplication[]
 
   @@unique([provider, providerId])
   @@map("users")
@@ -263,12 +261,6 @@ enum OwnProductStatus {
   expired
 }
 
-enum PartnerStatus {
-  pending
-  approved
-  rejected
-}
-
 enum PartyApplicationStatus {
   pending
   confirmed
@@ -288,31 +280,29 @@ model OwnCategory {
 }
 
 model OwnProduct {
-  id           String           @id @default(uuid()) @db.Uuid
-  name         String           @db.VarChar(255)
-  categoryId   String           @map("category_id") @db.Uuid
-  durationDays Int              @map("duration_days")
-  price         Int
-  dailyDiscount Int              @default(0) @map("daily_discount")
-  totalSlots    Int              @map("total_slots")
-  filledSlots  Int              @default(0) @map("filled_slots")
-  imagePath    String?          @map("image_path") @db.VarChar(500)
+  id              String           @id @default(uuid()) @db.Uuid
+  name            String           @db.VarChar(255)
+  categoryId      String           @map("category_id") @db.Uuid
+  durationDays    Int              @map("duration_days")
+  price           Int
+  dailyDiscount   Int              @default(0) @map("daily_discount")
+  totalSlots      Int              @map("total_slots")
+  filledSlots     Int              @default(0) @map("filled_slots")
+  imagePath       String?          @map("image_path") @db.VarChar(500)
   notes           String?          @db.Text
   accountId       String?          @map("account_id") @db.Text
   accountPassword String?          @map("account_password") @db.Text
   status          OwnProductStatus @default(recruiting)
-  startedAt    DateTime?        @map("started_at") @db.Timestamptz(6)
-  deletedAt    DateTime?        @map("deleted_at") @db.Timestamptz(6)
-  userId       String           @map("user_id") @db.Uuid
-  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  startedAt       DateTime?        @map("started_at") @db.Timestamptz(6)
+  deletedAt       DateTime?        @map("deleted_at") @db.Timestamptz(6)
+  leaderName      String           @map("leader_name") @db.VarChar(100)
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   category     OwnCategory        @relation(fields: [categoryId], references: [id])
-  user         User               @relation(fields: [userId], references: [id])
   applications PartyApplication[]
 
   @@index([categoryId, status])
-  @@index([userId])
   @@index([status, createdAt])
   @@map("own_products")
 }
@@ -339,7 +329,6 @@ model PartyApplication {
   @@map("party_applications")
 }
 
-
 model PhoneVerification {
   id        String   @id @default(uuid()) @db.Uuid
   phone     String   @db.VarChar(20)
@@ -351,25 +340,4 @@ model PhoneVerification {
 
   @@index([phone, createdAt])
   @@map("phone_verifications")
-}
-
-// ───────────────────────── 파트너 (OTTALL) ─────────────────────────
-
-model Partner {
-  id            String        @id @default(uuid()) @db.Uuid
-  userId        String        @unique @map("user_id") @db.Uuid
-  name          String        @db.VarChar(100)
-  phone         String        @db.VarChar(20)
-  bankName      String        @map("bank_name") @db.VarChar(50)
-  bankAccount   String        @map("bank_account") @db.VarChar(50)
-  status        PartnerStatus @default(pending)
-  rejectedAt    DateTime?     @map("rejected_at") @db.Timestamptz(6)
-  rejectionNote String?       @map("rejection_note") @db.VarChar(500)
-  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([status, createdAt])
-  @@map("partners")
 }

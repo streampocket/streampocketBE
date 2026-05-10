@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import {
+  adminCreateOwnProductHandler,
   adminGetOwnProductsHandler,
   adminGetOwnProductDetailHandler,
   adminGetOwnProductCredentialsHandler,
@@ -14,6 +15,7 @@ export const adminOwnProductsRouter = Router()
 
 adminOwnProductsRouter.use(authMiddleware)
 
+adminOwnProductsRouter.post('/', asyncHandler(adminCreateOwnProductHandler))
 adminOwnProductsRouter.get('/', asyncHandler(adminGetOwnProductsHandler))
 adminOwnProductsRouter.get('/:id', asyncHandler(adminGetOwnProductDetailHandler))
 adminOwnProductsRouter.get('/:id/credentials', asyncHandler(adminGetOwnProductCredentialsHandler))

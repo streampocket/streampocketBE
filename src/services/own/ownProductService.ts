@@ -2,11 +2,9 @@ import {
   findOwnCategoryByName,
   createOwnCategory,
 } from '../../repositories/own/ownCategoryRepository'
-import { findPartnerByUserId } from '../../repositories/own/partnerRepository'
 import {
   createOwnProduct,
   findAllOwnProducts,
-  findOwnProductsByUserId,
   findOwnProductById,
   updateOwnProduct,
   softDeleteOwnProductById,
@@ -39,7 +37,7 @@ type CreateInput = {
   notes?: string | null
   accountId?: string | null
   accountPassword?: string | null
-  userId: string
+  leaderName: string
 }
 
 type UpdateInput = {
@@ -52,6 +50,7 @@ type UpdateInput = {
   notes?: string | null
   accountId?: string | null
   accountPassword?: string | null
+  leaderName?: string
 }
 
 function encryptField(value: string | null | undefined): string | null | undefined {
@@ -101,10 +100,6 @@ type ListFilters = {
 }
 
 export async function createOwnProductItem(input: CreateInput) {
-  const partner = await findPartnerByUserId(input.userId)
-  if (!partner || partner.status !== 'approved') {
-    throw Object.assign(new Error('파트너 승인이 필요합니다.'), { statusCode: 403 })
-  }
   const categoryId = await resolveCategoryByName(input.name)
   const product = await createOwnProduct({
     ...input,
@@ -153,88 +148,12 @@ export async function getOwnProducts(filters: ListFilters) {
   return { data, total: result.total }
 }
 
-export async function getMyOwnProducts(userId: string) {
-  const products = await findOwnProductsByUserId(userId)
-  return products.map((p) => enrichWithPricing(stripCredentials(p)))
-}
-
 export async function getOwnProductDetail(id: string) {
   const product = await findOwnProductById(id)
   if (!product || product.deletedAt) {
     throw Object.assign(new Error('파티를 찾을 수 없습니다.'), { statusCode: 404 })
   }
   return enrichWithPricing(stripCredentials(product))
-}
-
-export async function updateOwnProductItem(id: string, userId: string, data: UpdateInput) {
-  const product = await findOwnProductById(id)
-  if (!product) {
-    throw Object.assign(new Error('파티를 찾을 수 없습니다.'), { statusCode: 404 })
-  }
-  if (product.userId !== userId) {
-    throw Object.assign(new Error('본인의 파티만 수정할 수 있습니다.'), { statusCode: 403 })
-  }
-  if (data.totalSlots !== undefined && data.totalSlots < product.filledSlots) {
-    throw Object.assign(
-      new Error('모집 총인원은 현재 모집된 인원보다 작을 수 없습니다.'),
-      { statusCode: 400 },
-    )
-  }
-  const updateData: Record<string, unknown> = { ...data }
-  if (data.name) {
-    updateData.categoryId = await resolveCategoryByName(data.name)
-  }
-  if (data.accountId !== undefined) {
-    updateData.accountId = encryptField(data.accountId) ?? null
-  }
-  if (data.accountPassword !== undefined) {
-    updateData.accountPassword = encryptField(data.accountPassword) ?? null
-  }
-  const updated = await updateOwnProduct(id, updateData)
-  return enrichWithPricing(stripCredentials(updated))
-}
-
-export async function closeOwnProduct(id: string, userId: string) {
-  const product = await findOwnProductById(id)
-  if (!product) {
-    throw Object.assign(new Error('파티를 찾을 수 없습니다.'), { statusCode: 404 })
-  }
-  if (product.userId !== userId) {
-    throw Object.assign(new Error('본인의 파티만 닫을 수 있습니다.'), { statusCode: 403 })
-  }
-  if (product.status !== 'recruiting') {
-    throw Object.assign(new Error('모집중인 파티만 닫을 수 있습니다.'), { statusCode: 400 })
-  }
-  const updated = await updateOwnProduct(id, { status: 'closed' })
-  return enrichWithPricing(stripCredentials(updated))
-}
-
-export async function deleteOwnProductItem(id: string, userId: string) {
-  const product = await findOwnProductById(id)
-  if (!product) {
-    throw Object.assign(new Error('파티를 찾을 수 없습니다.'), { statusCode: 404 })
-  }
-  if (product.userId !== userId) {
-    throw Object.assign(new Error('본인의 파티만 삭제할 수 있습니다.'), { statusCode: 403 })
-  }
-  if (product.status !== 'recruiting') {
-    throw Object.assign(new Error('모집중인 파티만 삭제할 수 있습니다.'), { statusCode: 400 })
-  }
-  return softDeleteOwnProductById(id)
-}
-
-export async function getOwnProductCredentials(id: string, userId: string) {
-  const record = await findOwnProductCredentialsById(id)
-  if (!record) {
-    throw Object.assign(new Error('파티를 찾을 수 없습니다.'), { statusCode: 404 })
-  }
-  if (record.userId !== userId) {
-    throw Object.assign(new Error('본인의 파티만 조회할 수 있습니다.'), { statusCode: 403 })
-  }
-  return {
-    accountId: record.accountId ? decrypt(record.accountId) : null,
-    accountPassword: record.accountPassword ? decrypt(record.accountPassword) : null,
-  }
 }
 
 // 관리자용 (소유권 검증 없음)

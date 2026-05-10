@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma'
+import type { Prisma } from '@prisma/client'
 
 type CreateOwnProductInput = {
   name: string
@@ -11,7 +12,7 @@ type CreateOwnProductInput = {
   notes?: string | null
   accountId?: string | null
   accountPassword?: string | null
-  userId: string
+  leaderName: string
 }
 
 type UpdateOwnProductInput = {
@@ -25,6 +26,7 @@ type UpdateOwnProductInput = {
   notes?: string | null
   accountId?: string | null
   accountPassword?: string | null
+  leaderName?: string
   status?: 'recruiting' | 'closed' | 'expired'
 }
 
@@ -39,7 +41,6 @@ type OwnProductFilters = {
 
 const productInclude = {
   category: true,
-  user: { select: { id: true, name: true } },
 } as const
 
 export function createOwnProduct(data: CreateOwnProductInput) {
@@ -50,7 +51,7 @@ export function createOwnProduct(data: CreateOwnProductInput) {
 }
 
 export async function findAllOwnProducts(filters: OwnProductFilters) {
-  const where = {
+  const where: Prisma.OwnProductWhereInput = {
     deletedAt: null,
     ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),
     ...(filters.status ? { status: filters.status } : {}),
@@ -58,7 +59,7 @@ export async function findAllOwnProducts(filters: OwnProductFilters) {
       ? {
           OR: [
             { name: { contains: filters.search, mode: 'insensitive' as const } },
-            { user: { name: { contains: filters.search, mode: 'insensitive' as const } } },
+            { leaderName: { contains: filters.search, mode: 'insensitive' as const } },
           ],
         }
       : {}),
@@ -86,14 +87,6 @@ export async function findAllOwnProducts(filters: OwnProductFilters) {
   return { items, total: items.length }
 }
 
-export function findOwnProductsByUserId(userId: string) {
-  return prisma.ownProduct.findMany({
-    where: { userId, deletedAt: null },
-    include: productInclude,
-    orderBy: { createdAt: 'desc' },
-  })
-}
-
 export function findOwnProductById(id: string) {
   return prisma.ownProduct.findUnique({
     where: { id },
@@ -119,7 +112,7 @@ export function softDeleteOwnProductById(id: string) {
 export function findOwnProductCredentialsById(id: string) {
   return prisma.ownProduct.findUnique({
     where: { id },
-    select: { accountId: true, accountPassword: true, userId: true },
+    select: { accountId: true, accountPassword: true },
   })
 }
 
@@ -174,20 +167,6 @@ export function findOwnProductWithApplications(id: string) {
     where: { id },
     include: {
       ...productInclude,
-      user: {
-        select: {
-          id: true,
-          name: true,
-          phone: true,
-          partner: {
-            select: {
-              phone: true,
-              bankName: true,
-              bankAccount: true,
-            },
-          },
-        },
-      },
       applications: {
         include: {
           user: { select: { id: true, name: true, email: true, phone: true } },

@@ -11,6 +11,11 @@ import {
 import { decrypt } from '../../utils/crypto'
 import { isPartyJoinable, calculateCurrentPrice } from '../../utils/partyPricing'
 import { sendDiscordAlert } from '../../lib/discord'
+import {
+  sendPartyApplicationAlimtalk,
+  type AlimtalkSendResult,
+} from '../alimtalkService'
+import { findDeliveryLogsByPartyApplicationId } from '../../repositories/deliveryLogRepository'
 
 const FEE_RATE = 0.1
 
@@ -86,13 +91,31 @@ export async function applyToParty(productId: string, userId: string) {
     return { applicationId: created.id }
   })
 
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { name: true, phone: true },
+  })
+
+  let alimtalkResult: AlimtalkSendResult
+  if (user?.name && user?.phone) {
+    alimtalkResult = await sendPartyApplicationAlimtalk({
+      partyApplicationId: result.applicationId,
+      recipientPhoneNumber: user.phone,
+      recipientName: user.name,
+      productName: product.name,
+    })
+  } else {
+    alimtalkResult = { ok: false, reason: '수신 정보 없음' }
+  }
+
   await notifyApplicationCreated({
     productName: product.name,
     categoryName: product.category.name,
-    userId,
+    user,
     price: currentPrice,
     fee,
     totalAmount,
+    alimtalkResult,
   }).catch((err) => {
     console.error('[partyApply] Discord 알림 실패:', err)
   })
@@ -110,18 +133,24 @@ export async function applyToParty(productId: string, userId: string) {
 type NotifyInput = {
   productName: string
   categoryName: string
-  userId: string
+  user: { name: string | null; phone: string | null } | null
   price: number
   fee: number
   totalAmount: number
+  alimtalkResult: AlimtalkSendResult
+}
+
+function formatAlimtalkLine(result: AlimtalkSendResult): string {
+  if (result.ok) {
+    return '알림톡: ✓ 발송완료'
+  }
+  if (result.reason === '수신 정보 없음') {
+    return '알림톡: - 미발송 (수신 정보 없음)'
+  }
+  return `알림톡: ✗ 실패 (${result.reason})`
 }
 
 async function notifyApplicationCreated(input: NotifyInput): Promise<void> {
-  const user = await prisma.user.findUnique({
-    where: { id: input.userId },
-    select: { name: true, phone: true },
-  })
-
   const now = new Intl.DateTimeFormat('ko-KR', {
     timeZone: 'Asia/Seoul',
     year: 'numeric',
@@ -135,9 +164,10 @@ async function notifyApplicationCreated(input: NotifyInput): Promise<void> {
   const message = [
     '[신규 파티 참여 신청]',
     `파티: ${input.productName} (${input.categoryName})`,
-    `신청자: ${user?.name ?? '(알 수 없음)'} / ${user?.phone ?? '-'}`,
+    `신청자: ${input.user?.name ?? '(알 수 없음)'} / ${input.user?.phone ?? '-'}`,
     `금액: ${input.price.toLocaleString()}원 + 수수료 ${input.fee.toLocaleString()}원 = ${input.totalAmount.toLocaleString()}원`,
     `신청일시: ${now} (KST)`,
+    formatAlimtalkLine(input.alimtalkResult),
   ].join('\n')
 
   await sendDiscordAlert('partyApply', message)
@@ -170,7 +200,18 @@ export async function adminGetApplicationDetail(applicationId: string) {
   if (!application) {
     throw Object.assign(new Error('신청 내역을 찾을 수 없습니다.'), { statusCode: 404 })
   }
-  return { data: application }
+
+  const logs = await findDeliveryLogsByPartyApplicationId(applicationId)
+  const alimtalkLogs = logs.map((log) => ({
+    id: log.id,
+    status: log.status,
+    templateCode: log.templateCode,
+    errorMessage: log.errorMessage,
+    sentAt: log.sentAt,
+    createdAt: log.createdAt,
+  }))
+
+  return { data: { ...application, alimtalkLogs } }
 }
 
 export async function adminApproveApplication(applicationId: string) {

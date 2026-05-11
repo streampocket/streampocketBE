@@ -24,10 +24,12 @@ import { ownUsersRouter } from './routes/own/users'
 import { ownCategoriesRouter } from './routes/own/categories'
 import { ownProductsRouter } from './routes/own/products'
 import { ownApplicationsRouter } from './routes/own/applications'
+import { ownReviewsRouter } from './routes/own/reviews'
 import { adminOwnCategoriesRouter } from './routes/admin/ownCategories'
 import { adminOwnProductsRouter } from './routes/admin/ownProducts'
 import { adminOwnApplicationsRouter } from './routes/admin/ownApplications'
 import { adminOwnUsersRouter } from './routes/admin/ownUsers'
+import { adminOwnReviewsRouter } from './routes/admin/ownReviews'
 
 const app = express()
 
@@ -83,10 +85,12 @@ app.use('/own/users', ownUsersRouter)
 app.use('/own/categories', ownCategoriesRouter)
 app.use('/own/products', ownProductsRouter)
 app.use('/own/applications', ownApplicationsRouter)
+app.use('/own/reviews', ownReviewsRouter)
 app.use('/own/admin/categories', adminOwnCategoriesRouter)
 app.use('/own/admin/products', adminOwnProductsRouter)
 app.use('/own/admin/applications', adminOwnApplicationsRouter)
 app.use('/own/admin/users', adminOwnUsersRouter)
+app.use('/own/admin/reviews', adminOwnReviewsRouter)
 
 // ───────────────────────── Health ─────────────────────────
 app.get('/health', (_req, res) => {

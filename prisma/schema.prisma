@@ -236,6 +236,7 @@ model User {
 
   termsAgreements   TermsAgreement[]
   partyApplications PartyApplication[]
+  ownReviews        OwnReview[]
 
   @@unique([provider, providerId])
   @@map("users")
@@ -301,6 +302,7 @@ model OwnProduct {
 
   category     OwnCategory        @relation(fields: [categoryId], references: [id])
   applications PartyApplication[]
+  reviews      OwnReview[]
 
   @@index([categoryId, status])
   @@index([status, createdAt])
@@ -322,11 +324,33 @@ model PartyApplication {
 
   product OwnProduct @relation(fields: [productId], references: [id])
   user    User       @relation(fields: [userId], references: [id])
+  review  OwnReview?
 
   @@unique([productId, userId])
   @@index([userId, createdAt])
   @@index([status, expiresAt])
   @@map("party_applications")
+}
+
+model OwnReview {
+  id            String   @id @default(uuid()) @db.Uuid
+  applicationId String   @unique @map("application_id") @db.Uuid
+  productId     String   @map("product_id") @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  content       String   @db.Text
+  rating        Int
+  imageUrl      String?  @map("image_url") @db.VarChar(500)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  application PartyApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  product     OwnProduct       @relation(fields: [productId], references: [id])
+  user        User             @relation(fields: [userId], references: [id])
+
+  @@index([productId, createdAt])
+  @@index([userId, createdAt])
+  @@index([rating, createdAt])
+  @@map("own_reviews")
 }
 
 model PhoneVerification {

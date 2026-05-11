@@ -73,6 +73,7 @@ export type AlimtalkSettingsView = {
     templateCodeReviewGame: string | null
     templateCodeGiftCompleted: string | null
     templateCodeBG: string | null
+    templateCodePartyApply: string | null
     sender: string | null
     providerConnected: boolean
     providerMessage: string
@@ -116,8 +117,13 @@ type EnvConfig = {
   templateCodeReviewGame: string
   templateCodeGiftCompleted: string
   templateCodeBG: string
+  templateCodePartyApply: string
   sender: string
 }
+
+export type AlimtalkSendResult =
+  | { ok: true; providerMessageId: string | null }
+  | { ok: false; reason: string }
 
 const aligoTemplateListResponseSchema = z.object({
   code: z.union([z.number(), z.string()]).optional(),
@@ -206,6 +212,7 @@ export function getEnvConfig(): EnvConfig {
     templateCodeReviewGame: process.env['ALIGO_TEMPLATE_CODE_REVIEW_GAME'] ?? '',
     templateCodeGiftCompleted: process.env['ALIGO_TEMPLATE_CODE_GIFT_COMPLETED'] ?? '',
     templateCodeBG: process.env['ALIGO_TEMPLATE_CODE_BG'] ?? '',
+    templateCodePartyApply: process.env['ALIGO_TEMPLATE_CODE_PARTY_APPLY'] ?? '',
     sender: process.env['ALIGO_SENDER'] ?? '',
   }
 }
@@ -463,6 +470,7 @@ export async function getAlimtalkSettings(): Promise<AlimtalkSettingsView> {
       templateCodeReviewGame: config.templateCodeReviewGame || null,
       templateCodeGiftCompleted: config.templateCodeGiftCompleted || null,
       templateCodeBG: config.templateCodeBG || null,
+      templateCodePartyApply: config.templateCodePartyApply || null,
       sender: config.sender || null,
       providerConnected: provider.providerConnected,
       providerMessage: provider.providerMessage,
@@ -707,6 +715,73 @@ export async function sendReviewGameAlimtalk(
       errorMessage: message,
     })
     throw error
+  }
+}
+
+type SendPartyApplicationAlimtalkInput = {
+  partyApplicationId: string
+  recipientPhoneNumber: string
+  recipientName: string
+  productName: string
+}
+
+export async function sendPartyApplicationAlimtalk(
+  input: SendPartyApplicationAlimtalkInput,
+): Promise<AlimtalkSendResult> {
+  const config = getEnvConfig()
+  if (!isConfigured(config)) {
+    return { ok: false, reason: '알리고 환경변수 미설정' }
+  }
+  if (!config.templateCodePartyApply) {
+    return { ok: false, reason: '템플릿 코드 미설정 (ALIGO_TEMPLATE_CODE_PARTY_APPLY)' }
+  }
+
+  let template: AligoTemplateView
+  try {
+    template = await getActiveTemplateOrThrow(config, config.templateCodePartyApply)
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    return { ok: false, reason }
+  }
+
+  const buttonJson = buildButtonPayload(template)
+  const templateContent = template.templateContent ?? ''
+  const vars: Record<string, string> = {
+    성함: input.recipientName,
+    상품명: input.productName,
+  }
+
+  const deliveryLog = await createDeliveryLog({
+    partyApplicationId: input.partyApplicationId,
+    channel: 'alimtalk',
+    recipient: input.recipientPhoneNumber,
+    templateCode: config.templateCodePartyApply,
+  })
+
+  try {
+    const json = await sendAlimtalkMessage({
+      templateCode: config.templateCodePartyApply,
+      recipientPhoneNumber: input.recipientPhoneNumber,
+      recipientName: input.recipientName,
+      message: applyTemplate(templateContent, normalizeTemplateVars(vars)),
+      buttonJson,
+    })
+
+    const providerMessageId = getProviderMessageId(json)
+    await updateDeliveryLog(deliveryLog.id, {
+      status: 'sent',
+      providerMessageId,
+      sentAt: new Date(),
+      errorMessage: null,
+    })
+    return { ok: true, providerMessageId }
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    await updateDeliveryLog(deliveryLog.id, {
+      status: 'failed',
+      errorMessage: reason,
+    })
+    return { ok: false, reason }
   }
 }
 

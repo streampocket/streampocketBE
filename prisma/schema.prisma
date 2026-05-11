@@ -139,19 +139,22 @@ model SteamOrderItem {
 }
 
 model DeliveryLog {
-  id                String            @id @default(uuid()) @db.Uuid
-  orderItemId       String            @map("order_item_id") @db.Uuid
-  channel           DeliveryChannel   @map("channel")
-  recipient         String            @map("recipient") @db.VarChar(100)
-  templateCode      String?           @map("template_code") @db.VarChar(50)
-  status            DeliveryLogStatus @default(queued)
-  errorMessage      String?           @map("error_message")
-  providerMessageId String?           @map("provider_message_id") @db.VarChar(100)
-  sentAt            DateTime?         @map("sent_at") @db.Timestamptz(6)
-  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-  orderItem         SteamOrderItem    @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  id                 String            @id @default(uuid()) @db.Uuid
+  orderItemId        String?           @map("order_item_id") @db.Uuid
+  partyApplicationId String?           @map("party_application_id") @db.Uuid
+  channel            DeliveryChannel   @map("channel")
+  recipient          String            @map("recipient") @db.VarChar(100)
+  templateCode       String?           @map("template_code") @db.VarChar(50)
+  status             DeliveryLogStatus @default(queued)
+  errorMessage       String?           @map("error_message")
+  providerMessageId  String?           @map("provider_message_id") @db.VarChar(100)
+  sentAt             DateTime?         @map("sent_at") @db.Timestamptz(6)
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  orderItem          SteamOrderItem?   @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  partyApplication   PartyApplication? @relation(fields: [partyApplicationId], references: [id], onDelete: Cascade)
 
   @@index([orderItemId, createdAt])
+  @@index([partyApplicationId, createdAt])
   @@map("delivery_logs")
 }
 
@@ -322,9 +325,10 @@ model PartyApplication {
   createdAt   DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  product OwnProduct @relation(fields: [productId], references: [id])
-  user    User       @relation(fields: [userId], references: [id])
-  review  OwnReview?
+  product      OwnProduct    @relation(fields: [productId], references: [id])
+  user         User          @relation(fields: [userId], references: [id])
+  review       OwnReview?
+  deliveryLogs DeliveryLog[]
 
   @@unique([productId, userId])
   @@index([userId, createdAt])

@@ -10,7 +10,8 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "db:seed:reviewers": "node dist/scripts/seedReviewers.js"
   },
   "prisma": {
     "seed": "ts-node-dev --transpile-only -r tsconfig-paths/register prisma/seed.ts"

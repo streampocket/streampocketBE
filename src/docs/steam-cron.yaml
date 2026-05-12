@@ -41,3 +41,22 @@ paths:
       responses:
         '200':
           description: 만료 처리 완료 (expiredCount 반환)
+
+  /steam/cron/daily-expense-summary:
+    post:
+      summary: 일일 비용 요약 Discord 전송 (매일 23:50 KST 자동 실행, 수동 트리거용)
+      tags: [SteamCron]
+      responses:
+        '200':
+          description: 일일 비용 요약 전송 완료
+
+  /steam/cron/daily-sales-report:
+    post:
+      summary: 일일 매출 리포트 Discord 전송 (매일 23:59 KST 자동 실행, 수동 트리거용)
+      description: |
+        오늘(KST) 기준 주문/구매확정/반품 카운트와 총매출·총비용·네이버 수수료(6.6%)·순수익을 계산하여
+        Discord 정산금 채널로 발송한다. 매출은 paidAt이 오늘이고 반품되지 않은 주문의 paymentAmount 합계.
+      tags: [SteamCron]
+      responses:
+        '200':
+          description: 일일 매출 리포트 전송 완료

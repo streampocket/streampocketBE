@@ -9,6 +9,7 @@ import { naverOrderSource } from './services/platform/naverOrderSource'
 import { generateWeeklySettlement } from './services/settlementService'
 import { expireOldParties } from './services/own/ownProductService'
 import { sendDailyExpenseSummary } from './services/expenseSummaryService'
+import { sendDailySalesReport } from './services/dailySalesReportService'
 
 const PORT = Number(process.env.PORT ?? 4000)
 const POLL_INTERVAL_MS = Number(process.env['ORDER_POLL_INTERVAL_SECONDS'] ?? 300) * 1000
@@ -119,4 +120,27 @@ app.listen(PORT, () => {
   }, 60_000)
 
   console.log('일일 비용 요약 스케줄러 시작: 매일 23:50')
+
+  // 일일 매출 리포트 스케줄러 (매일 23:59 KST)
+  let lastSalesReportDate = ''
+
+  setInterval(() => {
+    const now = new Date()
+    const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000)
+    const today = kst.toISOString().slice(0, 10)
+    const hour = kst.getUTCHours()
+    const minute = kst.getUTCMinutes()
+
+    // 주간 정산(금요일 23:59)과 동시에 트리거되지 않도록 금요일은 제외하고 토요일 00:00 직전까지 살핀다는 선택지도 있으나,
+    // 주간 정산은 별도 채널 메시지이므로 동시 발송돼도 문제 없음.
+    if (hour === 23 && minute === 59 && lastSalesReportDate !== today) {
+      lastSalesReportDate = today
+      console.log('[SALES_REPORT] 일일 매출 리포트 전송')
+      sendDailySalesReport().catch((err) => {
+        console.error('[SALES_REPORT] 일일 매출 리포트 전송 실패', err)
+      })
+    }
+  }, 60_000)
+
+  console.log('일일 매출 리포트 스케줄러 시작: 매일 23:59')
 })

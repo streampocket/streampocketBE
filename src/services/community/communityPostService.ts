@@ -11,7 +11,6 @@ import {
 import { generateCommunityImagePresignedUrl, isCommunityImageUrl } from '../../lib/s3'
 
 const PAGE_SIZE = 20
-const PINNED_LIMIT = 3
 const ADMIN_AUTHOR_LABEL = '관리자'
 const DELETED_USER_LABEL = '(탈퇴 회원)'
 
@@ -24,6 +23,7 @@ export type CommunityPostDto = {
   title: string
   content: string
   imageUrl: string | null
+  isPinned: boolean
   authorType: 'user' | 'admin'
   authorId: string | null
   authorName: string
@@ -43,11 +43,18 @@ function toDto(post: PostDbNonNull): CommunityPostDto {
     title: post.title,
     content: post.content,
     imageUrl: post.imageUrl,
+    isPinned: post.isPinned,
     authorType: isAdmin ? 'admin' : 'user',
     authorId: isAdmin ? post.authorAdminId : post.authorUserId,
     authorName,
     createdAt: post.createdAt,
     updatedAt: post.updatedAt,
+  }
+}
+
+function assertPinnable(category: 'notice' | 'free', isPinned: boolean): void {
+  if (isPinned && category !== 'notice') {
+    throw Object.assign(new Error('공지 글만 상단 고정할 수 있습니다.'), { statusCode: 400 })
   }
 }
 
@@ -71,7 +78,7 @@ export async function listPostsForPublic(params: {
   const { page, category } = params
   const { items, total } = await findPostsForPublic({ page, pageSize: PAGE_SIZE, category })
 
-  const pinned = page === 1 && !category ? await findPinnedNotices(PINNED_LIMIT) : []
+  const pinned = !category ? await findPinnedNotices() : []
 
   return {
     items: items.map(toDto),
@@ -108,6 +115,7 @@ export async function createFreePostByUser(params: {
     title: params.title,
     content: params.content,
     imageUrl: params.imageUrl,
+    isPinned: false,
     authorUserId: params.userId,
     authorAdminId: null,
   })
@@ -172,13 +180,16 @@ export async function createPostByAdmin(params: {
   title: string
   content: string
   imageUrl: string | null
+  isPinned: boolean
 }): Promise<CommunityPostDto> {
   validateImageUrl(params.imageUrl)
+  assertPinnable(params.category, params.isPinned)
   const created = await createPost({
     category: params.category,
     title: params.title,
     content: params.content,
     imageUrl: params.imageUrl,
+    isPinned: params.isPinned,
     authorUserId: null,
     authorAdminId: params.adminId,
   })
@@ -191,8 +202,10 @@ export async function updatePostByAdmin(params: {
   content: string
   imageUrl: string | null
   category: 'notice' | 'free'
+  isPinned: boolean
 }): Promise<CommunityPostDto> {
   validateImageUrl(params.imageUrl)
+  assertPinnable(params.category, params.isPinned)
   const post = await findPostByIdRaw(params.postId)
   if (!post || post.deletedAt) {
     throw Object.assign(new Error('게시글을 찾을 수 없습니다.'), { statusCode: 404 })
@@ -202,6 +215,7 @@ export async function updatePostByAdmin(params: {
     content: params.content,
     imageUrl: params.imageUrl,
     category: params.category,
+    isPinned: params.isPinned,
   })
   return toDto(updated)
 }
@@ -235,16 +249,19 @@ export async function listPostsForAdmin(params: {
   total: number
   page: number
   pageSize: number
+  pinnedNotices: CommunityPostDto[]
 }> {
   const { items, total } = await findPostsForPublic({
     page: params.page,
     pageSize: PAGE_SIZE,
     category: params.category,
   })
+  const pinned = !params.category ? await findPinnedNotices() : []
   return {
     items: items.map(toDto),
     total,
     page: params.page,
     pageSize: PAGE_SIZE,
+    pinnedNotices: pinned.map(toDto),
   }
 }

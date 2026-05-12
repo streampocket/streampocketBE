@@ -386,6 +386,7 @@ model CommunityPost {
   title         String            @db.VarChar(200)
   content       String            @db.Text
   imageUrl      String?           @map("image_url") @db.VarChar(500)
+  isPinned      Boolean           @default(false) @map("is_pinned")
   authorUserId  String?           @map("author_user_id") @db.Uuid
   authorAdminId String?           @map("author_admin_id") @db.Uuid
   createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -397,5 +398,6 @@ model CommunityPost {
 
   @@index([deletedAt, category, createdAt])
   @@index([deletedAt, createdAt])
+  @@index([deletedAt, isPinned, createdAt])
   @@map("community_posts")
 }

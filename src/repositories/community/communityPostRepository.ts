@@ -10,12 +10,13 @@ type ListInput = {
   page: number
   pageSize: number
   category?: 'notice' | 'free'
+  includePinned?: boolean
 }
 
 export async function findPostsForPublic(input: ListInput) {
   const where: Prisma.CommunityPostWhereInput = {
     deletedAt: null,
-    isPinned: false,
+    ...(input.includePinned ? {} : { isPinned: false }),
     ...(input.category ? { category: input.category } : {}),
   }
 

@@ -255,13 +255,13 @@ export async function listPostsForAdmin(params: {
     page: params.page,
     pageSize: PAGE_SIZE,
     category: params.category,
+    includePinned: true,
   })
-  const pinned = !params.category ? await findPinnedNotices() : []
   return {
     items: items.map(toDto),
     total,
     page: params.page,
     pageSize: PAGE_SIZE,
-    pinnedNotices: pinned.map(toDto),
+    pinnedNotices: [],
   }
 }

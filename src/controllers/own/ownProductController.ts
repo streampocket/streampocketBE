@@ -42,7 +42,6 @@ const adminUpdateOwnProductSchema = z.object({
 const listQuerySchema = z.object({
   categoryId: z.string().uuid().optional(),
   status: z.enum(['recruiting', 'closed', 'expired']).optional(),
-  sort: z.enum(['latest', 'urgency']).optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
 })
 

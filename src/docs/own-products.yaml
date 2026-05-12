@@ -2,6 +2,7 @@ paths:
   /own/products:
     get:
       summary: 파티 목록 조회 (공개)
+      description: 정렬 규칙 — 참여자 있는 파티(filledSlots > 0)를 먼저, 같은 그룹 내에서는 오래된 순(createdAt 오름차순).
       tags: [OwnProducts]
       parameters:
         - in: query
@@ -16,12 +17,6 @@ paths:
             type: string
             enum: [recruiting, closed, expired]
           description: 상태로 필터링
-        - in: query
-          name: sort
-          schema:
-            type: string
-            enum: [latest, urgency]
-          description: 정렬 기준 (urgency = 잔여 슬롯 적은 순)
         - in: query
           name: limit
           schema:

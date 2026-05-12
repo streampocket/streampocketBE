@@ -63,6 +63,8 @@ model Admin {
   password  String
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
+  communityPosts CommunityPost[]
+
   @@map("admins")
 }
 
@@ -240,6 +242,7 @@ model User {
   termsAgreements   TermsAgreement[]
   partyApplications PartyApplication[]
   ownReviews        OwnReview[]
+  communityPosts    CommunityPost[]
 
   @@unique([provider, providerId])
   @@map("users")
@@ -368,4 +371,31 @@ model PhoneVerification {
 
   @@index([phone, createdAt])
   @@map("phone_verifications")
+}
+
+// ───────────────────────── 커뮤니티 ─────────────────────────
+
+enum CommunityCategory {
+  notice
+  free
+}
+
+model CommunityPost {
+  id            String            @id @default(uuid()) @db.Uuid
+  category      CommunityCategory
+  title         String            @db.VarChar(200)
+  content       String            @db.Text
+  imageUrl      String?           @map("image_url") @db.VarChar(500)
+  authorUserId  String?           @map("author_user_id") @db.Uuid
+  authorAdminId String?           @map("author_admin_id") @db.Uuid
+  createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt     DateTime?         @map("deleted_at") @db.Timestamptz(6)
+
+  authorUser  User?  @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
+  authorAdmin Admin? @relation(fields: [authorAdminId], references: [id], onDelete: SetNull)
+
+  @@index([deletedAt, category, createdAt])
+  @@index([deletedAt, createdAt])
+  @@map("community_posts")
 }

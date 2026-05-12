@@ -1,0 +1,133 @@
+paths:
+  /community/posts:
+    get:
+      summary: 커뮤니티 게시글 목록 (공개)
+      tags: [Community]
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: category
+          schema: { type: string, enum: [notice, free] }
+      responses:
+        '200':
+          description: |
+            { items, total, page, pageSize, pinnedNotices } 반환.
+            page=1이고 category 미지정 시에만 pinnedNotices(최신 공지 최대 3건) 포함.
+
+    post:
+      summary: 자유 게시글 작성 (회원)
+      tags: [Community]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, content]
+              properties:
+                title: { type: string, minLength: 1, maxLength: 100 }
+                content: { type: string, minLength: 1, maxLength: 5000 }
+                imageUrl:
+                  type: string
+                  format: uri
+                  nullable: true
+      responses:
+        '201': { description: 게시글 생성됨 }
+        '400': { description: 이미지 URL 형식 오류 }
+        '401': { description: 인증 필요 }
+
+  /community/posts/{id}:
+    get:
+      summary: 커뮤니티 게시글 단건 조회 (공개)
+      tags: [Community]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: 게시글 상세 }
+        '404': { description: 게시글 없음 }
+
+    patch:
+      summary: 자유 게시글 수정 (본인만)
+      tags: [Community]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, content]
+              properties:
+                title: { type: string, minLength: 1, maxLength: 100 }
+                content: { type: string, minLength: 1, maxLength: 5000 }
+                imageUrl:
+                  type: string
+                  format: uri
+                  nullable: true
+      responses:
+        '200': { description: 수정된 게시글 }
+        '401': { description: 인증 필요 }
+        '403': { description: 본인 글 아님 또는 공지 글 }
+        '404': { description: 게시글 없음 }
+
+    delete:
+      summary: 자유 게시글 삭제 (본인만, 소프트)
+      tags: [Community]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: 삭제됨 }
+        '401': { description: 인증 필요 }
+        '403': { description: 본인 글 아님 또는 공지 글 }
+        '404': { description: 게시글 없음 }
+
+  /community/posts/sitemap:
+    get:
+      summary: 사이트맵용 게시글 ID·updatedAt 목록 (공개)
+      tags: [Community]
+      responses:
+        '200': { description: 게시글 식별자 목록 }
+
+  /community/uploads/presigned-url:
+    post:
+      summary: 커뮤니티 이미지 업로드용 S3 Presigned URL 발급 (회원)
+      tags: [Community]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [contentType, contentLength]
+              properties:
+                contentType:
+                  type: string
+                  enum: [image/jpeg, image/png, image/webp]
+                contentLength:
+                  type: integer
+                  minimum: 1
+                  maximum: 5242880
+      responses:
+        '200': { description: '{ uploadUrl, objectUrl, key } 반환' }
+        '400': { description: 허용되지 않은 형식 또는 용량 초과 }
+        '401': { description: 인증 필요 }

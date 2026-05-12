@@ -1,0 +1,118 @@
+paths:
+  /admin/community/posts:
+    get:
+      summary: 관리자 커뮤니티 게시글 목록
+      tags: [AdminCommunity]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: category
+          schema: { type: string, enum: [notice, free] }
+      responses:
+        '200': { description: 게시글 목록 (페이지네이션) }
+        '401': { description: 인증 필요 }
+
+    post:
+      summary: 게시글 작성 (공지/자유 모두 가능)
+      tags: [AdminCommunity]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category, title, content]
+              properties:
+                category:
+                  type: string
+                  enum: [notice, free]
+                title: { type: string, minLength: 1, maxLength: 100 }
+                content: { type: string, minLength: 1, maxLength: 5000 }
+                imageUrl:
+                  type: string
+                  format: uri
+                  nullable: true
+      responses:
+        '201': { description: 게시글 생성됨 }
+        '400': { description: 이미지 URL 형식 오류 }
+        '401': { description: 인증 필요 }
+
+  /admin/community/posts/{id}:
+    patch:
+      summary: 게시글 수정 (모든 글)
+      tags: [AdminCommunity]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category, title, content]
+              properties:
+                category:
+                  type: string
+                  enum: [notice, free]
+                title: { type: string, minLength: 1, maxLength: 100 }
+                content: { type: string, minLength: 1, maxLength: 5000 }
+                imageUrl:
+                  type: string
+                  format: uri
+                  nullable: true
+      responses:
+        '200': { description: 수정된 게시글 }
+        '401': { description: 인증 필요 }
+        '404': { description: 게시글 없음 }
+
+    delete:
+      summary: 게시글 삭제 (모든 글, 소프트)
+      tags: [AdminCommunity]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: 삭제됨 }
+        '401': { description: 인증 필요 }
+        '404': { description: 게시글 없음 }
+
+  /admin/community/uploads/presigned-url:
+    post:
+      summary: 커뮤니티 이미지 업로드용 S3 Presigned URL 발급 (관리자)
+      tags: [AdminCommunity]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [contentType, contentLength]
+              properties:
+                contentType:
+                  type: string
+                  enum: [image/jpeg, image/png, image/webp]
+                contentLength:
+                  type: integer
+                  minimum: 1
+                  maximum: 5242880
+      responses:
+        '200': { description: '{ uploadUrl, objectUrl, key } 반환' }
+        '400': { description: 허용되지 않은 형식 또는 용량 초과 }
+        '401': { description: 인증 필요 }

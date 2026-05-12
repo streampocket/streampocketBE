@@ -87,15 +87,12 @@ async function resolveCategoryByName(name: string): Promise<string> {
   return created.id
 }
 
-type OwnProductSort = 'latest' | 'urgency'
-
 type ListFilters = {
   categoryId?: string
   status?: 'recruiting' | 'closed' | 'expired'
   search?: string
   page?: number
   pageSize?: number
-  sort?: OwnProductSort
   limit?: number
 }
 
@@ -110,24 +107,20 @@ export async function createOwnProductItem(input: CreateInput) {
   return enrichWithPricing(stripCredentials(product))
 }
 
-function sortByUrgency<T extends { totalSlots: number; filledSlots: number; createdAt: Date }>(
+function sortByHasMembersThenOldest<T extends { filledSlots: number; createdAt: Date }>(
   items: T[],
 ): T[] {
   return [...items].sort((a, b) => {
-    const remainA = a.totalSlots - a.filledSlots
-    const remainB = b.totalSlots - b.filledSlots
-    if (remainA !== remainB) return remainA - remainB
-    return b.createdAt.getTime() - a.createdAt.getTime()
+    const aHas = a.filledSlots > 0 ? 1 : 0
+    const bHas = b.filledSlots > 0 ? 1 : 0
+    if (aHas !== bHas) return bHas - aHas
+    return a.createdAt.getTime() - b.createdAt.getTime()
   })
 }
 
 export async function getOwnProducts(filters: ListFilters) {
   const result = await findAllOwnProducts(filters)
-  let items = result.items
-
-  if (filters.sort === 'urgency') {
-    items = sortByUrgency(items)
-  }
+  let items = sortByHasMembersThenOldest(result.items)
 
   if (filters.limit) {
     items = items.slice(0, filters.limit)

@@ -38,9 +38,13 @@ paths:
                   type: string
                   format: uri
                   nullable: true
+                isPinned:
+                  type: boolean
+                  default: false
+                  description: 공지 글일 때만 true 가능. 자유 글에 true 지정 시 400.
       responses:
         '201': { description: 게시글 생성됨 }
-        '400': { description: 이미지 URL 형식 오류 }
+        '400': { description: 이미지 URL 형식 오류 또는 자유 글 핀 시도 }
         '401': { description: 인증 필요 }
 
   /admin/community/posts/{id}:
@@ -71,8 +75,13 @@ paths:
                   type: string
                   format: uri
                   nullable: true
+                isPinned:
+                  type: boolean
+                  default: false
+                  description: 공지 글일 때만 true 가능.
       responses:
         '200': { description: 수정된 게시글 }
+        '400': { description: 자유 글에 핀 시도 등 검증 실패 }
         '401': { description: 인증 필요 }
         '404': { description: 게시글 없음 }
 

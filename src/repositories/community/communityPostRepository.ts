@@ -10,11 +10,13 @@ type ListInput = {
   page: number
   pageSize: number
   category?: 'notice' | 'free'
+  includePinned?: boolean
 }
 
 export async function findPostsForPublic(input: ListInput) {
   const where: Prisma.CommunityPostWhereInput = {
     deletedAt: null,
+    ...(input.includePinned ? {} : { isPinned: false }),
     ...(input.category ? { category: input.category } : {}),
   }
 
@@ -32,12 +34,11 @@ export async function findPostsForPublic(input: ListInput) {
   return { items, total }
 }
 
-export function findPinnedNotices(limit: number) {
+export function findPinnedNotices() {
   return prisma.communityPost.findMany({
-    where: { deletedAt: null, category: 'notice' },
+    where: { deletedAt: null, isPinned: true },
     include: POST_INCLUDE,
     orderBy: { createdAt: 'desc' },
-    take: limit,
   })
 }
 
@@ -65,6 +66,7 @@ type CreatePostInput = {
   title: string
   content: string
   imageUrl: string | null
+  isPinned: boolean
   authorUserId: string | null
   authorAdminId: string | null
 }
@@ -78,6 +80,7 @@ type UpdatePostInput = {
   content?: string
   imageUrl?: string | null
   category?: 'notice' | 'free'
+  isPinned?: boolean
 }
 
 export function updatePost(id: string, data: UpdatePostInput) {

@@ -20,6 +20,7 @@ const createBodySchema = z.object({
   title: z.string().trim().min(1).max(100),
   content: z.string().trim().min(1).max(5000),
   imageUrl: z.string().url().max(500).nullable().optional(),
+  isPinned: z.boolean().optional().default(false),
 })
 
 const updateBodySchema = z.object({
@@ -27,6 +28,7 @@ const updateBodySchema = z.object({
   title: z.string().trim().min(1).max(100),
   content: z.string().trim().min(1).max(5000),
   imageUrl: z.string().url().max(500).nullable().optional(),
+  isPinned: z.boolean().optional().default(false),
 })
 
 const presignBodySchema = z.object({
@@ -59,6 +61,7 @@ export async function adminCreatePostHandler(req: Request, res: Response): Promi
     title: body.title,
     content: body.content,
     imageUrl: body.imageUrl ?? null,
+    isPinned: body.isPinned,
   })
   res.status(201).json(result)
 }
@@ -72,6 +75,7 @@ export async function adminUpdatePostHandler(req: Request, res: Response): Promi
     title: body.title,
     content: body.content,
     imageUrl: body.imageUrl ?? null,
+    isPinned: body.isPinned,
   })
   res.json(result)
 }

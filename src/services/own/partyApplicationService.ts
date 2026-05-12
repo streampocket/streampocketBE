@@ -248,6 +248,12 @@ export async function adminApproveApplication(applicationId: string) {
       },
     })
 
+    // 첫 confirmed 승인 시점에만 파티 자체의 시작 시각을 세팅(startedAt이 null인 경우에만 update → 멱등).
+    await tx.ownProduct.updateMany({
+      where: { id: application.product.id, startedAt: null },
+      data: { startedAt },
+    })
+
     // 승인 시점에 슬롯 +1. 동시 승인 race를 막기 위해 filledSlots < totalSlots 가드를 updateMany 조건으로 사용.
     const slotUpdate = await tx.ownProduct.updateMany({
       where: {

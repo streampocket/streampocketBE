@@ -6,15 +6,23 @@ export async function countOrdersPaidOn(start: Date, end: Date): Promise<number>
   })
 }
 
+// 모집단을 paidAt 기준으로 통일 — 오늘 결제된 주문 중 구매확정된 건만 카운트
 export async function countOrdersDecidedOn(start: Date, end: Date): Promise<number> {
   return prisma.steamOrderItem.count({
-    where: { decisionDate: { gte: start, lte: end } },
+    where: {
+      paidAt: { gte: start, lte: end },
+      decisionDate: { not: null },
+    },
   })
 }
 
+// 모집단을 paidAt 기준으로 통일 — 오늘 결제된 주문 중 반품된 건만 카운트
 export async function countOrdersReturnedOn(start: Date, end: Date): Promise<number> {
   return prisma.steamOrderItem.count({
-    where: { returnedAt: { gte: start, lte: end } },
+    where: {
+      paidAt: { gte: start, lte: end },
+      returnedAt: { not: null },
+    },
   })
 }
 

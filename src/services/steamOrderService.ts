@@ -3,6 +3,7 @@ import {
   listOrders,
   exportOrders,
   findOrderById,
+  findOrderByProductOrderId,
   updateOrderItem,
   groupOrderCountsByStatus,
 } from '../repositories/steamOrderRepository'
@@ -41,6 +42,7 @@ export async function getOrderCounts(input: GetOrderCountsInput) {
   const counts = {
     total: 0,
     pending: 0,
+    in_progress: 0,
     completed: 0,
     purchase_decided: 0,
     manual_review: 0,
@@ -213,7 +215,8 @@ export async function markGiftCompleted(id: string): Promise<void> {
   )
 }
 
-export async function manualCompleteOrder(id: string): Promise<void> {
+// 대기 → 진행중 수동 전환 (구매자 진행상황 페이지 2단계)
+export async function markOrderInProgress(id: string): Promise<void> {
   const order = await findOrderById(id)
   if (!order) {
     throw Object.assign(new Error('주문을 찾을 수 없습니다.'), { statusCode: 404 })
@@ -221,12 +224,58 @@ export async function manualCompleteOrder(id: string): Promise<void> {
 
   if (order.fulfillmentStatus !== 'pending') {
     throw Object.assign(
-      new Error(`대기 상태 주문만 완료 처리할 수 있습니다. 현재 상태: ${order.fulfillmentStatus}`),
+      new Error(
+        `대기 상태 주문만 진행중으로 전환할 수 있습니다. 현재 상태: ${order.fulfillmentStatus}`,
+      ),
+      { statusCode: 400 },
+    )
+  }
+
+  await updateOrderItem(order.id, { fulfillmentStatus: 'in_progress' })
+}
+
+export async function manualCompleteOrder(id: string): Promise<void> {
+  const order = await findOrderById(id)
+  if (!order) {
+    throw Object.assign(new Error('주문을 찾을 수 없습니다.'), { statusCode: 404 })
+  }
+
+  if (order.fulfillmentStatus !== 'pending' && order.fulfillmentStatus !== 'in_progress') {
+    throw Object.assign(
+      new Error(
+        `대기/진행중 상태 주문만 완료 처리할 수 있습니다. 현재 상태: ${order.fulfillmentStatus}`,
+      ),
       { statusCode: 400 },
     )
   }
 
   await updateOrderItem(order.id, { fulfillmentStatus: 'completed' })
+}
+
+// 구매자용 공개 진행상황 조회 — 노출 정보 최소화 (연락처·계정·금액 등 제외)
+type OrderTrackingResult = {
+  productName: string
+  fulfillmentStatus: FulfillmentStatus
+  paidAt: Date | null
+  updatedAt: Date
+  returnedAt: Date | null
+}
+
+export async function getOrderTracking(productOrderId: string): Promise<OrderTrackingResult> {
+  const order = await findOrderByProductOrderId(productOrderId)
+  if (!order) {
+    throw Object.assign(new Error('주문을 찾을 수 없습니다. 상품주문번호를 확인해 주세요.'), {
+      statusCode: 404,
+    })
+  }
+
+  return {
+    productName: order.productName,
+    fulfillmentStatus: order.fulfillmentStatus,
+    paidAt: order.paidAt,
+    updatedAt: order.updatedAt,
+    returnedAt: order.returnedAt,
+  }
 }
 
 export async function manualReturnOrder(id: string): Promise<void> {

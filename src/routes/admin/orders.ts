@@ -3,6 +3,7 @@ import {
   getOrdersHandler,
   getOrderDetailHandler,
   retryOrderHandler,
+  markInProgressHandler,
   manualCompleteHandler,
   manualReturnHandler,
   exportOrdersHandler,
@@ -21,6 +22,7 @@ adminOrdersRouter.get('/', asyncHandler(getOrdersHandler))
 adminOrdersRouter.get('/export', asyncHandler(exportOrdersHandler))
 adminOrdersRouter.get('/:id', asyncHandler(getOrderDetailHandler))
 adminOrdersRouter.post('/:id/retry', asyncHandler(retryOrderHandler))
+adminOrdersRouter.post('/:id/in-progress', asyncHandler(markInProgressHandler))
 adminOrdersRouter.post('/:id/complete', asyncHandler(manualCompleteHandler))
 adminOrdersRouter.post('/:id/return', asyncHandler(manualReturnHandler))
 adminOrdersRouter.post('/:id/review-game', asyncHandler(sendReviewGameHandler))

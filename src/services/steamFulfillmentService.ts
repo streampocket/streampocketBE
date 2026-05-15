@@ -529,7 +529,9 @@ export async function processPurchaseDecidedOrders(orderSource: IOrderSource): P
       if (!existing || existing.decisionDate) continue
 
       const shouldTransitionStatus =
-        existing.fulfillmentStatus === 'pending' || existing.fulfillmentStatus === 'completed'
+        existing.fulfillmentStatus === 'pending' ||
+        existing.fulfillmentStatus === 'in_progress' ||
+        existing.fulfillmentStatus === 'completed'
 
       await updateOrderItem(existing.id, {
         decisionDate: item.decisionDate,

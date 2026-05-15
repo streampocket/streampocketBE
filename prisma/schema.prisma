@@ -23,6 +23,7 @@ enum AccountStatus {
 
 enum FulfillmentStatus {
   pending
+  in_progress
   completed
   purchase_decided
   manual_review

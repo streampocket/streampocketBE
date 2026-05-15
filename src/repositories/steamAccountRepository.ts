@@ -92,7 +92,9 @@ export async function exportAccounts(input: ExportAccountsInput): Promise<Accoun
     include: {
       product: { select: { name: true } },
       orderItems: {
-        where: { fulfillmentStatus: { in: ['pending', 'completed', 'purchase_decided'] } },
+        where: {
+          fulfillmentStatus: { in: ['pending', 'in_progress', 'completed', 'purchase_decided'] },
+        },
         select: { updatedAt: true },
         orderBy: { updatedAt: 'desc' },
         take: 1,

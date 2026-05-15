@@ -10,7 +10,7 @@ paths:
           name: status
           schema:
             type: string
-            enum: [pending, completed, purchase_decided, manual_review, failed, returned]
+            enum: [pending, in_progress, completed, purchase_decided, manual_review, failed, returned]
         - in: query
           name: from
           schema:
@@ -73,10 +73,31 @@ paths:
         '404':
           description: 주문 없음
 
+  /steam/admin/orders/{id}/in-progress:
+    post:
+      summary: 대기 상태 주문 진행중 전환
+      description: '`pending` 상태 주문을 `in_progress`(진행중)로 전환한다. 구매자 진행상황 페이지에 2단계로 표시된다.'
+      tags: [SteamOrders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 진행중으로 전환됨
+        '400':
+          description: pending 상태가 아님
+        '404':
+          description: 주문 없음
+
   /steam/admin/orders/{id}/complete:
     post:
-      summary: 대기 상태 주문 수동 완료 처리
-      description: 자동 처리(발주확인·발송·알림톡)가 끝난 `pending` 상태 주문을 운영자가 확인하여 `completed`로 전환한다. 추가 액션 없이 단순 상태 변경.
+      summary: 주문 수동 완료 처리
+      description: '`pending` 또는 `in_progress` 상태 주문을 운영자가 확인하여 `completed`로 전환한다. 추가 액션 없이 단순 상태 변경.'
       tags: [SteamOrders]
       security:
         - bearerAuth: []
@@ -90,7 +111,7 @@ paths:
         '200':
           description: 완료 처리됨
         '400':
-          description: pending 상태가 아님
+          description: pending/in_progress 상태가 아님
         '404':
           description: 주문 없음
 

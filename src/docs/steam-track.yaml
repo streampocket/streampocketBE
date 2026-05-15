@@ -1,0 +1,54 @@
+paths:
+  /steam/track/{productOrderId}:
+    get:
+      summary: 주문 진행상황 조회 (구매자용 공개 API)
+      description: >-
+        네이버 상품주문번호로 주문 진행 단계를 조회한다. 인증 불필요.
+        노출 정보는 상품명·진행상태·결제일·갱신일로 최소화되어 있으며 연락처·계정·금액은 포함하지 않는다.
+      tags: [SteamTrack]
+      parameters:
+        - in: path
+          name: productOrderId
+          required: true
+          description: 네이버 상품주문번호
+          schema:
+            type: string
+            maxLength: 100
+      responses:
+        '200':
+          description: 진행상황
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      productName:
+                        type: string
+                      fulfillmentStatus:
+                        type: string
+                        enum:
+                          [
+                            pending,
+                            in_progress,
+                            completed,
+                            purchase_decided,
+                            manual_review,
+                            failed,
+                            returned,
+                          ]
+                      paidAt:
+                        type: string
+                        format: date-time
+                        nullable: true
+                      updatedAt:
+                        type: string
+                        format: date-time
+                      returnedAt:
+                        type: string
+                        format: date-time
+                        nullable: true
+        '404':
+          description: 주문 없음 (상품주문번호 불일치)

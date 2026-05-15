@@ -18,6 +18,7 @@ type AccountExportRow = {
 
 const ORDER_STATUS_KO: Record<FulfillmentStatus, string> = {
   pending: '대기',
+  in_progress: '진행중',
   completed: '완료',
   purchase_decided: '구매확정',
   manual_review: '수동 검토',

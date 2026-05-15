@@ -10,6 +10,7 @@ import { errorHandler } from './middlewares/errorHandler'
 import { authRouter } from './routes/auth'
 import { cronRouter } from './routes/cron'
 import { adminOrdersRouter } from './routes/admin/orders'
+import { steamTrackRouter } from './routes/steam/track'
 import { adminProductsRouter } from './routes/admin/products'
 import { adminAccountsRouter } from './routes/admin/accounts'
 import { adminAlimtalkRouter } from './routes/admin/alimtalk'
@@ -70,6 +71,7 @@ app.use(requestLogger)
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
 app.use('/auth', authRouter)
 app.use('/steam/cron', cronRouter)
+app.use('/steam/track', steamTrackRouter)
 app.use('/steam/admin/orders', adminOrdersRouter)
 app.use('/steam/admin/products', adminProductsRouter)
 app.use('/steam/admin/accounts', adminAccountsRouter)

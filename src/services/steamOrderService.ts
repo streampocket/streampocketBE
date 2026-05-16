@@ -9,8 +9,12 @@ import {
 } from '../repositories/steamOrderRepository'
 import { findAccountById, markAccountAsSent } from '../repositories/steamAccountRepository'
 import { isAlimtalkEnabled, sendGiftCompletedAlimtalk, sendOrderAlimtalk } from './alimtalkService'
+import { getSystemSettings } from './systemSettingsService'
 import { sendDiscordAlert } from '../lib/discord'
 import { detectProductType } from '../utils/productType'
+
+// 진행중 주문 시간 연장 단위(분)
+const EXTEND_MINUTES = 10
 
 type ListOrdersInput = {
   status?: FulfillmentStatus
@@ -216,6 +220,7 @@ export async function markGiftCompleted(id: string): Promise<void> {
 }
 
 // 대기 → 진행중 수동 전환 (구매자 진행상황 페이지 2단계)
+// 전역 기본 소요시간을 읽어 예상 완료시각을 함께 저장한다.
 export async function markOrderInProgress(id: string): Promise<void> {
   const order = await findOrderById(id)
   if (!order) {
@@ -231,7 +236,37 @@ export async function markOrderInProgress(id: string): Promise<void> {
     )
   }
 
-  await updateOrderItem(order.id, { fulfillmentStatus: 'in_progress' })
+  const { defaultDurationMinutes } = await getSystemSettings()
+  const estimatedCompletedAt = new Date(Date.now() + defaultDurationMinutes * 60_000)
+
+  await updateOrderItem(order.id, {
+    fulfillmentStatus: 'in_progress',
+    estimatedCompletedAt,
+  })
+}
+
+// 진행중 주문의 예상 완료시각을 10분 연장
+export async function extendOrderEstimatedTime(id: string): Promise<void> {
+  const order = await findOrderById(id)
+  if (!order) {
+    throw Object.assign(new Error('주문을 찾을 수 없습니다.'), { statusCode: 404 })
+  }
+
+  if (order.fulfillmentStatus !== 'in_progress') {
+    throw Object.assign(
+      new Error(`진행중 상태 주문만 시간을 연장할 수 있습니다. 현재 상태: ${order.fulfillmentStatus}`),
+      { statusCode: 400 },
+    )
+  }
+
+  if (!order.estimatedCompletedAt) {
+    throw Object.assign(new Error('예상 완료시각이 설정되지 않은 주문입니다.'), {
+      statusCode: 400,
+    })
+  }
+
+  const extended = new Date(order.estimatedCompletedAt.getTime() + EXTEND_MINUTES * 60_000)
+  await updateOrderItem(order.id, { estimatedCompletedAt: extended })
 }
 
 export async function manualCompleteOrder(id: string): Promise<void> {
@@ -259,6 +294,7 @@ type OrderTrackingResult = {
   paidAt: Date | null
   updatedAt: Date
   returnedAt: Date | null
+  estimatedCompletedAt: Date | null
 }
 
 export async function getOrderTracking(productOrderId: string): Promise<OrderTrackingResult> {
@@ -275,6 +311,7 @@ export async function getOrderTracking(productOrderId: string): Promise<OrderTra
     paidAt: order.paidAt,
     updatedAt: order.updatedAt,
     returnedAt: order.returnedAt,
+    estimatedCompletedAt: order.estimatedCompletedAt,
   }
 }
 

@@ -6,6 +6,7 @@ import {
   getOrderDetail,
   retryOrder,
   markOrderInProgress,
+  extendOrderEstimatedTime,
   manualCompleteOrder,
   manualReturnOrder,
   exportOrdersForExcel,
@@ -113,6 +114,15 @@ export async function markInProgressHandler(
   const { id } = req.params
   await markOrderInProgress(id)
   res.json({ message: '진행중으로 전환되었습니다.' })
+}
+
+export async function extendOrderTimeHandler(
+  req: Request<{ id: string }>,
+  res: Response,
+): Promise<void> {
+  const { id } = req.params
+  await extendOrderEstimatedTime(id)
+  res.json({ message: '예상 완료시각이 10분 연장되었습니다.' })
 }
 
 export async function manualCompleteHandler(

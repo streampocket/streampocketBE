@@ -107,34 +107,35 @@ model SteamAccount {
 }
 
 model SteamOrderItem {
-  id                  String            @id @default(uuid()) @db.Uuid
-  productOrderId      String            @unique @map("product_order_id") @db.VarChar(100)
-  naverOrderId        String            @map("naver_order_id") @db.VarChar(100)
-  productId           String?           @map("product_id") @db.Uuid
-  accountId           String?           @map("account_id") @db.Uuid
-  productName         String            @map("product_name") @db.VarChar(255)
-  receiverPhoneNumber String?           @map("receiver_phone_number") @db.VarChar(30)
-  receiverName        String?           @map("receiver_name") @db.VarChar(100)
-  unitPrice           Int               @map("unit_price")
-  paymentAmount       Int?              @map("payment_amount")
-  settlementAmount    Int?              @map("settlement_amount")
-  decisionDate        DateTime?         @map("decision_date") @db.Timestamptz(6)
-  fulfillmentStatus   FulfillmentStatus @default(pending) @map("fulfillment_status")
-  errorMessage        String?           @map("error_message")
-  paidAt              DateTime?         @map("paid_at") @db.Timestamptz(6)
-  returnedAt          DateTime?         @map("returned_at") @db.Timestamptz(6)
-  reviewGameSentAt    DateTime?         @map("review_game_sent_at") @db.Timestamptz(6)
-  friendLink1         String?           @map("friend_link1") @db.VarChar(500)
-  friendLink2         String?           @map("friend_link2") @db.VarChar(500)
-  giftCode            String?           @map("gift_code") @db.VarChar(200)
-  gameUrl             String?           @map("game_url") @db.VarChar(500)
-  memo                String?           @map("memo")
-  giftCompletedAt     DateTime?         @map("gift_completed_at") @db.Timestamptz(6)
-  createdAt           DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt           DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
-  product             SteamProduct?     @relation(fields: [productId], references: [id], onDelete: SetNull)
-  account             SteamAccount?     @relation(fields: [accountId], references: [id], onDelete: SetNull)
-  deliveryLogs        DeliveryLog[]
+  id                   String            @id @default(uuid()) @db.Uuid
+  productOrderId       String            @unique @map("product_order_id") @db.VarChar(100)
+  naverOrderId         String            @map("naver_order_id") @db.VarChar(100)
+  productId            String?           @map("product_id") @db.Uuid
+  accountId            String?           @map("account_id") @db.Uuid
+  productName          String            @map("product_name") @db.VarChar(255)
+  receiverPhoneNumber  String?           @map("receiver_phone_number") @db.VarChar(30)
+  receiverName         String?           @map("receiver_name") @db.VarChar(100)
+  unitPrice            Int               @map("unit_price")
+  paymentAmount        Int?              @map("payment_amount")
+  settlementAmount     Int?              @map("settlement_amount")
+  decisionDate         DateTime?         @map("decision_date") @db.Timestamptz(6)
+  fulfillmentStatus    FulfillmentStatus @default(pending) @map("fulfillment_status")
+  errorMessage         String?           @map("error_message")
+  paidAt               DateTime?         @map("paid_at") @db.Timestamptz(6)
+  returnedAt           DateTime?         @map("returned_at") @db.Timestamptz(6)
+  reviewGameSentAt     DateTime?         @map("review_game_sent_at") @db.Timestamptz(6)
+  friendLink1          String?           @map("friend_link1") @db.VarChar(500)
+  friendLink2          String?           @map("friend_link2") @db.VarChar(500)
+  giftCode             String?           @map("gift_code") @db.VarChar(200)
+  gameUrl              String?           @map("game_url") @db.VarChar(500)
+  memo                 String?           @map("memo")
+  giftCompletedAt      DateTime?         @map("gift_completed_at") @db.Timestamptz(6)
+  estimatedCompletedAt DateTime?         @map("estimated_completed_at") @db.Timestamptz(6)
+  createdAt            DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  product              SteamProduct?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  account              SteamAccount?     @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  deliveryLogs         DeliveryLog[]
 
   @@index([fulfillmentStatus, createdAt])
   @@index([naverOrderId])
@@ -186,9 +187,10 @@ model ReviewCode {
 }
 
 model SystemSettings {
-  id               String   @id @default(uuid()) @db.Uuid
-  alimtalkUnitCost Decimal  @default(6.5) @map("alimtalk_unit_cost") @db.Decimal(7, 1)
-  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                     String   @id @default(uuid()) @db.Uuid
+  alimtalkUnitCost       Decimal  @default(6.5) @map("alimtalk_unit_cost") @db.Decimal(7, 1)
+  defaultDurationMinutes Int      @default(60) @map("default_duration_minutes")
+  updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@map("system_settings")
 }

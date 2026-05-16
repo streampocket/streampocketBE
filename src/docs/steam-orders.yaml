@@ -76,7 +76,9 @@ paths:
   /steam/admin/orders/{id}/in-progress:
     post:
       summary: 대기 상태 주문 진행중 전환
-      description: '`pending` 상태 주문을 `in_progress`(진행중)로 전환한다. 구매자 진행상황 페이지에 2단계로 표시된다.'
+      description: >-
+        `pending` 상태 주문을 `in_progress`(진행중)로 전환한다. 구매자 진행상황 페이지에 2단계로 표시된다.
+        전역 설정(`/steam/admin/settings`)의 기본 소요시간을 읽어 `estimatedCompletedAt`(예상 완료시각)을 함께 저장한다.
       tags: [SteamOrders]
       security:
         - bearerAuth: []
@@ -91,6 +93,27 @@ paths:
           description: 진행중으로 전환됨
         '400':
           description: pending 상태가 아님
+        '404':
+          description: 주문 없음
+
+  /steam/admin/orders/{id}/extend-time:
+    post:
+      summary: 진행중 주문 예상 완료시각 10분 연장
+      description: '`in_progress` 상태 주문의 `estimatedCompletedAt`을 10분 뒤로 미룬다.'
+      tags: [SteamOrders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 예상 완료시각 10분 연장됨
+        '400':
+          description: in_progress 상태가 아니거나 예상 완료시각 미설정
         '404':
           description: 주문 없음
 

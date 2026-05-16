@@ -1,0 +1,45 @@
+paths:
+  /steam/admin/settings:
+    get:
+      summary: 시스템 설정 조회
+      description: 전역 기본 소요시간 등 시스템 설정을 조회한다.
+      tags: [SystemSettings]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 시스템 설정
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      defaultDurationMinutes:
+                        type: integer
+                        description: 진행중 전환 시 적용되는 전역 기본 소요시간(분)
+                        example: 60
+    patch:
+      summary: 시스템 설정 수정
+      description: 전역 기본 소요시간을 수정한다. 허용 값은 20·40·60·90·120분.
+      tags: [SystemSettings]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [defaultDurationMinutes]
+              properties:
+                defaultDurationMinutes:
+                  type: integer
+                  enum: [20, 40, 60, 90, 120]
+      responses:
+        '200':
+          description: 수정된 시스템 설정
+        '400':
+          description: 허용되지 않는 값

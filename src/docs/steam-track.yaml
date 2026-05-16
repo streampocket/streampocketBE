@@ -50,5 +50,10 @@ paths:
                         type: string
                         format: date-time
                         nullable: true
+                      estimatedCompletedAt:
+                        type: string
+                        format: date-time
+                        nullable: true
+                        description: 진행중(in_progress) 주문의 예상 완료시각. 2단계 카운트다운에 사용.
         '404':
           description: 주문 없음 (상품주문번호 불일치)

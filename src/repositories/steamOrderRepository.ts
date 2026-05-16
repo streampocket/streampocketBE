@@ -30,6 +30,7 @@ type UpdateOrderItemInput = {
   gameUrl?: string | null
   memo?: string | null
   giftCompletedAt?: Date
+  estimatedCompletedAt?: Date | null
 }
 
 type ListOrdersInput = {

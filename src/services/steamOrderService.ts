@@ -275,16 +275,28 @@ export async function manualCompleteOrder(id: string): Promise<void> {
     throw Object.assign(new Error('주문을 찾을 수 없습니다.'), { statusCode: 404 })
   }
 
-  if (order.fulfillmentStatus !== 'pending' && order.fulfillmentStatus !== 'in_progress') {
+  if (order.completedAt) {
+    throw Object.assign(new Error('이미 완료 처리된 주문입니다.'), { statusCode: 400 })
+  }
+
+  const completable: FulfillmentStatus[] = ['pending', 'in_progress', 'purchase_decided']
+  if (!completable.includes(order.fulfillmentStatus)) {
     throw Object.assign(
       new Error(
-        `대기/진행중 상태 주문만 완료 처리할 수 있습니다. 현재 상태: ${order.fulfillmentStatus}`,
+        `대기/진행중/구매확정 상태 주문만 완료 처리할 수 있습니다. 현재 상태: ${order.fulfillmentStatus}`,
       ),
       { statusCode: 400 },
     )
   }
 
-  await updateOrderItem(order.id, { fulfillmentStatus: 'completed' })
+  // 구매확정 주문은 뱃지를 그대로 두고(구매확정) 발송완료 시각만 기록한다.
+  // 대기/진행중 주문은 completed로 전환한다.
+  await updateOrderItem(order.id, {
+    completedAt: new Date(),
+    ...(order.fulfillmentStatus === 'purchase_decided'
+      ? {}
+      : { fulfillmentStatus: 'completed' as const }),
+  })
 }
 
 // 구매자용 공개 진행상황 조회 — 노출 정보 최소화 (연락처·계정·금액 등 제외)
@@ -295,6 +307,7 @@ type OrderTrackingResult = {
   updatedAt: Date
   returnedAt: Date | null
   estimatedCompletedAt: Date | null
+  completedAt: Date | null
 }
 
 export async function getOrderTracking(productOrderId: string): Promise<OrderTrackingResult> {
@@ -312,6 +325,7 @@ export async function getOrderTracking(productOrderId: string): Promise<OrderTra
     updatedAt: order.updatedAt,
     returnedAt: order.returnedAt,
     estimatedCompletedAt: order.estimatedCompletedAt,
+    completedAt: order.completedAt,
   }
 }
 

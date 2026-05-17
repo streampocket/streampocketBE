@@ -626,6 +626,7 @@ export async function runBackupOrderScan(
           await updateOrderItem(before.id, {
             fulfillmentStatus: 'pending',
             returnedAt: null,
+            completedAt: null,
             errorMessage: '반품 클레임 종료 후 자동 복귀',
           })
           await sendDiscordAlert(

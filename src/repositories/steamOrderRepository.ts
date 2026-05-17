@@ -31,6 +31,7 @@ type UpdateOrderItemInput = {
   memo?: string | null
   giftCompletedAt?: Date
   estimatedCompletedAt?: Date | null
+  completedAt?: Date | null
 }
 
 type ListOrdersInput = {

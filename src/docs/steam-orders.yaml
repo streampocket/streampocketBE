@@ -120,7 +120,11 @@ paths:
   /steam/admin/orders/{id}/complete:
     post:
       summary: 주문 수동 완료 처리
-      description: '`pending` 또는 `in_progress` 상태 주문을 운영자가 확인하여 `completed`로 전환한다. 추가 액션 없이 단순 상태 변경.'
+      description: >-
+        운영자가 발송완료를 확인하고 `completedAt`(발송완료 시각)을 기록한다.
+        `pending`/`in_progress` 주문은 `completed`로 전환하고, 구매자가 먼저 구매확정한
+        `purchase_decided` 주문은 뱃지를 유지한 채 `completedAt`만 기록한다.
+        진행사항(track) 페이지는 이 `completedAt` 값으로 완료를 판정한다.
       tags: [SteamOrders]
       security:
         - bearerAuth: []
@@ -134,7 +138,7 @@ paths:
         '200':
           description: 완료 처리됨
         '400':
-          description: pending/in_progress 상태가 아님
+          description: 이미 완료 처리됨, 또는 pending/in_progress/purchase_decided 상태가 아님
         '404':
           description: 주문 없음
 

@@ -55,5 +55,12 @@ paths:
                         format: date-time
                         nullable: true
                         description: 진행중(in_progress) 주문의 예상 완료시각. 2단계 카운트다운에 사용.
+                      completedAt:
+                        type: string
+                        format: date-time
+                        nullable: true
+                        description: >-
+                          관리자/시스템이 발송완료 처리한 시각. 이 값이 있어야 진행사항이 완료(3단계)로 표시된다.
+                          fulfillmentStatus가 purchase_decided여도 이 값이 없으면 진행중으로 표시된다.
         '404':
           description: 주문 없음 (상품주문번호 불일치)

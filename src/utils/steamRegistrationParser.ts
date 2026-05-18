@@ -119,6 +119,16 @@ function splitLine(line: string): { label: string | null; value: string } {
   return { label: null, value: line.trim() }
 }
 
+// 라벨 없는 값 줄 맨 앞의 목록 기호(`1.` `2)` `①` `-` 등)를 제거한다.
+// 숫자는 구분 기호(. ) ])가 뒤따를 때만 제거해 "1234abc" 같은 값이 깎이지 않게 한다.
+function stripLeadingMarker(text: string): string {
+  return text
+    .replace(/^\s*\d{1,2}\s*[.)\]]\s*/, '')
+    .replace(/^\s*[①-⑳]\s*/, '')
+    .replace(/^\s*[-•·▶►]\s+/, '')
+    .trim()
+}
+
 // 정규화된 라벨을 표준 필드키로 매칭. 가장 긴(구체적인) 동의어가 우선한다.
 function matchFieldKey(normalizedLabel: string): RegistrationFieldKey | null {
   if (normalizedLabel.length === 0) return null
@@ -223,7 +233,8 @@ export function parseSteamRegistration(raw: string): SteamRegistrationParseResul
         continue
       }
     }
-    if (value.length > 0) labelLessValues.push(value)
+    const cleanedValue = stripLeadingMarker(value)
+    if (cleanedValue.length > 0) labelLessValues.push(cleanedValue)
   }
 
   // 라벨 없는 값 → 아직 비어있는 필수 필드를 표준 순서로 채움

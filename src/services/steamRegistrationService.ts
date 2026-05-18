@@ -18,11 +18,15 @@ import {
 } from '../repositories/steamRegistrationRepository'
 import { findOrderById } from '../repositories/steamOrderRepository'
 
-export type RegistrationSubmitResult = {
-  registration: RegistrationWithOrder
-  missingFields: string[]
-  matchedOrder: SteamOrderItem | null
-}
+// 등록 양식이면 'registered', 일반 문의(비양식)면 'non_form'
+export type RegistrationSubmitResult =
+  | { kind: 'non_form' }
+  | {
+      kind: 'registered'
+      registration: RegistrationWithOrder
+      missingFields: string[]
+      matchedOrder: SteamOrderItem | null
+    }
 
 export type RegistrationAnswerResult = {
   found: boolean
@@ -82,7 +86,14 @@ export async function submitRegistration(
   rawMessage: string,
   botUserKey: string,
 ): Promise<RegistrationSubmitResult> {
-  const { fields, formVariant, missingFields } = parseSteamRegistration(rawMessage)
+  const { fields, formVariant, missingFields, looksLikeRegistration } =
+    parseSteamRegistration(rawMessage)
+
+  // 등록 양식이 아니면(일반 문의) 저장·Discord 알림 없이 비양식 결과만 반환한다.
+  if (!looksLikeRegistration) {
+    return { kind: 'non_form' }
+  }
+
   const matchedOrder = await attemptAutoMatch(fields.buyerName, fields.gameName)
 
   const created = await createRegistration({
@@ -112,7 +123,7 @@ export async function submitRegistration(
 
   await notifyDiscord(registration, matchedOrder)
 
-  return { registration, missingFields, matchedOrder }
+  return { kind: 'registered', registration, missingFields, matchedOrder }
 }
 
 // 멀티턴 되묻기 답변 처리 — 진행 중 접수의 첫 누락 항목을 채운다.

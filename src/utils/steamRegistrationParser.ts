@@ -24,6 +24,7 @@ export type SteamRegistrationParseResult = {
   fields: SteamRegistrationFields
   formVariant: string // 'A' | 'B' | 'C' | 'unknown'
   missingFields: RegistrationFieldKey[]
+  looksLikeRegistration: boolean // 등록 양식으로 보이는가 (false면 일반 문의)
 }
 
 // 필수 항목 — 누락 시 챗봇이 되묻는다. (가드/동의는 양식별로 달라 필수에서 제외)
@@ -62,6 +63,10 @@ const POSITIONAL_ORDER: readonly RegistrationFieldKey[] = [
   'gameName',
   'buyerName',
 ]
+
+// 라벨이 하나도 없을 때 "등록 양식"으로 인정하는 최소 줄 수.
+// 양식은 최소 ID/PW/게임/성함 4줄 → 1~3줄 자유 텍스트(일반 문의)와 구분한다.
+const FORM_MIN_LINES = 4
 
 // 표준 필드키 → 라벨 동의어(정규화된 형태). 부분일치로 표기 변형을 흡수한다.
 const LABEL_SYNONYMS: Record<RegistrationFieldKey, readonly string[]> = {
@@ -218,6 +223,9 @@ export function parseSteamRegistration(raw: string): SteamRegistrationParseResul
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
 
+  // 헤더·구분선 등을 제외한 실제 데이터 줄 수 — 양식 여부 판별에 사용
+  const meaningfulLineCount = lines.filter((line) => !isNoiseLine(line)).length
+
   const labelLessValues: string[] = []
   let anyLabelMatched = false
 
@@ -248,6 +256,9 @@ export function parseSteamRegistration(raw: string): SteamRegistrationParseResul
 
   const formVariant = inferFormVariant(fields, anyLabelMatched)
   const missingFields = REQUIRED_FIELDS.filter((key) => fields[key] === null)
+  // 라벨이 하나라도 매칭됐거나(라벨형 양식), 라벨 없이도 줄 수가 충분하면(번호형/위치형
+  // 양식) 등록 양식으로 본다. 그 외 1~3줄 자유 텍스트는 일반 문의로 간주한다.
+  const looksLikeRegistration = anyLabelMatched || meaningfulLineCount >= FORM_MIN_LINES
 
-  return { fields, formVariant, missingFields }
+  return { fields, formVariant, missingFields, looksLikeRegistration }
 }

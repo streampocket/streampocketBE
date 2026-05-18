@@ -7,11 +7,9 @@ import { answerMissingField, submitRegistration } from '../services/steamRegistr
 
 // ───────────────────────── 카카오 i 오픈빌더 SkillResponse 타입 ─────────────────────────
 
-type SkillButton = {
-  action: 'webLink'
-  label: string
-  webLinkUrl: string
-}
+type SkillButton =
+  | { action: 'webLink'; label: string; webLinkUrl: string }
+  | { action: 'operator'; label: string } // 상담원 연결 버튼 (URL 불필요)
 
 type SkillOutput =
   | { simpleText: { text: string } }
@@ -50,6 +48,23 @@ function buildTrackUrl(productOrderId: string | null): string {
 
 function simpleTextResponse(text: string): SkillResponse {
   return { version: '2.0', template: { outputs: [{ simpleText: { text } }] } }
+}
+
+// 양식이 아닌 일반 문의 — 안내 메시지 + 상담원 연결 버튼 응답
+function buildOperatorHandoffResponse(): SkillResponse {
+  return {
+    version: '2.0',
+    template: {
+      outputs: [
+        {
+          textCard: {
+            text: '스팀 등록 양식 접수만 자동으로 처리하고 있어요.\n다른 문의는 상담원이 도와드릴게요. 아래 버튼을 눌러주세요 🙏',
+            buttons: [{ action: 'operator', label: '상담원 연결' }],
+          },
+        },
+      ],
+    },
+  }
 }
 
 function buildSkillResponse(
@@ -108,6 +123,13 @@ function buildSkillResponse(
 export async function submitRegistrationSkillHandler(req: Request, res: Response): Promise<void> {
   const { userRequest } = skillRequestSchema.parse(req.body)
   const result = await submitRegistration(userRequest.utterance, userRequest.user.id)
+
+  // 양식이 아닌 일반 문의는 저장하지 않고 상담원 연결로 안내한다.
+  if (result.kind === 'non_form') {
+    res.json(buildOperatorHandoffResponse())
+    return
+  }
+
   res.json(buildSkillResponse(result.registration, result.missingFields, result.matchedOrder))
 }
 

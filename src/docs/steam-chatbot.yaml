@@ -3,10 +3,10 @@ paths:
     post:
       summary: 스팀 등록 양식 접수 (카카오 챗봇 스킬)
       description: >-
-        카카오 i 오픈빌더 챗봇이 호출하는 스킬 엔드포인트. 구매자가 보낸 등록 양식(스팀 ID/PW·게임명·성함·가드 정보)을
-        규칙 기반으로 파싱해 저장하고, 성함+게임명으로 주문 자동매칭을 시도한다.
-        응답은 카카오 SkillResponse 2.0 형식이며, 필수 항목 누락 시 되묻기 컨텍스트를 포함한다.
-        인증: X-Chatbot-Secret 헤더.
+        카카오 i 오픈빌더 챗봇(폴백 블록)이 호출하는 스킬 엔드포인트. 구매자가 보낸 메시지가
+        등록 양식이면 규칙 기반으로 파싱·저장하고 성함+게임명으로 주문 자동매칭을 시도한다.
+        양식이 아닌 일반 문의는 저장·알림 없이 상담원 연결(operator) 버튼으로 안내한다.
+        응답은 카카오 SkillResponse 2.0 형식. 인증: X-Chatbot-Secret 헤더.
       tags: [SteamChatbot]
       parameters:
         - in: header
@@ -39,7 +39,35 @@ paths:
                           description: 챗봇 사용자 식별값(botUserKey)
       responses:
         '200':
-          description: 카카오 SkillResponse 2.0 (접수 확인 또는 누락 항목 되묻기)
+          description: >-
+            카카오 SkillResponse 2.0. 등록 양식이면 접수 확인(또는 누락 항목 재전송 안내),
+            양식이 아닌 일반 문의면 안내 메시지 + 상담원 연결(operator) 버튼을 반환한다.
+          content:
+            application/json:
+              examples:
+                registered:
+                  summary: 등록 양식 접수 완료
+                  value:
+                    version: '2.0'
+                    template:
+                      outputs:
+                        - textCard:
+                            text: '✅ 홍길동님, 스팀 등록 양식이 정상 접수되었습니다.'
+                            buttons:
+                              - action: webLink
+                                label: 실시간 진행상황 조회
+                                webLinkUrl: https://ottall.com/track
+                nonForm:
+                  summary: 양식이 아닌 일반 문의 — 상담원 연결
+                  value:
+                    version: '2.0'
+                    template:
+                      outputs:
+                        - textCard:
+                            text: "스팀 등록 양식 접수만 자동으로 처리하고 있어요.\n다른 문의는 상담원이 도와드릴게요. 아래 버튼을 눌러주세요 🙏"
+                            buttons:
+                              - action: operator
+                                label: 상담원 연결
         '401':
           description: 시크릿 불일치
 

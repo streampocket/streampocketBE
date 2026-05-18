@@ -3,6 +3,7 @@ import { chatbotAuthMiddleware } from '../../middlewares/chatbotAuth'
 import {
   answerMissingFieldSkillHandler,
   submitRegistrationSkillHandler,
+  welcomeSkillHandler,
 } from '../../controllers/steamChatbotController'
 import { asyncHandler } from '../../utils/asyncHandler'
 
@@ -13,3 +14,4 @@ steamChatbotRouter.use(chatbotAuthMiddleware)
 
 steamChatbotRouter.post('/registration', asyncHandler(submitRegistrationSkillHandler))
 steamChatbotRouter.post('/registration/answer', asyncHandler(answerMissingFieldSkillHandler))
+steamChatbotRouter.post('/welcome', asyncHandler(welcomeSkillHandler))

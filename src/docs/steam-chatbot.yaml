@@ -71,6 +71,25 @@ paths:
         '401':
           description: 시크릿 불일치
 
+  /steam/chatbot/welcome:
+    post:
+      summary: 챗봇 웰컴 응답 (카카오 챗봇 스킬)
+      description: >-
+        오픈빌더 웰컴 블록이 호출하는 스킬 엔드포인트. 웰컴 인사말(simpleText)과
+        활성 챗봇 메뉴 항목을 quickReplies로 반환한다. 인증: X-Chatbot-Secret 헤더.
+      tags: [SteamChatbot]
+      parameters:
+        - in: header
+          name: X-Chatbot-Secret
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 카카오 SkillResponse 2.0 (인사말 + 메뉴 quickReplies)
+        '401':
+          description: 시크릿 불일치
+
   /steam/chatbot/registration/answer:
     post:
       summary: 누락 항목 되묻기 답변 처리 (카카오 챗봇 스킬)

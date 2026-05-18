@@ -23,3 +23,14 @@ export async function updateSystemSettings(input: {
   const row = await upsertSystemSettings({ defaultDurationMinutes: input.defaultDurationMinutes })
   return { defaultDurationMinutes: row.defaultDurationMinutes }
 }
+
+// 카카오 챗봇 웰컴 인사말 — 챗봇 메뉴 기능에서 사용
+export async function getChatbotWelcomeMessage(): Promise<string | null> {
+  const row = await getSystemSettingsRow()
+  return row?.chatbotWelcomeMessage ?? null
+}
+
+export async function setChatbotWelcomeMessage(message: string | null): Promise<string | null> {
+  const row = await upsertSystemSettings({ chatbotWelcomeMessage: message })
+  return row.chatbotWelcomeMessage
+}

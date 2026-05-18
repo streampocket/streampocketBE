@@ -58,6 +58,18 @@ enum ExpensePayer {
   im_jeongbin
 }
 
+enum SteamRegistrationStatus {
+  received // 접수됨 (파싱 직후)
+  needs_info // 필수 항목 누락 — 챗봇 되묻기 진행 중
+  completed // 운영자 등록 작업 완료
+}
+
+enum SteamRegistrationMatchStatus {
+  unmatched // 미연결
+  auto_matched // 성함+게임명 자동매칭
+  manual_matched // 관리자 수동연결
+}
+
 model Admin {
   id        String   @id @default(uuid()) @db.Uuid
   email     String   @unique @db.VarChar(320)
@@ -137,10 +149,45 @@ model SteamOrderItem {
   product              SteamProduct?     @relation(fields: [productId], references: [id], onDelete: SetNull)
   account              SteamAccount?     @relation(fields: [accountId], references: [id], onDelete: SetNull)
   deliveryLogs         DeliveryLog[]
+  registrations        SteamRegistration[]
 
   @@index([fulfillmentStatus, createdAt])
   @@index([naverOrderId])
   @@map("steam_order_items")
+}
+
+model SteamRegistration {
+  id          String  @id @default(uuid()) @db.Uuid
+  orderItemId String? @map("order_item_id") @db.Uuid
+
+  // 파싱 항목 — 전부 nullable (best-effort 저장)
+  steamId            String?  @map("steam_id") @db.VarChar(255)
+  steamPassword      String?  @map("steam_password") @db.VarChar(255) // 평문 저장 (사용자 결정)
+  gameName           String?  @map("game_name") @db.VarChar(255)
+  buyerName          String?  @map("buyer_name") @db.VarChar(100)
+  steamGuardCodes    String?  @map("steam_guard_codes") // 양식 A: 1회용 코드 원문 보존
+  steamGuardDisabled Boolean? @map("steam_guard_disabled") // 양식 B: 가드 해제 여부
+  refundConsent      Boolean  @default(false) @map("refund_consent")
+
+  // 원본 / 메타
+  rawMessage    String   @map("raw_message") @db.Text
+  formVariant   String?  @map("form_variant") @db.VarChar(10) // A/B/C/unknown
+  botUserKey    String   @map("bot_user_key") @db.VarChar(255)
+  missingFields String[] @map("missing_fields") // 누락 필수항목 키
+
+  matchStatus SteamRegistrationMatchStatus @default(unmatched) @map("match_status")
+  status      SteamRegistrationStatus      @default(received)
+  adminMemo   String?                      @map("admin_memo") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  orderItem SteamOrderItem? @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([matchStatus, createdAt])
+  @@index([botUserKey, createdAt])
+  @@map("steam_registrations")
 }
 
 model DeliveryLog {

@@ -57,27 +57,17 @@ function buildSkillResponse(
   missingFields: string[],
   matchedOrder: SteamOrderItem | null,
 ): SkillResponse {
-  // 누락 항목이 있으면 첫 항목을 되묻고, 컨텍스트에 진행 정보를 싣는다.
+  // 누락 항목이 있으면 빠진 항목을 안내하고 양식 전체를 다시 보내달라고 요청한다.
   if (missingFields.length > 0) {
-    const nextField = missingFields[0]
-    const label = FIELD_LABELS[nextField] ?? nextField
+    const labels = missingFields.map((field) => FIELD_LABELS[field] ?? field).join(', ')
     return {
       version: '2.0',
       template: {
         outputs: [
           {
             simpleText: {
-              text: `접수 양식을 확인했어요. '${label}' 항목이 빠진 것 같아요.\n${label}을(를) 보내주시겠어요?`,
+              text: `접수 양식을 확인했어요. 다음 항목이 빠진 것 같아요: ${labels}\n\n번거로우시겠지만 양식 전체를 다시 채워서 보내주시겠어요? 🙏`,
             },
-          },
-        ],
-      },
-      context: {
-        values: [
-          {
-            name: 'steam_reg_missing',
-            lifeSpan: 5,
-            params: { registrationId: registration.id, missingField: nextField },
           },
         ],
       },

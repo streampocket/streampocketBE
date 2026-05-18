@@ -1,0 +1,85 @@
+paths:
+  /steam/chatbot/registration:
+    post:
+      summary: 스팀 등록 양식 접수 (카카오 챗봇 스킬)
+      description: >-
+        카카오 i 오픈빌더 챗봇이 호출하는 스킬 엔드포인트. 구매자가 보낸 등록 양식(스팀 ID/PW·게임명·성함·가드 정보)을
+        규칙 기반으로 파싱해 저장하고, 성함+게임명으로 주문 자동매칭을 시도한다.
+        응답은 카카오 SkillResponse 2.0 형식이며, 필수 항목 누락 시 되묻기 컨텍스트를 포함한다.
+        인증: X-Chatbot-Secret 헤더.
+      tags: [SteamChatbot]
+      parameters:
+        - in: header
+          name: X-Chatbot-Secret
+          required: true
+          description: 챗봇 스킬 시크릿 토큰
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userRequest]
+              properties:
+                userRequest:
+                  type: object
+                  required: [utterance, user]
+                  properties:
+                    utterance:
+                      type: string
+                      description: 구매자가 보낸 메시지 원문
+                    user:
+                      type: object
+                      required: [id]
+                      properties:
+                        id:
+                          type: string
+                          description: 챗봇 사용자 식별값(botUserKey)
+      responses:
+        '200':
+          description: 카카오 SkillResponse 2.0 (접수 확인 또는 누락 항목 되묻기)
+        '401':
+          description: 시크릿 불일치
+
+  /steam/chatbot/registration/answer:
+    post:
+      summary: 누락 항목 되묻기 답변 처리 (카카오 챗봇 스킬)
+      description: >-
+        멀티턴 되묻기에서 구매자가 보낸 답변을 처리한다. botUserKey로 진행 중(needs_info) 접수를 찾아
+        첫 번째 누락 항목을 채우고, 남은 누락이 있으면 다시 되묻고 없으면 접수 완료 응답을 반환한다.
+        인증: X-Chatbot-Secret 헤더.
+      tags: [SteamChatbot]
+      parameters:
+        - in: header
+          name: X-Chatbot-Secret
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userRequest]
+              properties:
+                userRequest:
+                  type: object
+                  required: [utterance, user]
+                  properties:
+                    utterance:
+                      type: string
+                      description: 누락 항목에 대한 구매자 답변
+                    user:
+                      type: object
+                      required: [id]
+                      properties:
+                        id:
+                          type: string
+      responses:
+        '200':
+          description: 카카오 SkillResponse 2.0
+        '401':
+          description: 시크릿 불일치

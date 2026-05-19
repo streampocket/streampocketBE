@@ -218,6 +218,7 @@ paths:
       description: >-
         주문 상세 모달에서 관리자가 고객에게 "주문 진행상황 조회" 알림톡(알리고 템플릿 `UH_9631`)을 수동 발송한다.
         `#{고객명}`, `#{네이버주문번호}` 변수를 치환하며, 발송 결과는 `DeliveryLog`에 기록된다.
+        발송 성공 시 `orderStatusAlimtalkSentAt`를 기록해 재발송을 차단하며, 발송 결과(성공·실패)는 Discord로도 알린다.
       tags: [SteamOrders]
       security:
         - bearerAuth: []
@@ -231,6 +232,6 @@ paths:
         '200':
           description: 주문상황 알림톡 발송됨
         '400':
-          description: 수신 전화번호 없음
+          description: 수신 전화번호 없음 또는 이미 발송한 주문
         '404':
           description: 주문 없음

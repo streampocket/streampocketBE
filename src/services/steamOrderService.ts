@@ -160,6 +160,15 @@ export async function retryOrder(id: string): Promise<void> {
   )
 }
 
+// 알림톡 발송 결과 Discord 알림 — best-effort (실패해도 본 동작에 영향 없음)
+async function notifyAlimtalkDiscord(message: string): Promise<void> {
+  try {
+    await sendDiscordAlert('alimtalk', message)
+  } catch (error) {
+    console.error('[ALIMTALK_DISCORD] Discord 알림 전송 실패', error)
+  }
+}
+
 // 주문 진행상황 조회 안내 알림톡 수동 발송 (관리자 주문 상세 모달)
 export async function sendOrderStatusNotification(id: string): Promise<void> {
   const order = await findOrderById(id)
@@ -173,12 +182,36 @@ export async function sendOrderStatusNotification(id: string): Promise<void> {
     })
   }
 
-  await sendOrderStatusAlimtalk({
-    orderItemId: order.id,
-    recipientPhoneNumber: order.receiverPhoneNumber,
-    recipientName: order.receiverName,
-    naverOrderId: order.naverOrderId,
-  })
+  // 중복 발송 방지 — 이미 발송한 주문이면 차단
+  if (order.orderStatusAlimtalkSentAt) {
+    throw Object.assign(new Error('이미 주문상황 알림톡을 발송한 주문입니다.'), {
+      statusCode: 400,
+    })
+  }
+
+  const recipientLabel = `${order.receiverName ?? '미확인'} (${order.receiverPhoneNumber})`
+
+  try {
+    await sendOrderStatusAlimtalk({
+      orderItemId: order.id,
+      recipientPhoneNumber: order.receiverPhoneNumber,
+      recipientName: order.receiverName,
+      naverOrderId: order.naverOrderId,
+    })
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    await notifyAlimtalkDiscord(
+      `⚠️ 주문상황 알림톡 발송 실패\n상품: ${order.productName}\n수신: ${recipientLabel}\n사유: ${reason}`,
+    )
+    throw error
+  }
+
+  // 발송 성공 시각 기록 (재발송 차단)
+  await updateOrderItem(order.id, { orderStatusAlimtalkSentAt: new Date() })
+
+  await notifyAlimtalkDiscord(
+    `📨 주문상황 알림톡 발송 완료\n상품: ${order.productName}\n수신: ${recipientLabel}`,
+  )
 }
 
 type UpdateFriendLinksInput = {
@@ -297,14 +330,22 @@ export async function manualCompleteOrder(id: string): Promise<void> {
     phone &&
     (order.fulfillmentStatus === 'pending' || order.fulfillmentStatus === 'in_progress')
   ) {
+    const recipientLabel = `${order.receiverName ?? '미확인'} (${phone})`
     try {
       await sendOrderCompletedAlimtalk({
         orderItemId: order.id,
         recipientPhoneNumber: phone,
         recipientName: order.receiverName,
       })
+      await notifyAlimtalkDiscord(
+        `📨 게임선물 완료 알림톡 발송 완료\n상품: ${order.productName}\n수신: ${recipientLabel}`,
+      )
     } catch (error) {
       console.error('[ORDER_COMPLETE] 완료 알림톡 발송 실패', error)
+      const reason = error instanceof Error ? error.message : String(error)
+      await notifyAlimtalkDiscord(
+        `⚠️ 게임선물 완료 알림톡 발송 실패\n상품: ${order.productName}\n수신: ${recipientLabel}\n사유: ${reason}`,
+      )
     }
   }
 }

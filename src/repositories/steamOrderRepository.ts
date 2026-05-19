@@ -29,6 +29,7 @@ type UpdateOrderItemInput = {
   giftCode?: string | null
   gameUrl?: string | null
   memo?: string | null
+  orderStatusAlimtalkSentAt?: Date
   estimatedCompletedAt?: Date | null
   completedAt?: Date | null
 }
@@ -58,6 +59,8 @@ type OrderItemWithRelations = SteamOrderItem & {
     id: string
     channel: DeliveryChannel
     recipient: string
+    templateCode: string | null
+    message: string | null
     status: DeliveryLogStatus
     errorMessage: string | null
     providerMessageId: string | null
@@ -130,6 +133,8 @@ export async function findOrderById(id: string): Promise<OrderItemWithRelations 
           id: true,
           channel: true,
           recipient: true,
+          templateCode: true,
+          message: true,
           status: true,
           errorMessage: true,
           providerMessageId: true,

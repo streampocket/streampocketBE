@@ -81,6 +81,17 @@ async function notifyDiscord(
   }
 }
 
+// 비양식 일반 문의 알림 — 챗봇 전용 대화 내용을 운영자가 Discord로 볼 수 있게 한다.
+async function notifyNonFormInquiry(rawMessage: string, botUserKey: string): Promise<void> {
+  // Discord 메시지 길이 제한 대비 — 내용을 1000자로 제한한다.
+  const content = rawMessage.length > 1000 ? `${rawMessage.slice(0, 1000)}…` : rawMessage
+  try {
+    await sendDiscordAlert('order', `💬 챗봇 일반 문의\n사용자: ${botUserKey}\n내용: ${content}`)
+  } catch {
+    // 알림 실패는 무시
+  }
+}
+
 // 챗봇 양식 접수 — 파싱 → 자동매칭 → 저장 → Discord 알림
 export async function submitRegistration(
   rawMessage: string,
@@ -89,8 +100,10 @@ export async function submitRegistration(
   const { fields, formVariant, missingFields, looksLikeRegistration } =
     parseSteamRegistration(rawMessage)
 
-  // 등록 양식이 아니면(일반 문의) 저장·Discord 알림 없이 비양식 결과만 반환한다.
+  // 등록 양식이 아니면(일반 문의) 저장은 하지 않되, 운영자가 대화 내용을 볼 수 있도록
+  // Discord로 메시지 내용을 알린다.
   if (!looksLikeRegistration) {
+    await notifyNonFormInquiry(rawMessage, botUserKey)
     return { kind: 'non_form' }
   }
 

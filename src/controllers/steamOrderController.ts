@@ -11,7 +11,7 @@ import {
   manualReturnOrder,
   exportOrdersForExcel,
   updateFriendLinks,
-  markGiftCompleted,
+  sendOrderStatusNotification,
 } from '../services/steamOrderService'
 import { buildOrderExcelBuffer } from '../utils/excel'
 
@@ -161,11 +161,11 @@ export async function updateFriendLinksHandler(
   res.json({ message: '친구 링크가 저장되었습니다.' })
 }
 
-export async function markGiftCompletedHandler(
+export async function sendOrderStatusAlimtalkHandler(
   req: Request<{ id: string }>,
   res: Response,
 ): Promise<void> {
   const { id } = req.params
-  await markGiftCompleted(id)
-  res.json({ message: '선물 접수 완료 처리되었습니다.' })
+  await sendOrderStatusNotification(id)
+  res.json({ message: '주문상황 알림톡이 발송되었습니다.' })
 }

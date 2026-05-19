@@ -125,6 +125,8 @@ paths:
         `pending`/`in_progress` 주문은 `completed`로 전환하고, 구매자가 먼저 구매확정한
         `purchase_decided` 주문은 뱃지를 유지한 채 `completedAt`만 기록한다.
         진행사항(track) 페이지는 이 `completedAt` 값으로 완료를 판정한다.
+        `pending`/`in_progress` 주문 완료 시 게임선물 완료 알림톡(UH_9664)을 발송한다
+        (`purchase_decided`는 미발송, 발송 실패는 완료 처리를 막지 않음).
       tags: [SteamOrders]
       security:
         - bearerAuth: []
@@ -210,10 +212,12 @@ paths:
         '404':
           description: 주문 없음
 
-  /steam/admin/orders/{id}/gift-complete:
+  /steam/admin/orders/{id}/order-status-alimtalk:
     post:
-      summary: AA 주문 선물 접수 완료 처리
-      description: AA(선물형) 주문의 `giftCompletedAt` 타임스탬프를 현재 시각으로 기록한다. 1회만 호출 가능.
+      summary: 주문 진행상황 조회 안내 알림톡 발송
+      description: >-
+        주문 상세 모달에서 관리자가 고객에게 "주문 진행상황 조회" 알림톡(알리고 템플릿 `UH_9631`)을 수동 발송한다.
+        `#{고객명}`, `#{네이버주문번호}` 변수를 치환하며, 발송 결과는 `DeliveryLog`에 기록된다.
       tags: [SteamOrders]
       security:
         - bearerAuth: []
@@ -225,8 +229,8 @@ paths:
             type: string
       responses:
         '200':
-          description: 선물 접수 완료 처리됨
+          description: 주문상황 알림톡 발송됨
         '400':
-          description: AA 주문 아님 또는 이미 완료된 주문
+          description: 수신 전화번호 없음
         '404':
           description: 주문 없음

@@ -71,9 +71,11 @@ export type AlimtalkSettingsView = {
     templateCodeNASecondary: string | null
     templateCodeNAOutOfStock: string | null
     templateCodeReviewGame: string | null
-    templateCodeGiftCompleted: string | null
     templateCodeBG: string | null
     templateCodePartyApply: string | null
+    templateCodeOrderStatus: string | null
+    templateCodeOrderCompleted: string | null
+    templateCodePhoneVerify: string | null
     sender: string | null
     providerConnected: boolean
     providerMessage: string
@@ -115,9 +117,11 @@ type EnvConfig = {
   templateCodeNASecondary: string
   templateCodeNAOutOfStock: string
   templateCodeReviewGame: string
-  templateCodeGiftCompleted: string
   templateCodeBG: string
   templateCodePartyApply: string
+  templateCodeOrderStatus: string
+  templateCodeOrderCompleted: string
+  templateCodePhoneVerify: string
   sender: string
 }
 
@@ -210,9 +214,11 @@ export function getEnvConfig(): EnvConfig {
     templateCodeNASecondary: process.env['ALIGO_TEMPLATE_CODE_NA_SECONDARY'] ?? '',
     templateCodeNAOutOfStock: process.env['ALIGO_TEMPLATE_CODE_NA_OUT_OF_STOCK'] ?? '',
     templateCodeReviewGame: process.env['ALIGO_TEMPLATE_CODE_REVIEW_GAME'] ?? '',
-    templateCodeGiftCompleted: process.env['ALIGO_TEMPLATE_CODE_GIFT_COMPLETED'] ?? '',
     templateCodeBG: process.env['ALIGO_TEMPLATE_CODE_BG'] ?? '',
     templateCodePartyApply: process.env['ALIGO_TEMPLATE_CODE_PARTY_APPLY'] ?? '',
+    templateCodeOrderStatus: process.env['ALIGO_TEMPLATE_CODE_ORDER_STATUS'] ?? '',
+    templateCodeOrderCompleted: process.env['ALIGO_TEMPLATE_CODE_ORDER_COMPLETED'] ?? '',
+    templateCodePhoneVerify: process.env['ALIGO_TEMPLATE_CODE_PHONE_VERIFY'] ?? '',
     sender: process.env['ALIGO_SENDER'] ?? '',
   }
 }
@@ -468,9 +474,11 @@ export async function getAlimtalkSettings(): Promise<AlimtalkSettingsView> {
       templateCodeNASecondary: config.templateCodeNASecondary || null,
       templateCodeNAOutOfStock: config.templateCodeNAOutOfStock || null,
       templateCodeReviewGame: config.templateCodeReviewGame || null,
-      templateCodeGiftCompleted: config.templateCodeGiftCompleted || null,
       templateCodeBG: config.templateCodeBG || null,
       templateCodePartyApply: config.templateCodePartyApply || null,
+      templateCodeOrderStatus: config.templateCodeOrderStatus || null,
+      templateCodeOrderCompleted: config.templateCodeOrderCompleted || null,
+      templateCodePhoneVerify: config.templateCodePhoneVerify || null,
       sender: config.sender || null,
       providerConnected: provider.providerConnected,
       providerMessage: provider.providerMessage,
@@ -603,62 +611,6 @@ export async function sendAlimtalkTest(): Promise<AlimtalkTestResult> {
     recipient: config.sender,
     providerMessageId: getProviderMessageId(json),
     providerMessage: json.message ?? '전송 요청 완료',
-  }
-}
-
-type SendGiftCompletedAlimtalkInput = {
-  orderItemId: string
-  recipientPhoneNumber: string
-  recipientName: string | null
-}
-
-export async function sendGiftCompletedAlimtalk(
-  input: SendGiftCompletedAlimtalkInput,
-): Promise<void> {
-  const config = getEnvConfig()
-  if (!isConfigured(config)) {
-    throw new Error('알리고 환경변수가 모두 설정되지 않았습니다.')
-  }
-
-  if (!config.templateCodeGiftCompleted) {
-    throw new Error(
-      '선물 접수 완료 알림톡 템플릿 코드(ALIGO_TEMPLATE_CODE_GIFT_COMPLETED)가 설정되지 않았습니다.',
-    )
-  }
-
-  const template = await getActiveTemplateOrThrow(config, config.templateCodeGiftCompleted)
-  const buttonJson = buildButtonPayload(template)
-  const templateContent = template.templateContent ?? ''
-
-  const deliveryLog = await createDeliveryLog({
-    orderItemId: input.orderItemId,
-    channel: 'alimtalk',
-    recipient: input.recipientPhoneNumber,
-    templateCode: config.templateCodeGiftCompleted,
-  })
-
-  try {
-    const json = await sendAlimtalkMessage({
-      templateCode: config.templateCodeGiftCompleted,
-      recipientPhoneNumber: input.recipientPhoneNumber,
-      recipientName: input.recipientName,
-      message: templateContent,
-      buttonJson,
-    })
-
-    await updateDeliveryLog(deliveryLog.id, {
-      status: 'sent',
-      providerMessageId: getProviderMessageId(json),
-      sentAt: new Date(),
-      errorMessage: null,
-    })
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    await updateDeliveryLog(deliveryLog.id, {
-      status: 'failed',
-      errorMessage: message,
-    })
-    throw error
   }
 }
 
@@ -819,6 +771,126 @@ export async function sendOutOfStockAlimtalk(
   try {
     const json = await sendAlimtalkMessage({
       templateCode: config.templateCodeNAOutOfStock,
+      recipientPhoneNumber: input.recipientPhoneNumber,
+      recipientName: input.recipientName,
+      message: templateContent,
+      buttonJson,
+    })
+
+    await updateDeliveryLog(deliveryLog.id, {
+      status: 'sent',
+      providerMessageId: getProviderMessageId(json),
+      sentAt: new Date(),
+      errorMessage: null,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    await updateDeliveryLog(deliveryLog.id, {
+      status: 'failed',
+      errorMessage: message,
+    })
+    throw error
+  }
+}
+
+type SendOrderStatusAlimtalkInput = {
+  orderItemId: string
+  recipientPhoneNumber: string
+  recipientName: string | null
+  naverOrderId: string
+}
+
+// 주문 진행상황 조회 안내 알림톡 (관리자가 주문 상세 모달에서 수동 발송)
+export async function sendOrderStatusAlimtalk(
+  input: SendOrderStatusAlimtalkInput,
+): Promise<void> {
+  const config = getEnvConfig()
+  if (!isConfigured(config)) {
+    throw new Error('알리고 환경변수가 모두 설정되지 않았습니다.')
+  }
+
+  if (!config.templateCodeOrderStatus) {
+    throw new Error(
+      '주문상황 알림톡 템플릿 코드(ALIGO_TEMPLATE_CODE_ORDER_STATUS)가 설정되지 않았습니다.',
+    )
+  }
+
+  const template = await getActiveTemplateOrThrow(config, config.templateCodeOrderStatus)
+  const buttonJson = buildButtonPayload(template)
+  const templateContent = template.templateContent ?? ''
+
+  const deliveryLog = await createDeliveryLog({
+    orderItemId: input.orderItemId,
+    channel: 'alimtalk',
+    recipient: input.recipientPhoneNumber,
+    templateCode: config.templateCodeOrderStatus,
+  })
+
+  try {
+    const vars: Record<string, string> = {
+      고객명: input.recipientName ?? '고객',
+      네이버주문번호: input.naverOrderId,
+    }
+
+    const json = await sendAlimtalkMessage({
+      templateCode: config.templateCodeOrderStatus,
+      recipientPhoneNumber: input.recipientPhoneNumber,
+      recipientName: input.recipientName,
+      message: applyTemplate(templateContent, normalizeTemplateVars(vars)),
+      buttonJson,
+    })
+
+    await updateDeliveryLog(deliveryLog.id, {
+      status: 'sent',
+      providerMessageId: getProviderMessageId(json),
+      sentAt: new Date(),
+      errorMessage: null,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    await updateDeliveryLog(deliveryLog.id, {
+      status: 'failed',
+      errorMessage: message,
+    })
+    throw error
+  }
+}
+
+type SendOrderCompletedAlimtalkInput = {
+  orderItemId: string
+  recipientPhoneNumber: string
+  recipientName: string | null
+}
+
+// 주문 완료 처리 시 게임선물 완료 안내 알림톡 (고정 메시지, 변수 없음)
+export async function sendOrderCompletedAlimtalk(
+  input: SendOrderCompletedAlimtalkInput,
+): Promise<void> {
+  const config = getEnvConfig()
+  if (!isConfigured(config)) {
+    throw new Error('알리고 환경변수가 모두 설정되지 않았습니다.')
+  }
+
+  if (!config.templateCodeOrderCompleted) {
+    throw new Error(
+      '주문 완료 알림톡 템플릿 코드(ALIGO_TEMPLATE_CODE_ORDER_COMPLETED)가 설정되지 않았습니다.',
+    )
+  }
+
+  const template = await getActiveTemplateOrThrow(config, config.templateCodeOrderCompleted)
+  const buttonJson = buildButtonPayload(template)
+  const templateContent = template.templateContent ?? ''
+
+  const deliveryLog = await createDeliveryLog({
+    orderItemId: input.orderItemId,
+    channel: 'alimtalk',
+    recipient: input.recipientPhoneNumber,
+    templateCode: config.templateCodeOrderCompleted,
+  })
+
+  try {
+    const json = await sendAlimtalkMessage({
+      templateCode: config.templateCodeOrderCompleted,
       recipientPhoneNumber: input.recipientPhoneNumber,
       recipientName: input.recipientName,
       message: templateContent,

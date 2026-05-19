@@ -527,41 +527,43 @@ export async function sendOrderAlimtalk(
         : config.templateCodeAA
   const template = await getActiveTemplateOrThrow(config, templateCode)
   const buttonJson = buildButtonPayload(template)
+  const templateContent = template.templateContent ?? ALIMTALK_MESSAGE_TEMPLATE
+  const vars: Record<string, string> =
+    input.productType === 'NA'
+      ? {
+          서비스명: input.productName,
+          아이디: input.accountUsername,
+          임시비밀번호: input.accountPassword,
+          이메일: input.accountEmail,
+          이메일비밀번호: input.accountEmailPassword,
+          이메일플렛폼: input.accountEmailSiteUrl,
+          ...(input.accountSecondaryEmail
+            ? {
+                '2차이메일': input.accountSecondaryEmail,
+                '2차이메일비밀번호': input.accountSecondaryEmailPassword ?? '',
+                '2차이메일플렛폼': input.accountSecondaryEmailSiteUrl ?? '',
+              }
+            : {}),
+        }
+      : {
+          상품명: input.productName,
+        }
+  const message = applyTemplate(templateContent, normalizeTemplateVars(vars))
+
   const deliveryLog = await createDeliveryLog({
     orderItemId: input.orderItemId,
     channel: 'alimtalk',
     recipient: input.recipientPhoneNumber,
     templateCode,
+    message,
   })
 
   try {
-    const templateContent = template.templateContent ?? ALIMTALK_MESSAGE_TEMPLATE
-    const vars: Record<string, string> =
-      input.productType === 'NA'
-        ? {
-            서비스명: input.productName,
-            아이디: input.accountUsername,
-            임시비밀번호: input.accountPassword,
-            이메일: input.accountEmail,
-            이메일비밀번호: input.accountEmailPassword,
-            이메일플렛폼: input.accountEmailSiteUrl,
-            ...(input.accountSecondaryEmail
-              ? {
-                  '2차이메일': input.accountSecondaryEmail,
-                  '2차이메일비밀번호': input.accountSecondaryEmailPassword ?? '',
-                  '2차이메일플렛폼': input.accountSecondaryEmailSiteUrl ?? '',
-                }
-              : {}),
-          }
-        : {
-            상품명: input.productName,
-          }
-
     const json = await sendAlimtalkMessage({
       templateCode,
       recipientPhoneNumber: input.recipientPhoneNumber,
       recipientName: input.recipientName,
-      message: applyTemplate(templateContent, normalizeTemplateVars(vars)),
+      message,
       buttonJson,
     })
 
@@ -572,10 +574,10 @@ export async function sendOrderAlimtalk(
       errorMessage: null,
     })
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const reason = error instanceof Error ? error.message : String(error)
     await updateDeliveryLog(deliveryLog.id, {
       status: 'failed',
-      errorMessage: message,
+      errorMessage: reason,
     })
     throw error
   }
@@ -637,12 +639,14 @@ export async function sendReviewGameAlimtalk(
   const vars: Record<string, string> = {
     리뷰상품: codeList,
   }
+  const message = applyTemplate(templateContent, normalizeTemplateVars(vars))
 
   const deliveryLog = await createDeliveryLog({
     orderItemId: input.orderItemId,
     channel: 'alimtalk',
     recipient: input.recipientPhoneNumber,
     templateCode: config.templateCodeReviewGame,
+    message,
   })
 
   try {
@@ -650,7 +654,7 @@ export async function sendReviewGameAlimtalk(
       templateCode: config.templateCodeReviewGame,
       recipientPhoneNumber: input.recipientPhoneNumber,
       recipientName: input.recipientName,
-      message: applyTemplate(templateContent, normalizeTemplateVars(vars)),
+      message,
       buttonJson,
     })
 
@@ -661,10 +665,10 @@ export async function sendReviewGameAlimtalk(
       errorMessage: null,
     })
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const reason = error instanceof Error ? error.message : String(error)
     await updateDeliveryLog(deliveryLog.id, {
       status: 'failed',
-      errorMessage: message,
+      errorMessage: reason,
     })
     throw error
   }
@@ -702,12 +706,14 @@ export async function sendPartyApplicationAlimtalk(
     성함: input.recipientName,
     상품명: input.productName,
   }
+  const message = applyTemplate(templateContent, normalizeTemplateVars(vars))
 
   const deliveryLog = await createDeliveryLog({
     partyApplicationId: input.partyApplicationId,
     channel: 'alimtalk',
     recipient: input.recipientPhoneNumber,
     templateCode: config.templateCodePartyApply,
+    message,
   })
 
   try {
@@ -715,7 +721,7 @@ export async function sendPartyApplicationAlimtalk(
       templateCode: config.templateCodePartyApply,
       recipientPhoneNumber: input.recipientPhoneNumber,
       recipientName: input.recipientName,
-      message: applyTemplate(templateContent, normalizeTemplateVars(vars)),
+      message,
       buttonJson,
     })
 
@@ -766,6 +772,7 @@ export async function sendOutOfStockAlimtalk(
     channel: 'alimtalk',
     recipient: input.recipientPhoneNumber,
     templateCode: config.templateCodeNAOutOfStock,
+    message: templateContent,
   })
 
   try {
@@ -784,10 +791,10 @@ export async function sendOutOfStockAlimtalk(
       errorMessage: null,
     })
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const reason = error instanceof Error ? error.message : String(error)
     await updateDeliveryLog(deliveryLog.id, {
       status: 'failed',
-      errorMessage: message,
+      errorMessage: reason,
     })
     throw error
   }
@@ -818,25 +825,26 @@ export async function sendOrderStatusAlimtalk(
   const template = await getActiveTemplateOrThrow(config, config.templateCodeOrderStatus)
   const buttonJson = buildButtonPayload(template)
   const templateContent = template.templateContent ?? ''
+  const vars: Record<string, string> = {
+    고객명: input.recipientName ?? '고객',
+    네이버주문번호: input.naverOrderId,
+  }
+  const message = applyTemplate(templateContent, normalizeTemplateVars(vars))
 
   const deliveryLog = await createDeliveryLog({
     orderItemId: input.orderItemId,
     channel: 'alimtalk',
     recipient: input.recipientPhoneNumber,
     templateCode: config.templateCodeOrderStatus,
+    message,
   })
 
   try {
-    const vars: Record<string, string> = {
-      고객명: input.recipientName ?? '고객',
-      네이버주문번호: input.naverOrderId,
-    }
-
     const json = await sendAlimtalkMessage({
       templateCode: config.templateCodeOrderStatus,
       recipientPhoneNumber: input.recipientPhoneNumber,
       recipientName: input.recipientName,
-      message: applyTemplate(templateContent, normalizeTemplateVars(vars)),
+      message,
       buttonJson,
     })
 
@@ -847,10 +855,10 @@ export async function sendOrderStatusAlimtalk(
       errorMessage: null,
     })
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const reason = error instanceof Error ? error.message : String(error)
     await updateDeliveryLog(deliveryLog.id, {
       status: 'failed',
-      errorMessage: message,
+      errorMessage: reason,
     })
     throw error
   }
@@ -886,6 +894,7 @@ export async function sendOrderCompletedAlimtalk(
     channel: 'alimtalk',
     recipient: input.recipientPhoneNumber,
     templateCode: config.templateCodeOrderCompleted,
+    message: templateContent,
   })
 
   try {
@@ -904,10 +913,10 @@ export async function sendOrderCompletedAlimtalk(
       errorMessage: null,
     })
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const reason = error instanceof Error ? error.message : String(error)
     await updateDeliveryLog(deliveryLog.id, {
       status: 'failed',
-      errorMessage: message,
+      errorMessage: reason,
     })
     throw error
   }

@@ -7,6 +7,7 @@ type CreateDeliveryLogInput = {
   channel: DeliveryChannel
   recipient: string
   templateCode?: string | null
+  message?: string | null
 }
 
 type UpdateDeliveryLogInput = {

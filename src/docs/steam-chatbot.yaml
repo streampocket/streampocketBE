@@ -52,8 +52,10 @@ paths:
                     template:
                       outputs:
                         - textCard:
-                            text: '✅ 홍길동님, 스팀 등록 양식이 정상 접수되었습니다.'
+                            text: "✅ 홍길동님, 스팀 등록 양식이 정상 접수되었습니다.\n\n🔹 주문번호: 2026051972332241\n\n안전하고 신속한 등록 처리를 위해 마지막 확인 단계가 남았습니다. 아래 [상담원 연결하기] 버튼을 눌러 말씀해 주시면 바로 처리를 도와드리겠습니다! 😊\n\n👇 안전한 등록을 위해 클릭해 주세요"
                             buttons:
+                              - action: operator
+                                label: 상담원 연결하기
                               - action: webLink
                                 label: 실시간 진행상황 조회
                                 webLinkUrl: https://ottall.com/track

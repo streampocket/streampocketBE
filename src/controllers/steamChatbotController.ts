@@ -153,12 +153,16 @@ function buildSkillResponse(
     }
   }
 
-  // 접수 완료 — 확인 메시지 + 진행상황 조회 버튼
+  // 접수 완료 — 확인 메시지 + [상담원 연결하기]·[실시간 진행상황 조회] 버튼.
+  // 상담원 연결을 한 번 누르면 그 톡방이 상담 콘솔에 올라와 운영자가 직접 응대할 수 있다.
   const buyerName = registration.buyerName ?? '고객'
   const productOrderId = matchedOrder?.productOrderId ?? registration.orderItem?.productOrderId ?? null
-  const text = productOrderId
-    ? `✅ ${buyerName}님, 스팀 등록 양식이 정상 접수되었습니다.\n\n🔹 주문번호: ${productOrderId}\n\n아래 [실시간 진행상황 조회] 버튼으로 진행 상황을 확인하실 수 있어요. 감사합니다 😊`
-    : `✅ ${buyerName}님, 스팀 등록 양식이 정상 접수되었습니다.\n\n아래 [실시간 진행상황 조회] 버튼을 눌러 상품주문번호를 입력하시면 진행 상황을 확인하실 수 있어요. 감사합니다 😊`
+  const orderLine = productOrderId ? `\n\n🔹 주문번호: ${productOrderId}` : ''
+  const text =
+    `✅ ${buyerName}님, 스팀 등록 양식이 정상 접수되었습니다.${orderLine}\n\n` +
+    '안전하고 신속한 등록 처리를 위해 마지막 확인 단계가 남았습니다. ' +
+    '아래 [상담원 연결하기] 버튼을 눌러 말씀해 주시면 바로 처리를 도와드리겠습니다! 😊\n\n' +
+    '👇 안전한 등록을 위해 클릭해 주세요'
 
   return {
     version: '2.0',
@@ -168,6 +172,7 @@ function buildSkillResponse(
           textCard: {
             text,
             buttons: [
+              { action: 'operator', label: '상담원 연결하기' },
               {
                 action: 'webLink',
                 label: '실시간 진행상황 조회',

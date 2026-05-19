@@ -804,7 +804,7 @@ type SendOrderStatusAlimtalkInput = {
   orderItemId: string
   recipientPhoneNumber: string
   recipientName: string | null
-  naverOrderId: string
+  productOrderId: string
 }
 
 // 주문 진행상황 조회 안내 알림톡 (관리자가 주문 상세 모달에서 수동 발송)
@@ -827,7 +827,8 @@ export async function sendOrderStatusAlimtalk(
   const templateContent = template.templateContent ?? ''
   const vars: Record<string, string> = {
     고객명: input.recipientName ?? '고객',
-    네이버주문번호: input.naverOrderId,
+    // Aligo 템플릿 UH_9631의 #{네이버주문번호} placeholder에 매핑 — 실제 값은 상품주문번호(track 조회 기준)
+    네이버주문번호: input.productOrderId,
   }
   const message = applyTemplate(templateContent, normalizeTemplateVars(vars))
 

@@ -196,7 +196,7 @@ export async function sendOrderStatusNotification(id: string): Promise<void> {
       orderItemId: order.id,
       recipientPhoneNumber: order.receiverPhoneNumber,
       recipientName: order.receiverName,
-      naverOrderId: order.naverOrderId,
+      productOrderId: order.productOrderId,
     })
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)

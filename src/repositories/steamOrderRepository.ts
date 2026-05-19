@@ -29,7 +29,6 @@ type UpdateOrderItemInput = {
   giftCode?: string | null
   gameUrl?: string | null
   memo?: string | null
-  giftCompletedAt?: Date
   estimatedCompletedAt?: Date | null
   completedAt?: Date | null
 }

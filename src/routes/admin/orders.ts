@@ -9,7 +9,7 @@ import {
   manualReturnHandler,
   exportOrdersHandler,
   updateFriendLinksHandler,
-  markGiftCompletedHandler,
+  sendOrderStatusAlimtalkHandler,
 } from '../../controllers/steamOrderController'
 import { sendReviewGameHandler } from '../../controllers/reviewGameController'
 import { authMiddleware } from '../../middlewares/auth'
@@ -29,4 +29,7 @@ adminOrdersRouter.post('/:id/complete', asyncHandler(manualCompleteHandler))
 adminOrdersRouter.post('/:id/return', asyncHandler(manualReturnHandler))
 adminOrdersRouter.post('/:id/review-game', asyncHandler(sendReviewGameHandler))
 adminOrdersRouter.patch('/:id/friend-links', asyncHandler(updateFriendLinksHandler))
-adminOrdersRouter.post('/:id/gift-complete', asyncHandler(markGiftCompletedHandler))
+adminOrdersRouter.post(
+  '/:id/order-status-alimtalk',
+  asyncHandler(sendOrderStatusAlimtalkHandler),
+)

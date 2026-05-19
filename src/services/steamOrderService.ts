@@ -8,7 +8,12 @@ import {
   groupOrderCountsByStatus,
 } from '../repositories/steamOrderRepository'
 import { findAccountById, markAccountAsSent } from '../repositories/steamAccountRepository'
-import { isAlimtalkEnabled, sendGiftCompletedAlimtalk, sendOrderAlimtalk } from './alimtalkService'
+import {
+  isAlimtalkEnabled,
+  sendOrderAlimtalk,
+  sendOrderStatusAlimtalk,
+  sendOrderCompletedAlimtalk,
+} from './alimtalkService'
 import { getSystemSettings } from './systemSettingsService'
 import { sendDiscordAlert } from '../lib/discord'
 import { detectProductType } from '../utils/productType'
@@ -155,6 +160,27 @@ export async function retryOrder(id: string): Promise<void> {
   )
 }
 
+// 주문 진행상황 조회 안내 알림톡 수동 발송 (관리자 주문 상세 모달)
+export async function sendOrderStatusNotification(id: string): Promise<void> {
+  const order = await findOrderById(id)
+  if (!order) {
+    throw Object.assign(new Error('주문을 찾을 수 없습니다.'), { statusCode: 404 })
+  }
+
+  if (!order.receiverPhoneNumber) {
+    throw Object.assign(new Error('수신 전화번호가 없어 알림톡을 발송할 수 없습니다.'), {
+      statusCode: 400,
+    })
+  }
+
+  await sendOrderStatusAlimtalk({
+    orderItemId: order.id,
+    recipientPhoneNumber: order.receiverPhoneNumber,
+    recipientName: order.receiverName,
+    naverOrderId: order.naverOrderId,
+  })
+}
+
 type UpdateFriendLinksInput = {
   friendLink1?: string | null
   friendLink2?: string | null
@@ -183,40 +209,6 @@ export async function updateFriendLinks(
     gameUrl: input.gameUrl,
     memo: input.memo,
   })
-}
-
-export async function markGiftCompleted(id: string): Promise<void> {
-  const order = await findOrderById(id)
-  if (!order) {
-    throw Object.assign(new Error('주문을 찾을 수 없습니다.'), { statusCode: 404 })
-  }
-
-  if (detectProductType(order.productName) !== 'AA') {
-    throw Object.assign(new Error('AA(선물형) 주문만 사용 가능합니다.'), { statusCode: 400 })
-  }
-
-  if (order.giftCompletedAt) {
-    throw Object.assign(new Error('이미 선물 접수 완료 처리된 주문입니다.'), { statusCode: 400 })
-  }
-
-  if (!order.receiverPhoneNumber) {
-    throw Object.assign(new Error('수신자 전화번호가 없어 알림톡을 전송할 수 없습니다.'), {
-      statusCode: 400,
-    })
-  }
-
-  await sendGiftCompletedAlimtalk({
-    orderItemId: order.id,
-    recipientPhoneNumber: order.receiverPhoneNumber,
-    recipientName: order.receiverName,
-  })
-
-  await updateOrderItem(id, { giftCompletedAt: new Date() })
-
-  await sendDiscordAlert(
-    'order',
-    `🎁 선물 접수 완료\n상품: ${order.productName}\n수신자명: ${order.receiverName ?? '미확인'}\n수신번호: ${order.receiverPhoneNumber}`,
-  )
 }
 
 // 대기 → 진행중 수동 전환 (구매자 진행상황 페이지 2단계)
@@ -297,6 +289,24 @@ export async function manualCompleteOrder(id: string): Promise<void> {
       ? {}
       : { fulfillmentStatus: 'completed' as const }),
   })
+
+  // 대기/진행중 주문 완료 시 게임선물 완료 안내 알림톡 발송 (구매확정 주문은 제외).
+  // 발송 실패는 완료 처리를 막지 않는다 — 실패 사유는 DeliveryLog에 기록된다.
+  const phone = order.receiverPhoneNumber
+  if (
+    phone &&
+    (order.fulfillmentStatus === 'pending' || order.fulfillmentStatus === 'in_progress')
+  ) {
+    try {
+      await sendOrderCompletedAlimtalk({
+        orderItemId: order.id,
+        recipientPhoneNumber: phone,
+        recipientName: order.receiverName,
+      })
+    } catch (error) {
+      console.error('[ORDER_COMPLETE] 완료 알림톡 발송 실패', error)
+    }
+  }
 }
 
 // 구매자용 공개 진행상황 조회 — 노출 정보 최소화 (연락처·계정·금액 등 제외)

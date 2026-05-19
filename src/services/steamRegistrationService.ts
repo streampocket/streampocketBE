@@ -75,7 +75,7 @@ async function notifyDiscord(
     lines.push(`누락 항목: ${registration.missingFields.join(', ')}`)
   }
   try {
-    await sendDiscordAlert('order', `🎮 스팀 등록 접수\n${lines.join('\n')}`)
+    await sendDiscordAlert('chatbot', `🎮 스팀 등록 접수\n${lines.join('\n')}`)
   } catch {
     // 알림 실패는 무시
   }
@@ -86,7 +86,7 @@ async function notifyNonFormInquiry(rawMessage: string, botUserKey: string): Pro
   // Discord 메시지 길이 제한 대비 — 내용을 1000자로 제한한다.
   const content = rawMessage.length > 1000 ? `${rawMessage.slice(0, 1000)}…` : rawMessage
   try {
-    await sendDiscordAlert('order', `💬 챗봇 일반 문의\n사용자: ${botUserKey}\n내용: ${content}`)
+    await sendDiscordAlert('chatbot', `💬 챗봇 일반 문의\n사용자: ${botUserKey}\n내용: ${content}`)
   } catch {
     // 알림 실패는 무시
   }

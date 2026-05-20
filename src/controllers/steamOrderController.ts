@@ -15,21 +15,30 @@ import {
 } from '../services/steamOrderService'
 import { buildOrderExcelBuffer } from '../utils/excel'
 
+const fulfillmentStatusEnum = z.enum([
+  'pending',
+  'in_progress',
+  'completed',
+  'purchase_decided',
+  'manual_review',
+  'failed',
+  'returned',
+])
+
 const listQuerySchema = z.object({
-  status: z
-    .enum([
-      'pending',
-      'in_progress',
-      'completed',
-      'purchase_decided',
-      'manual_review',
-      'failed',
-      'returned',
-    ])
-    .optional(),
+  status: fulfillmentStatusEnum.optional(),
   from: z.string().datetime({ offset: true }).optional(),
   to: z.string().datetime({ offset: true }).optional(),
   receiverName: z.string().trim().optional(),
+  excludeStatuses: z
+    .string()
+    .optional()
+    .transform((s) => (s ? s.split(',').filter(Boolean) : undefined))
+    .pipe(z.array(fulfillmentStatusEnum).optional()),
+  excludeWithExpense: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((v) => v === 'true'),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 })
@@ -44,6 +53,8 @@ export async function getOrdersHandler(req: Request, res: Response): Promise<voi
       from,
       to,
       receiverName: query.receiverName,
+      excludeStatuses: query.excludeStatuses,
+      excludeWithExpense: query.excludeWithExpense,
       page: query.page,
       pageSize: query.pageSize,
     }),

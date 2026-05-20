@@ -39,6 +39,8 @@ type ListOrdersInput = {
   from?: Date
   to?: Date
   receiverName?: string
+  excludeStatuses?: FulfillmentStatus[]
+  excludeWithExpense?: boolean
   page: number
   pageSize: number
 }
@@ -76,6 +78,9 @@ type OrderItemWithRelations = SteamOrderItem & {
 export async function listOrders(input: ListOrdersInput): Promise<ListOrdersResult> {
   const where = {
     ...(input.status ? { fulfillmentStatus: input.status } : {}),
+    ...(input.excludeStatuses && input.excludeStatuses.length > 0
+      ? { fulfillmentStatus: { notIn: input.excludeStatuses } }
+      : {}),
     ...(input.from || input.to
       ? {
           createdAt: {
@@ -87,6 +92,7 @@ export async function listOrders(input: ListOrdersInput): Promise<ListOrdersResu
     ...(input.receiverName
       ? { receiverName: { contains: input.receiverName, mode: 'insensitive' as const } }
       : {}),
+    ...(input.excludeWithExpense ? { expense: null } : {}),
   }
   const [items, total] = await prisma.$transaction([
     prisma.steamOrderItem.findMany({

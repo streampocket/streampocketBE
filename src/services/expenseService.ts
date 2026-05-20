@@ -2,11 +2,13 @@ import { ExpenseCategory, ExpensePayer } from '@prisma/client'
 import {
   findExpenses,
   findExpenseById,
+  findExpenseBySteamOrderItemId,
   createExpense as createRepo,
   updateExpense as updateRepo,
   deleteExpense as deleteRepo,
   sumExpensesByCategory,
 } from '../repositories/expenseRepository'
+import { findOrderById } from '../repositories/steamOrderRepository'
 import { sendDiscordAlert } from '../lib/discord'
 
 const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
@@ -46,9 +48,14 @@ type CreateExpenseInput = {
   payer: ExpensePayer
   amount: number
   memo?: string
+  steamOrderItemId?: string | null
 }
 
 export async function createExpenseEntry(input: CreateExpenseInput) {
+  if (input.steamOrderItemId) {
+    await assertOrderAvailableForExpense(input.steamOrderItemId, null)
+  }
+
   const expense = await createRepo(input)
 
   const perPerson = Math.round(expense.amount / 2)
@@ -69,11 +76,29 @@ type UpdateExpenseInput = {
   payer?: ExpensePayer
   amount?: number
   memo?: string | null
+  steamOrderItemId?: string | null
 }
 
 export async function updateExpenseEntry(id: string, input: UpdateExpenseInput) {
   await getExpenseById(id)
+  if (input.steamOrderItemId) {
+    await assertOrderAvailableForExpense(input.steamOrderItemId, id)
+  }
   return updateRepo(id, input)
+}
+
+async function assertOrderAvailableForExpense(
+  steamOrderItemId: string,
+  currentExpenseId: string | null,
+) {
+  const order = await findOrderById(steamOrderItemId)
+  if (!order) {
+    throw Object.assign(new Error('연결할 주문을 찾을 수 없습니다.'), { statusCode: 404 })
+  }
+  const existing = await findExpenseBySteamOrderItemId(steamOrderItemId)
+  if (existing && existing.id !== currentExpenseId) {
+    throw Object.assign(new Error('이미 비용이 등록된 주문입니다.'), { statusCode: 409 })
+  }
 }
 
 export async function deleteExpenseEntry(id: string) {

@@ -27,6 +27,7 @@ const expenseBodySchema = z.object({
   payer: expensePayerSchema,
   amount: z.number().int().min(0),
   memo: z.string().max(500).optional(),
+  steamOrderItemId: z.string().uuid().nullable().optional(),
 })
 
 const expenseUpdateBodySchema = z.object({
@@ -35,6 +36,7 @@ const expenseUpdateBodySchema = z.object({
   payer: expensePayerSchema.optional(),
   amount: z.number().int().min(0).optional(),
   memo: z.string().max(500).nullable().optional(),
+  steamOrderItemId: z.string().uuid().nullable().optional(),
 })
 
 const idParamSchema = z.object({
@@ -114,6 +116,7 @@ export async function createExpenseHandler(req: Request, res: Response): Promise
     payer: body.payer,
     amount: body.amount,
     memo: body.memo,
+    steamOrderItemId: body.steamOrderItemId ?? null,
   })
   res.status(201).json({ data: expense })
 }

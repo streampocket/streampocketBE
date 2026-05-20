@@ -26,6 +26,8 @@ type ListOrdersInput = {
   from?: Date
   to?: Date
   receiverName?: string
+  excludeStatuses?: FulfillmentStatus[]
+  excludeWithExpense?: boolean
   page: number
   pageSize: number
 }

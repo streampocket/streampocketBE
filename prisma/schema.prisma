@@ -150,6 +150,7 @@ model SteamOrderItem {
   account              SteamAccount?     @relation(fields: [accountId], references: [id], onDelete: SetNull)
   deliveryLogs         DeliveryLog[]
   registrations        SteamRegistration[]
+  expense              Expense?
 
   @@index([fulfillmentStatus, createdAt])
   @@index([naverOrderId])
@@ -274,14 +275,16 @@ model ManualRevenue {
 }
 
 model Expense {
-  id        String          @id @default(uuid()) @db.Uuid
-  date      DateTime        @db.Timestamptz(6)
-  category  ExpenseCategory
-  payer     ExpensePayer    @default(song_donggeon)
-  amount    Int
-  memo      String?         @db.VarChar(500)
-  createdAt DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id               String          @id @default(uuid()) @db.Uuid
+  date             DateTime        @db.Timestamptz(6)
+  category         ExpenseCategory
+  payer            ExpensePayer    @default(song_donggeon)
+  amount           Int
+  memo             String?         @db.VarChar(500)
+  steamOrderItemId String?         @unique @map("steam_order_item_id") @db.Uuid
+  steamOrderItem   SteamOrderItem? @relation(fields: [steamOrderItemId], references: [id], onDelete: SetNull)
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@index([date])
   @@index([category, date])

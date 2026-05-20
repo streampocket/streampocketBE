@@ -43,7 +43,14 @@ type GetOrderCountsInput = {
 }
 
 export async function getOrders(input: ListOrdersInput) {
-  return listOrders(input)
+  const result = await listOrders(input)
+  return {
+    ...result,
+    items: result.items.map(({ expense, ...item }) => ({
+      ...item,
+      hasExpense: expense !== null,
+    })),
+  }
 }
 
 export async function getOrderCounts(input: GetOrderCountsInput) {

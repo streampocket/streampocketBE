@@ -1,6 +1,16 @@
 import { prisma } from '../lib/prisma'
 import { ExpenseCategory, ExpensePayer, Prisma } from '@prisma/client'
 
+const steamOrderItemInclude = {
+  select: {
+    id: true,
+    productOrderId: true,
+    productName: true,
+    receiverName: true,
+    paidAt: true,
+  },
+} as const
+
 type FindExpensesParams = {
   category?: ExpenseCategory
   startDate?: Date
@@ -27,6 +37,7 @@ export async function findExpenses(params: FindExpensesParams) {
       orderBy: { date: dateOrder },
       skip: (page - 1) * pageSize,
       take: pageSize,
+      include: { steamOrderItem: steamOrderItemInclude },
     }),
     prisma.expense.count({ where }),
   ])
@@ -35,7 +46,14 @@ export async function findExpenses(params: FindExpensesParams) {
 }
 
 export async function findExpenseById(id: string) {
-  return prisma.expense.findUnique({ where: { id } })
+  return prisma.expense.findUnique({
+    where: { id },
+    include: { steamOrderItem: steamOrderItemInclude },
+  })
+}
+
+export async function findExpenseBySteamOrderItemId(steamOrderItemId: string) {
+  return prisma.expense.findUnique({ where: { steamOrderItemId } })
 }
 
 type CreateExpenseData = {
@@ -44,10 +62,14 @@ type CreateExpenseData = {
   payer: ExpensePayer
   amount: number
   memo?: string
+  steamOrderItemId?: string | null
 }
 
 export async function createExpense(data: CreateExpenseData) {
-  return prisma.expense.create({ data })
+  return prisma.expense.create({
+    data,
+    include: { steamOrderItem: steamOrderItemInclude },
+  })
 }
 
 type UpdateExpenseData = {
@@ -56,10 +78,15 @@ type UpdateExpenseData = {
   payer?: ExpensePayer
   amount?: number
   memo?: string | null
+  steamOrderItemId?: string | null
 }
 
 export async function updateExpense(id: string, data: UpdateExpenseData) {
-  return prisma.expense.update({ where: { id }, data })
+  return prisma.expense.update({
+    where: { id },
+    data,
+    include: { steamOrderItem: steamOrderItemInclude },
+  })
 }
 
 export async function deleteExpense(id: string) {

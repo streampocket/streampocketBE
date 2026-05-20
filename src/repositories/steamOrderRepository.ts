@@ -43,8 +43,12 @@ type ListOrdersInput = {
   pageSize: number
 }
 
+type SteamOrderItemWithExpense = SteamOrderItem & {
+  expense: { id: string } | null
+}
+
 type ListOrdersResult = {
-  items: SteamOrderItem[]
+  items: SteamOrderItemWithExpense[]
   total: number
 }
 
@@ -90,6 +94,7 @@ export async function listOrders(input: ListOrdersInput): Promise<ListOrdersResu
       orderBy: [{ paidAt: 'desc' }, { createdAt: 'desc' }],
       skip: (input.page - 1) * input.pageSize,
       take: input.pageSize,
+      include: { expense: { select: { id: true } } },
     }),
     prisma.steamOrderItem.count({ where }),
   ])

@@ -169,10 +169,15 @@ export async function retryOrder(id: string): Promise<void> {
   )
 }
 
+// 알림톡 발송 완료 Discord 알림 강조색 (종류별 구분)
+const ALIMTALK_GIFT_COMPLETE_COLOR = 0xeb459e // 분홍 — 게임선물 완료
+const ALIMTALK_ORDER_STATUS_COLOR = 0x00b0f4 // 하늘색 — 주문상황
+
 // 알림톡 발송 결과 Discord 알림 — best-effort (실패해도 본 동작에 영향 없음)
-async function notifyAlimtalkDiscord(message: string): Promise<void> {
+// color 미전달 시 alimtalk 채널 기본색(노랑)으로 표시된다 (실패 알림 등).
+async function notifyAlimtalkDiscord(message: string, color?: number): Promise<void> {
   try {
-    await sendDiscordAlert('alimtalk', message)
+    await sendDiscordAlert('alimtalk', message, { color })
   } catch (error) {
     console.error('[ALIMTALK_DISCORD] Discord 알림 전송 실패', error)
   }
@@ -219,7 +224,8 @@ export async function sendOrderStatusNotification(id: string): Promise<void> {
   await updateOrderItem(order.id, { orderStatusAlimtalkSentAt: new Date() })
 
   await notifyAlimtalkDiscord(
-    `📨 주문상황 알림톡 발송 완료\n상품: ${order.productName}\n수신: ${recipientLabel}`,
+    `📦 주문상황 알림톡 발송 완료\n상품: ${order.productName}\n수신: ${recipientLabel}`,
+    ALIMTALK_ORDER_STATUS_COLOR,
   )
 }
 
@@ -347,7 +353,8 @@ export async function manualCompleteOrder(id: string): Promise<void> {
         recipientName: order.receiverName,
       })
       await notifyAlimtalkDiscord(
-        `📨 게임선물 완료 알림톡 발송 완료\n상품: ${order.productName}\n수신: ${recipientLabel}`,
+        `🎉 게임선물 완료 알림톡 발송 완료\n상품: ${order.productName}\n수신: ${recipientLabel}`,
+        ALIMTALK_GIFT_COMPLETE_COLOR,
       )
     } catch (error) {
       console.error('[ORDER_COMPLETE] 완료 알림톡 발송 실패', error)

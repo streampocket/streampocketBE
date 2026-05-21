@@ -183,11 +183,11 @@ export async function findOrderByProductOrderId(
 
 // zqbg 발송상태 폴링 대상: 진행중 + giftCode(zqbg 주문번호) 보유 주문
 export async function findInProgressGiftOrders(): Promise<
-  { id: string; giftCode: string | null; productName: string }[]
+  { id: string; giftCode: string | null; productName: string; receiverName: string | null }[]
 > {
   return prisma.steamOrderItem.findMany({
     where: { fulfillmentStatus: 'in_progress', giftCode: { not: null } },
-    select: { id: true, giftCode: true, productName: true },
+    select: { id: true, giftCode: true, productName: true, receiverName: true },
   })
 }
 

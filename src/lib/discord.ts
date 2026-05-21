@@ -33,11 +33,13 @@ function getWebhookUrl(channel: DiscordChannel): string | undefined {
 export async function sendDiscordAlert(
   channel: DiscordChannel,
   message: string,
+  options?: { color?: number },
 ): Promise<void> {
   const url = getWebhookUrl(channel)
   if (!url) return
 
-  const { title, color } = CHANNEL_META[channel]
+  const { title, color: defaultColor } = CHANNEL_META[channel]
+  const color = options?.color ?? defaultColor
 
   await fetch(url, {
     method: 'POST',

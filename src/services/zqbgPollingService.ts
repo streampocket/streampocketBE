@@ -17,7 +17,15 @@ export type ZqbgPollResult = {
   skipped: boolean // 이전 회차 진행 중이라 건너뛴 경우
 }
 
-type GiftOrder = { id: string; giftCode: string | null; productName: string }
+type GiftOrder = {
+  id: string
+  giftCode: string | null
+  productName: string
+  receiverName: string | null
+}
+
+// 발송완료 감지 → 자동 완료 알림 강조색 (밝은 파랑)
+const DISCORD_BLUE = 0x3498db
 
 // 안전 알림 중복 방지용 인메모리 상태 (서버 재시작 시 초기화 — 안전 알림 한정이라 허용)
 type PollState = {
@@ -123,7 +131,8 @@ async function completeOrder(order: GiftOrder): Promise<boolean> {
     await manualCompleteOrder(order.id)
     await sendDiscordAlert(
       'order',
-      `🤖 zqbg 발송완료 감지 → 자동 완료 처리\n상품: ${order.productName}\n주문ID: ${order.id}`,
+      `🤖 zqbg 발송완료 감지 → 자동 완료 처리\n상품: ${order.productName}\n수신자: ${order.receiverName ?? '-'}`,
+      { color: DISCORD_BLUE },
     )
     return true
   } catch (error) {

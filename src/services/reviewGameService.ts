@@ -9,6 +9,9 @@ export type SendReviewGameResult = {
   count: number
 }
 
+// 리뷰게임 발송 완료 Discord 알림 강조색 (보라 — 다른 주문 알림과 구분)
+const REVIEW_GAME_COLOR = 0x9b59b6
+
 export async function sendReviewGame(orderItemId: string): Promise<SendReviewGameResult> {
   const order = await findOrderById(orderItemId)
   if (!order) {
@@ -55,7 +58,8 @@ export async function sendReviewGame(orderItemId: string): Promise<SendReviewGam
 
     await sendDiscordAlert(
       'order',
-      `🎮 리뷰게임 발송 완료\n상품: ${order.productName}\n코드 ${reviewGameCount}개 발송\n수신자: ${order.receiverPhoneNumber}`,
+      `🎮 리뷰게임 발송 완료\n상품: ${order.productName}\n코드 ${reviewGameCount}개 발송\n수신자: ${order.receiverName ?? '미확인'} (${order.receiverPhoneNumber})`,
+      { color: REVIEW_GAME_COLOR },
     ).catch(() => {})
 
     return { count: reviewGameCount }

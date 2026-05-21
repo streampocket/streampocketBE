@@ -5,6 +5,7 @@ import {
   runOrderPolling,
 } from '../services/steamFulfillmentService'
 import { naverOrderSource } from '../services/platform/naverOrderSource'
+import { runZqbgGiftStatusPolling } from '../services/zqbgPollingService'
 
 const BACKUP_SCAN_HOURS_BACK = 6
 
@@ -21,4 +22,9 @@ export async function backupScanOrders(_req: Request, res: Response): Promise<vo
 export async function dailyReconcileOrders(_req: Request, res: Response): Promise<void> {
   const result = await runDailyOrderReconciliation(naverOrderSource)
   res.json({ message: '일일 대조 완료', ...result })
+}
+
+export async function zqbgPollOrders(_req: Request, res: Response): Promise<void> {
+  const result = await runZqbgGiftStatusPolling()
+  res.json({ message: 'zqbg 발송상태 폴링 완료', ...result })
 }

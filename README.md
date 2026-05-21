@@ -87,6 +87,9 @@ docker compose restart be
 | `LOW_STOCK_THRESHOLD` | 재고 부족 알림 임계치 (기본 2) |
 | `ORDER_POLL_INTERVAL_SECONDS` | 주문 폴링 간격 초 (기본 300) |
 | `MAX_RETRY_COUNT` | 최대 재시도 횟수 (기본 5) |
+| `ZQBG_API_BASE_URL` | zqbg 발송상태 조회 API 베이스 URL (기본 `https://new.zqbg.cn`) |
+| `ZQBG_POLL_INTERVAL_SECONDS` | AA 선물주문 자동완료 폴링 간격 초 (기본 120) |
+| `ZQBG_STALE_ALERT_HOURS` | 진행중 후 발송완료 미감지 시 Discord 경고까지의 시간(시간, 기본 6) |
 
 > 프로덕션 환경변수는 EC2 `/app/.env`에서 직접 관리. 자세한 내용은 루트의 `INFRA.md` 참고.
 

@@ -6,6 +6,7 @@ import {
   runOrderPolling,
 } from './services/steamFulfillmentService'
 import { naverOrderSource } from './services/platform/naverOrderSource'
+import { runZqbgGiftStatusPolling } from './services/zqbgPollingService'
 import { generateWeeklySettlement } from './services/settlementService'
 import { expireOldParties } from './services/own/ownProductService'
 import { sendDailyExpenseSummary } from './services/expenseSummaryService'
@@ -15,6 +16,7 @@ const PORT = Number(process.env.PORT ?? 4000)
 const POLL_INTERVAL_MS = Number(process.env['ORDER_POLL_INTERVAL_SECONDS'] ?? 300) * 1000
 const BACKUP_SCAN_INTERVAL_MS = 15 * 60 * 1000
 const BACKUP_SCAN_HOURS_BACK = 6
+const ZQBG_POLL_INTERVAL_MS = Number(process.env['ZQBG_POLL_INTERVAL_SECONDS'] ?? 120) * 1000
 
 app.listen(PORT, () => {
   console.log(`서버 실행 중: http://localhost:${PORT}`)
@@ -35,6 +37,13 @@ app.listen(PORT, () => {
   }, BACKUP_SCAN_INTERVAL_MS)
 
   console.log(`주문 보조 스캔 시작: ${BACKUP_SCAN_INTERVAL_MS / 1000}초 간격`)
+
+  // AA 선물주문 자동완료 — zqbg.cn 발송상태 폴링 (기본 2분 주기)
+  setInterval(() => {
+    runZqbgGiftStatusPolling().catch(console.error)
+  }, ZQBG_POLL_INTERVAL_MS)
+
+  console.log(`zqbg 선물 발송상태 폴링 시작: ${ZQBG_POLL_INTERVAL_MS / 1000}초 간격`)
 
   // 일일 주문 누락 대조 스케줄러 (매일 09:00 KST)
   let lastReconcileDate = ''

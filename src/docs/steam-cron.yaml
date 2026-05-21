@@ -25,6 +25,18 @@ paths:
         '200':
           description: 대조 완료
 
+  /steam/cron/zqbg-poll:
+    post:
+      summary: zqbg 발송상태 폴링 수동 실행 (AA 선물주문 자동완료)
+      description: |
+        진행중(in_progress) + giftCode(zqbg 주문번호) 보유 AA 주문을 zqbg.cn 발송상태 조회 API로 점검하여,
+        발송완료(status 6)면 자동으로 완료 처리하고 완료 알림톡을 발송한다. status 5/7은 진행중 유지,
+        미지정 status·장시간 미완료는 Discord 알림 후 진행중 유지. 자동 스케줄러(기본 5분)와 동일 로직의 수동 트리거.
+      tags: [SteamCron]
+      responses:
+        '200':
+          description: 폴링 완료 (checked/completed/pending/abnormal/failed/skipped 반환)
+
   /steam/cron/weekly-settlement:
     post:
       summary: 주간 정산 실행

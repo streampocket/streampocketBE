@@ -1,4 +1,4 @@
-import { FulfillmentStatus } from '@prisma/client'
+import { FulfillmentStatus, OrderSource } from '@prisma/client'
 import {
   listOrders,
   exportOrders,
@@ -6,6 +6,8 @@ import {
   findOrderByProductOrderId,
   updateOrderItem,
   groupOrderCountsByStatus,
+  createManualOrderItem,
+  generateManualProductOrderId,
 } from '../repositories/steamOrderRepository'
 import { findAccountById, markAccountAsSent } from '../repositories/steamAccountRepository'
 import {
@@ -28,6 +30,7 @@ type ListOrdersInput = {
   receiverName?: string
   excludeStatuses?: FulfillmentStatus[]
   excludeWithExpense?: boolean
+  source?: OrderSource
   page: number
   pageSize: number
 }
@@ -36,12 +39,21 @@ type ExportOrdersInput = {
   status?: FulfillmentStatus
   from?: Date
   to?: Date
+  source?: OrderSource
 }
 
 type GetOrderCountsInput = {
   from?: Date
   to?: Date
   receiverName?: string
+  source?: OrderSource
+}
+
+// 수동 주문 생성 입력 — 상품주문번호·상태(대기)·결제일시(생성 시각)는 서버가 자동 설정
+type CreateManualOrderInput = {
+  productName: string
+  receiverName: string
+  netProfit: number
 }
 
 export async function getOrders(input: ListOrdersInput) {
@@ -76,6 +88,27 @@ export async function getOrderCounts(input: GetOrderCountsInput) {
 
 export async function exportOrdersForExcel(input: ExportOrdersInput) {
   return exportOrders(input)
+}
+
+// 수동 주문 생성 — 상품주문번호 자동생성(MAN_), 상태=대기·결제일시=생성 시각 자동, Discord [수동] 알림
+export async function createManualOrder(input: CreateManualOrderInput) {
+  const productOrderId = await generateManualProductOrderId()
+  const order = await createManualOrderItem({
+    productOrderId,
+    naverOrderId: productOrderId,
+    productName: input.productName,
+    receiverName: input.receiverName,
+    netProfit: input.netProfit,
+    fulfillmentStatus: 'pending',
+    paidAt: new Date(),
+  })
+
+  await sendDiscordAlert(
+    'order',
+    `🔔 신규 주문 등록 [수동]\n상품: ${order.productName}\n수신자: ${order.receiverName ?? '-'}\n순수익: ${input.netProfit.toLocaleString('ko-KR')}원\n주문: ${order.productOrderId}`,
+  ).catch(() => {})
+
+  return order
 }
 
 export async function getOrderDetail(id: string) {
@@ -246,7 +279,8 @@ export async function updateFriendLinks(
     throw Object.assign(new Error('주문을 찾을 수 없습니다.'), { statusCode: 404 })
   }
 
-  if (detectProductType(order.productName) !== 'AA') {
+  // 수동 주문은 운영자가 자유 입력한 상품명을 쓰므로 AA 패턴 검사를 면제한다.
+  if (order.source !== 'manual' && detectProductType(order.productName) !== 'AA') {
     throw Object.assign(new Error('AA(선물형) 주문만 사용 가능합니다.'), { statusCode: 400 })
   }
 
@@ -411,8 +445,9 @@ export async function manualReturnOrder(id: string): Promise<void> {
     returnedAt: new Date(),
   })
 
+  const sourceTag = order.source === 'manual' ? ' [수동]' : ''
   await sendDiscordAlert(
     'order',
-    `📦 수동 반품 처리\n주문: ${order.productOrderId}\n상품: ${order.productName}`,
+    `📦 수동 반품 처리${sourceTag}\n주문: ${order.productOrderId}\n상품: ${order.productName}`,
   )
 }

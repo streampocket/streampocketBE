@@ -1,3 +1,4 @@
+import { OrderSource } from '@prisma/client'
 import { findInProgressGiftOrders } from '../repositories/steamOrderRepository'
 import { manualCompleteOrder } from './steamOrderService'
 import { checkZqbgOrderStatus, ZQBG_STATUS } from '../lib/zqbgClient'
@@ -22,6 +23,7 @@ type GiftOrder = {
   giftCode: string | null
   productName: string
   receiverName: string | null
+  source: OrderSource
 }
 
 // 발송완료 감지 → 자동 완료 알림 강조색 (밝은 파랑)
@@ -66,8 +68,10 @@ export async function runZqbgGiftStatusPolling(): Promise<ZqbgPollResult> {
 
     for (const order of orders) {
       const orderNo = order.giftCode?.trim()
-      // giftCode 없거나 AA 주문이 아니면 대상 제외 (DB 직접 입력 등 방어)
-      if (!orderNo || detectProductType(order.productName) !== 'AA') continue
+      // giftCode 없으면 제외. 네이버 주문은 AA(선물형)만 대상,
+      // 수동 주문은 운영자가 giftCode를 직접 넣은 경우 상품명 무관하게 대상에 포함한다.
+      if (!orderNo) continue
+      if (order.source !== 'manual' && detectProductType(order.productName) !== 'AA') continue
 
       seenIds.add(order.id)
       result.checked += 1
@@ -129,9 +133,10 @@ function getState(orderId: string): PollState {
 async function completeOrder(order: GiftOrder): Promise<boolean> {
   try {
     await manualCompleteOrder(order.id)
+    const sourceTag = order.source === 'manual' ? ' [수동]' : ''
     await sendDiscordAlert(
       'order',
-      `🤖 zqbg 발송완료 감지 → 자동 완료 처리\n상품: ${order.productName}\n수신자: ${order.receiverName ?? '-'}`,
+      `🤖 zqbg 발송완료 감지 → 자동 완료 처리${sourceTag}\n상품: ${order.productName}\n수신자: ${order.receiverName ?? '-'}`,
       { color: DISCORD_BLUE },
     )
     return true

@@ -12,6 +12,7 @@ import {
   exportOrdersForExcel,
   updateFriendLinks,
   sendOrderStatusNotification,
+  createManualOrder,
 } from '../services/steamOrderService'
 import { buildOrderExcelBuffer } from '../utils/excel'
 
@@ -24,6 +25,8 @@ const fulfillmentStatusEnum = z.enum([
   'failed',
   'returned',
 ])
+
+const orderSourceEnum = z.enum(['naver', 'manual'])
 
 const listQuerySchema = z.object({
   status: fulfillmentStatusEnum.optional(),
@@ -39,6 +42,7 @@ const listQuerySchema = z.object({
     .enum(['true', 'false'])
     .optional()
     .transform((v) => v === 'true'),
+  source: orderSourceEnum.optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 })
@@ -55,10 +59,11 @@ export async function getOrdersHandler(req: Request, res: Response): Promise<voi
       receiverName: query.receiverName,
       excludeStatuses: query.excludeStatuses,
       excludeWithExpense: query.excludeWithExpense,
+      source: query.source,
       page: query.page,
       pageSize: query.pageSize,
     }),
-    getOrderCounts({ from, to, receiverName: query.receiverName }),
+    getOrderCounts({ from, to, receiverName: query.receiverName, source: query.source }),
   ])
   res.json({
     data: result.items,
@@ -80,19 +85,10 @@ export async function getOrderDetailHandler(
 }
 
 const exportQuerySchema = z.object({
-  status: z
-    .enum([
-      'pending',
-      'in_progress',
-      'completed',
-      'purchase_decided',
-      'manual_review',
-      'failed',
-      'returned',
-    ])
-    .optional(),
+  status: fulfillmentStatusEnum.optional(),
   from: z.string().datetime({ offset: true }).optional(),
   to: z.string().datetime({ offset: true }).optional(),
+  source: orderSourceEnum.optional(),
 })
 
 export async function exportOrdersHandler(req: Request, res: Response): Promise<void> {
@@ -101,6 +97,7 @@ export async function exportOrdersHandler(req: Request, res: Response): Promise<
     status: query.status,
     from: query.from ? new Date(query.from) : undefined,
     to: query.to ? new Date(query.to) : undefined,
+    source: query.source,
   })
   const buffer = buildOrderExcelBuffer(orders)
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, '')
@@ -179,4 +176,21 @@ export async function sendOrderStatusAlimtalkHandler(
   const { id } = req.params
   await sendOrderStatusNotification(id)
   res.json({ message: '주문상황 알림톡이 발송되었습니다.' })
+}
+
+// 상태(대기 고정)·결제일시(생성 시각)는 서버가 자동 설정한다.
+const createManualOrderBodySchema = z.object({
+  productName: z.string().trim().min(1).max(255),
+  receiverName: z.string().trim().min(1).max(100),
+  netProfit: z.number().int().min(0),
+})
+
+export async function createManualOrderHandler(req: Request, res: Response): Promise<void> {
+  const body = createManualOrderBodySchema.parse(req.body)
+  const order = await createManualOrder({
+    productName: body.productName,
+    receiverName: body.receiverName,
+    netProfit: body.netProfit,
+  })
+  res.status(201).json({ data: order })
 }

@@ -49,7 +49,7 @@ type RevenueSummary = {
 }
 
 export async function getRevenueSummary(startDate: Date, endDate: Date): Promise<RevenueSummary> {
-  const [decidedTotals, pendingTotals, alimtalkCount, expenseSums, manualRevenueTotal] =
+  const [decidedTotals, pendingTotals, manualOrderTotals, alimtalkCount, expenseSums, manualRevenueTotal] =
     await Promise.all([
       prisma.$queryRaw<{ revenue: bigint; settlement: bigint; commission: bigint }[]>`
         SELECT
@@ -63,7 +63,8 @@ export async function getRevenueSummary(startDate: Date, endDate: Date): Promise
                  THEN COALESCE(payment_amount, unit_price) - settlement_amount ELSE 0 END
           ), 0)::bigint AS commission
         FROM steam_order_items
-        WHERE fulfillment_status IN ('completed', 'purchase_decided')
+        WHERE source = 'naver'
+          AND fulfillment_status IN ('completed', 'purchase_decided')
           AND decision_date IS NOT NULL
           AND decision_date >= ${startDate}
           AND decision_date <= ${endDate}
@@ -71,8 +72,18 @@ export async function getRevenueSummary(startDate: Date, endDate: Date): Promise
       prisma.$queryRaw<{ revenue: bigint }[]>`
         SELECT COALESCE(SUM(COALESCE(payment_amount, unit_price)), 0)::bigint AS revenue
         FROM steam_order_items
-        WHERE fulfillment_status = 'completed'
+        WHERE source = 'naver'
+          AND fulfillment_status = 'completed'
           AND decision_date IS NULL
+          AND paid_at >= ${startDate}
+          AND paid_at <= ${endDate}
+      `,
+      // 수동 주문 순수익 합산 — 반품 제외, paid_at 기준 (settlement_amount = 입력한 순수익)
+      prisma.$queryRaw<{ profit: bigint }[]>`
+        SELECT COALESCE(SUM(settlement_amount), 0)::bigint AS profit
+        FROM steam_order_items
+        WHERE source = 'manual'
+          AND fulfillment_status <> 'returned'
           AND paid_at >= ${startDate}
           AND paid_at <= ${endDate}
       `,
@@ -90,9 +101,11 @@ export async function getRevenueSummary(startDate: Date, endDate: Date): Promise
   const naverSettlement = Number(decidedTotals[0]?.settlement ?? 0n)
   const naverCommission = Number(decidedTotals[0]?.commission ?? 0n)
   const pendingSettlement = Number(pendingTotals[0]?.revenue ?? 0n)
+  const manualOrderProfit = Number(manualOrderTotals[0]?.profit ?? 0n)
 
-  const totalRevenue = naverRevenue + manualRevenueTotal
-  const totalSettlement = naverSettlement + manualRevenueTotal
+  // 수동 주문 순수익은 판매금=정산금=순수익으로 가산 → netProfit/인당수익에 반영
+  const totalRevenue = naverRevenue + manualRevenueTotal + manualOrderProfit
+  const totalSettlement = naverSettlement + manualRevenueTotal + manualOrderProfit
 
   const manualCosts =
     expenseSums.gamePurchase + expenseSums.countryChange + expenseSums.reviewGame + expenseSums.other
@@ -122,18 +135,19 @@ export async function getDashboardStats(period: Period = 'today') {
     pendingDecisionCount,
     returnedCount,
   ] = await Promise.all([
-    prisma.steamOrderItem.count(),
+    prisma.steamOrderItem.count({ where: { source: 'naver' } }),
     prisma.steamOrderItem.count({
-      where: { decisionDate: { not: null } },
+      where: { source: 'naver', decisionDate: { not: null } },
     }),
     prisma.steamOrderItem.count({
       where: {
+        source: 'naver',
         fulfillmentStatus: { in: ['pending', 'in_progress', 'completed'] },
         decisionDate: null,
       },
     }),
     prisma.steamOrderItem.count({
-      where: { fulfillmentStatus: 'returned' },
+      where: { source: 'naver', fulfillmentStatus: 'returned' },
     }),
   ])
 
@@ -166,7 +180,8 @@ export async function getRevenueChart(days: number) {
              THEN settlement_amount ELSE 0 END
       ), 0) AS total_settlement
     FROM steam_order_items
-    WHERE fulfillment_status IN ('completed', 'purchase_decided')
+    WHERE source = 'naver'
+      AND fulfillment_status IN ('completed', 'purchase_decided')
       AND decision_date IS NOT NULL
       AND decision_date >= ${startDate}
     GROUP BY DATE_TRUNC('day', decision_date)
@@ -222,6 +237,7 @@ export async function getProductRanking() {
   const rankings = await prisma.steamOrderItem.groupBy({
     by: ['productName'],
     where: {
+      source: 'naver',
       fulfillmentStatus: { not: 'returned' },
     },
     _count: { id: true },
@@ -243,7 +259,8 @@ export async function getAverageDecisionDays() {
       EXTRACT(EPOCH FROM (decision_date - paid_at)) / 86400.0
     ) AS avg_days
     FROM steam_order_items
-    WHERE decision_date IS NOT NULL
+    WHERE source = 'naver'
+      AND decision_date IS NOT NULL
       AND paid_at IS NOT NULL
   `
 

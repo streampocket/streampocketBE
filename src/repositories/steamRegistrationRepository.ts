@@ -126,6 +126,7 @@ export async function findOrderItemsForMatch(
 ): Promise<SteamOrderItem[]> {
   return prisma.steamOrderItem.findMany({
     where: {
+      source: 'naver', // 스팀 등록 접수는 네이버 챗봇 플로우 — 수동 주문은 매칭 대상 제외
       receiverName: { equals: buyerName, mode: 'insensitive' as const },
       productName: { contains: gameName, mode: 'insensitive' as const },
       fulfillmentStatus: { in: [FulfillmentStatus.pending, FulfillmentStatus.in_progress] },

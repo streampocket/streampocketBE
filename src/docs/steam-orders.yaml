@@ -22,6 +22,12 @@ paths:
             type: string
             format: date-time
         - in: query
+          name: source
+          description: 출처 필터 (미지정 시 네이버+수동 전체)
+          schema:
+            type: string
+            enum: [naver, manual]
+        - in: query
           name: page
           schema:
             type: integer
@@ -34,6 +40,42 @@ paths:
       responses:
         '200':
           description: 주문 목록
+
+  /steam/admin/orders/manual:
+    post:
+      summary: 수동 주문 생성
+      description: >-
+        네이버 외 경로로 발생한 주문을 관리자가 직접 등록한다. 상품주문번호는 서버가
+        `MAN_<타임스탬프>_<랜덤>` 형식으로 자동생성하며(네이버 번호와 충돌 없음),
+        상태는 `pending`(대기), 결제일시는 생성 시각으로 자동 설정된다(이후 상세 모달에서 변경).
+        입력한 순수익(`netProfit`)은 `unitPrice`/`paymentAmount`/`settlementAmount`에
+        동일 저장되어 매출 순수익·인당 수익에 반영된다. `source`는 `manual`로 저장된다.
+      tags: [SteamOrders]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productName, receiverName, netProfit]
+              properties:
+                productName:
+                  type: string
+                  maxLength: 255
+                receiverName:
+                  type: string
+                  maxLength: 100
+                netProfit:
+                  type: integer
+                  minimum: 0
+                  description: 순수익(원)
+      responses:
+        '201':
+          description: 생성된 수동 주문
+        '400':
+          description: 입력값 검증 실패
 
   /steam/admin/orders/{id}:
     get:

@@ -6,7 +6,7 @@ const BATCH_SIZE = 50
 
 export async function backfillPaymentAmounts(): Promise<{ updated: number; skipped: number }> {
   const targets = await prisma.steamOrderItem.findMany({
-    where: { paymentAmount: null },
+    where: { source: 'naver', paymentAmount: null },
     select: { id: true, productOrderId: true },
     orderBy: { createdAt: 'asc' },
   })
@@ -49,6 +49,7 @@ export async function backfillPaymentAmounts(): Promise<{ updated: number; skipp
 export async function backfillDecisionDates(): Promise<{ updated: number; skipped: number }> {
   const pendingOrders = await prisma.steamOrderItem.findMany({
     where: {
+      source: 'naver',
       fulfillmentStatus: { in: ['pending', 'in_progress', 'completed'] },
       decisionDate: null,
     },

@@ -10,6 +10,7 @@ import {
   exportOrdersHandler,
   updateFriendLinksHandler,
   sendOrderStatusAlimtalkHandler,
+  createManualOrderHandler,
 } from '../../controllers/steamOrderController'
 import { sendReviewGameHandler } from '../../controllers/reviewGameController'
 import { authMiddleware } from '../../middlewares/auth'
@@ -21,6 +22,7 @@ adminOrdersRouter.use(authMiddleware)
 
 adminOrdersRouter.get('/', asyncHandler(getOrdersHandler))
 adminOrdersRouter.get('/export', asyncHandler(exportOrdersHandler))
+adminOrdersRouter.post('/manual', asyncHandler(createManualOrderHandler))
 adminOrdersRouter.get('/:id', asyncHandler(getOrderDetailHandler))
 adminOrdersRouter.post('/:id/retry', asyncHandler(retryOrderHandler))
 adminOrdersRouter.post('/:id/in-progress', asyncHandler(markInProgressHandler))

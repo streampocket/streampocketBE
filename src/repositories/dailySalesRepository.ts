@@ -2,7 +2,7 @@ import { prisma } from '../lib/prisma'
 
 export async function countOrdersPaidOn(start: Date, end: Date): Promise<number> {
   return prisma.steamOrderItem.count({
-    where: { paidAt: { gte: start, lte: end } },
+    where: { source: 'naver', paidAt: { gte: start, lte: end } },
   })
 }
 
@@ -10,6 +10,7 @@ export async function countOrdersPaidOn(start: Date, end: Date): Promise<number>
 export async function countOrdersDecidedOn(start: Date, end: Date): Promise<number> {
   return prisma.steamOrderItem.count({
     where: {
+      source: 'naver',
       paidAt: { gte: start, lte: end },
       decisionDate: { not: null },
     },
@@ -20,6 +21,7 @@ export async function countOrdersDecidedOn(start: Date, end: Date): Promise<numb
 export async function countOrdersReturnedOn(start: Date, end: Date): Promise<number> {
   return prisma.steamOrderItem.count({
     where: {
+      source: 'naver',
       paidAt: { gte: start, lte: end },
       returnedAt: { not: null },
     },
@@ -31,6 +33,7 @@ export async function sumPaymentAmountPaidOn(start: Date, end: Date): Promise<nu
   const result = await prisma.steamOrderItem.aggregate({
     _sum: { paymentAmount: true },
     where: {
+      source: 'naver',
       paidAt: { gte: start, lte: end },
       returnedAt: null,
     },

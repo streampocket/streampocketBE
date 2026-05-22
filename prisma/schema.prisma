@@ -31,6 +31,12 @@ enum FulfillmentStatus {
   returned
 }
 
+// 주문 출처 — naver: 스마트스토어 자동 감지 / manual: 관리자 수동 등록
+enum OrderSource {
+  naver
+  manual
+}
+
 enum DeliveryChannel {
   alimtalk
 }
@@ -122,6 +128,7 @@ model SteamOrderItem {
   id                   String            @id @default(uuid()) @db.Uuid
   productOrderId       String            @unique @map("product_order_id") @db.VarChar(100)
   naverOrderId         String            @map("naver_order_id") @db.VarChar(100)
+  source               OrderSource       @default(naver) @map("source")
   productId            String?           @map("product_id") @db.Uuid
   accountId            String?           @map("account_id") @db.Uuid
   productName          String            @map("product_name") @db.VarChar(255)
@@ -154,6 +161,7 @@ model SteamOrderItem {
 
   @@index([fulfillmentStatus, createdAt])
   @@index([naverOrderId])
+  @@index([source, fulfillmentStatus, createdAt])
   @@map("steam_order_items")
 }
 

@@ -363,13 +363,15 @@ export async function manualCompleteOrder(id: string): Promise<void> {
     )
   }
 
-  // 구매확정 주문은 뱃지를 그대로 두고(구매확정) 발송완료 시각만 기록한다.
-  // 대기/진행중 주문은 completed로 전환한다.
+  // 수동 주문은 '구매확정', 네이버 주문은 '완료'를 종료 상태로 사용한다.
+  // 이미 구매확정(네이버 구매자 확정) 주문은 뱃지를 그대로 두고 발송완료 시각만 기록한다.
+  const completedStatus: FulfillmentStatus =
+    order.source === 'manual' ? 'purchase_decided' : 'completed'
   await updateOrderItem(order.id, {
     completedAt: new Date(),
     ...(order.fulfillmentStatus === 'purchase_decided'
       ? {}
-      : { fulfillmentStatus: 'completed' as const }),
+      : { fulfillmentStatus: completedStatus }),
   })
 
   // 대기/진행중 주문 완료 시 게임선물 완료 안내 알림톡 발송 (구매확정 주문은 제외).

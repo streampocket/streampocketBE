@@ -286,6 +286,22 @@ export async function deleteOrderItemById(id: string): Promise<void> {
   await prisma.steamOrderItem.delete({ where: { id } })
 }
 
+// 일일 종합 리포트용 — 당일 결제된 수동 주문(반품 제외)을 결제순으로 반환
+export async function listManualOrdersPaidOn(
+  start: Date,
+  end: Date,
+): Promise<{ productName: string; settlementAmount: number | null }[]> {
+  return prisma.steamOrderItem.findMany({
+    where: {
+      source: 'manual',
+      paidAt: { gte: start, lte: end },
+      returnedAt: null,
+    },
+    select: { productName: true, settlementAmount: true },
+    orderBy: { paidAt: 'asc' },
+  })
+}
+
 export async function updateReviewGameSentAt(id: string): Promise<SteamOrderItem> {
   return prisma.steamOrderItem.update({
     where: { id },

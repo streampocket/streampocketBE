@@ -13,6 +13,11 @@ import {
   createManualOrderHandler,
 } from '../../controllers/steamOrderController'
 import { sendReviewGameHandler } from '../../controllers/reviewGameController'
+import {
+  autoFriendLinkHandler,
+  submitGuardCodeHandler,
+  pollGuardHandler,
+} from '../../controllers/steamFriendLinkController'
 import { authMiddleware } from '../../middlewares/auth'
 import { asyncHandler } from '../../utils/asyncHandler'
 
@@ -31,6 +36,12 @@ adminOrdersRouter.post('/:id/complete', asyncHandler(manualCompleteHandler))
 adminOrdersRouter.post('/:id/return', asyncHandler(manualReturnHandler))
 adminOrdersRouter.post('/:id/review-game', asyncHandler(sendReviewGameHandler))
 adminOrdersRouter.patch('/:id/friend-links', asyncHandler(updateFriendLinksHandler))
+adminOrdersRouter.post('/:id/auto-friend-link', asyncHandler(autoFriendLinkHandler))
+adminOrdersRouter.post(
+  '/:id/auto-friend-link/guard-code',
+  asyncHandler(submitGuardCodeHandler),
+)
+adminOrdersRouter.post('/:id/auto-friend-link/status', asyncHandler(pollGuardHandler))
 adminOrdersRouter.post(
   '/:id/order-status-alimtalk',
   asyncHandler(sendOrderStatusAlimtalkHandler),

@@ -11,6 +11,7 @@ import {
   updateFriendLinksHandler,
   sendOrderStatusAlimtalkHandler,
   createManualOrderHandler,
+  deleteManualOrderHandler,
 } from '../../controllers/steamOrderController'
 import { sendReviewGameHandler } from '../../controllers/reviewGameController'
 import {
@@ -28,6 +29,7 @@ adminOrdersRouter.use(authMiddleware)
 adminOrdersRouter.get('/', asyncHandler(getOrdersHandler))
 adminOrdersRouter.get('/export', asyncHandler(exportOrdersHandler))
 adminOrdersRouter.post('/manual', asyncHandler(createManualOrderHandler))
+adminOrdersRouter.delete('/:id', asyncHandler(deleteManualOrderHandler))
 adminOrdersRouter.get('/:id', asyncHandler(getOrderDetailHandler))
 adminOrdersRouter.post('/:id/retry', asyncHandler(retryOrderHandler))
 adminOrdersRouter.post('/:id/in-progress', asyncHandler(markInProgressHandler))

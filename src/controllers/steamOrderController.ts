@@ -13,6 +13,7 @@ import {
   updateFriendLinks,
   sendOrderStatusNotification,
   createManualOrder,
+  deleteManualOrder,
 } from '../services/steamOrderService'
 import { buildOrderExcelBuffer } from '../utils/excel'
 
@@ -193,4 +194,17 @@ export async function createManualOrderHandler(req: Request, res: Response): Pro
     netProfit: body.netProfit,
   })
   res.status(201).json({ data: order })
+}
+
+const deleteManualOrderParamsSchema = z.object({
+  id: z.string().uuid(),
+})
+
+export async function deleteManualOrderHandler(
+  req: Request<{ id: string }>,
+  res: Response,
+): Promise<void> {
+  const { id } = deleteManualOrderParamsSchema.parse(req.params)
+  await deleteManualOrder(id)
+  res.json({ message: '수동 주문이 삭제되었습니다.' })
 }

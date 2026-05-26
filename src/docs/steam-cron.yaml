@@ -54,21 +54,19 @@ paths:
         '200':
           description: 만료 처리 완료 (expiredCount 반환)
 
-  /steam/cron/daily-expense-summary:
-    post:
-      summary: 일일 비용 요약 Discord 전송 (매일 23:50 KST 자동 실행, 수동 트리거용)
-      tags: [SteamCron]
-      responses:
-        '200':
-          description: 일일 비용 요약 전송 완료
-
   /steam/cron/daily-sales-report:
     post:
-      summary: 일일 매출 리포트 Discord 전송 (매일 23:59 KST 자동 실행, 수동 트리거용)
+      summary: 일일 종합 리포트 Discord 전송 (매일 23:59 KST 자동 실행, 수동 트리거용)
       description: |
-        오늘(KST) 기준 주문/구매확정/반품 카운트와 총매출·총비용·네이버 수수료(6.6%)·순수익을 계산하여
-        Discord 정산금 채널로 발송한다. 매출은 paidAt이 오늘이고 반품되지 않은 주문의 paymentAmount 합계.
+        오늘(KST) 기준으로 다음을 한 메시지에 모아 Discord `expense` 채널로 발송한다.
+        - 주문/구매확정/반품 카운트
+        - 네이버 매출 + 수수료(6.6%)
+        - 수동 주문 내역 (source='manual', paidAt 오늘, 반품 제외) + 소계
+        - 비용 내역 (분류·결제자 표시) + 결제자별 합계
+        - 순수익 = 네이버 매출 − 수수료 − 비용 (수동 주문 매출은 순수익에 합산하지 않음)
+        - 분담 정산: 분담 대상 = max(비용 − 수동 매출, 0). 인당 부담 = 분담 대상 / 2.
+          정산액 = (송동건 결제 − 임정빈 결제) / 2 (부호로 송금 방향 결정).
       tags: [SteamCron]
       responses:
         '200':
-          description: 일일 매출 리포트 전송 완료
+          description: 일일 종합 리포트 전송 완료

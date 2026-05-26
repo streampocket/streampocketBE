@@ -9,7 +9,6 @@ import { naverOrderSource } from './services/platform/naverOrderSource'
 import { runZqbgGiftStatusPolling } from './services/zqbgPollingService'
 import { generateWeeklySettlement } from './services/settlementService'
 import { expireOldParties } from './services/own/ownProductService'
-import { sendDailyExpenseSummary } from './services/expenseSummaryService'
 import { sendDailySalesReport } from './services/dailySalesReportService'
 
 const PORT = Number(process.env.PORT ?? 4000)
@@ -109,28 +108,7 @@ app.listen(PORT, () => {
 
   console.log('파티원 만료 스케줄러 시작: 매일 00:00')
 
-  // 일일 비용 요약 스케줄러 (매일 23:50 KST)
-  let lastExpenseSummaryDate = ''
-
-  setInterval(() => {
-    const now = new Date()
-    const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000)
-    const today = kst.toISOString().slice(0, 10)
-    const hour = kst.getUTCHours()
-    const minute = kst.getUTCMinutes()
-
-    if (hour === 23 && minute === 50 && lastExpenseSummaryDate !== today) {
-      lastExpenseSummaryDate = today
-      console.log('[EXPENSE_SUMMARY] 일일 비용 요약 전송')
-      sendDailyExpenseSummary().catch((err) => {
-        console.error('[EXPENSE_SUMMARY] 일일 비용 요약 전송 실패', err)
-      })
-    }
-  }, 60_000)
-
-  console.log('일일 비용 요약 스케줄러 시작: 매일 23:50')
-
-  // 일일 매출 리포트 스케줄러 (매일 23:59 KST)
+  // 일일 종합 리포트 스케줄러 (매일 23:59 KST)
   let lastSalesReportDate = ''
 
   setInterval(() => {
@@ -144,12 +122,12 @@ app.listen(PORT, () => {
     // 주간 정산은 별도 채널 메시지이므로 동시 발송돼도 문제 없음.
     if (hour === 23 && minute === 59 && lastSalesReportDate !== today) {
       lastSalesReportDate = today
-      console.log('[SALES_REPORT] 일일 매출 리포트 전송')
+      console.log('[DAILY_REPORT] 일일 종합 리포트 전송')
       sendDailySalesReport().catch((err) => {
-        console.error('[SALES_REPORT] 일일 매출 리포트 전송 실패', err)
+        console.error('[DAILY_REPORT] 일일 종합 리포트 전송 실패', err)
       })
     }
   }, 60_000)
 
-  console.log('일일 매출 리포트 스케줄러 시작: 매일 23:59')
+  console.log('일일 종합 리포트 스케줄러 시작: 매일 23:59')
 })

@@ -8,7 +8,9 @@ import {
   groupOrderCountsByStatus,
   createManualOrderItem,
   generateManualProductOrderId,
+  deleteOrderItemById,
 } from '../repositories/steamOrderRepository'
+import { findExpenseBySteamOrderItemId } from '../repositories/expenseRepository'
 import { findAccountById, markAccountAsSent } from '../repositories/steamAccountRepository'
 import {
   isAlimtalkEnabled,
@@ -430,6 +432,30 @@ export async function getOrderTracking(productOrderId: string): Promise<OrderTra
     estimatedCompletedAt: order.estimatedCompletedAt,
     completedAt: order.completedAt,
   }
+}
+
+// 수동 주문 삭제 — source='manual' 한정, 지출 연결 시 차단, DeliveryLog는 Cascade로 함께 제거
+export async function deleteManualOrder(id: string): Promise<void> {
+  const order = await findOrderById(id)
+  if (!order) {
+    throw Object.assign(new Error('주문을 찾을 수 없습니다.'), { statusCode: 404 })
+  }
+
+  if (order.source !== 'manual') {
+    throw Object.assign(new Error('수동 주문만 삭제할 수 있습니다.'), { statusCode: 400 })
+  }
+
+  const linkedExpense = await findExpenseBySteamOrderItemId(id)
+  if (linkedExpense) {
+    throw Object.assign(
+      new Error(
+        '지출이 연결된 주문은 삭제할 수 없습니다. 먼저 지출 관리에서 연결을 해제하거나 지출을 삭제하세요.',
+      ),
+      { statusCode: 409 },
+    )
+  }
+
+  await deleteOrderItemById(id)
 }
 
 export async function manualReturnOrder(id: string): Promise<void> {

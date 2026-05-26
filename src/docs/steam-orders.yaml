@@ -94,6 +94,32 @@ paths:
           description: 주문 상세 (발송 이력 포함)
         '404':
           description: 주문 없음
+    delete:
+      summary: 수동 주문 삭제
+      description: >-
+        `source='manual'`인 주문만 삭제할 수 있다(네이버 자동 주문은 400 차단).
+        삭제는 hard delete이며, 연결된 `DeliveryLog`는 Cascade로 함께 제거된다.
+        연결된 `SteamRegistration`이 있다면 `order_item_id`만 NULL로 풀린다(행은 보존).
+        지출(`Expense`)이 연결돼 있으면 409로 차단되므로, 먼저 지출 관리에서 연결을 해제하거나 지출을 삭제해야 한다.
+      tags: [SteamOrders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 삭제 완료
+        '400':
+          description: 수동 주문이 아님
+        '404':
+          description: 주문 없음
+        '409':
+          description: 지출이 연결된 주문
 
   /steam/admin/orders/{id}/retry:
     post:

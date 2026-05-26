@@ -282,6 +282,10 @@ export async function updateOrderItem(
   return prisma.steamOrderItem.update({ where: { id }, data })
 }
 
+export async function deleteOrderItemById(id: string): Promise<void> {
+  await prisma.steamOrderItem.delete({ where: { id } })
+}
+
 export async function updateReviewGameSentAt(id: string): Promise<SteamOrderItem> {
   return prisma.steamOrderItem.update({
     where: { id },

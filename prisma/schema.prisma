@@ -150,6 +150,7 @@ model SteamOrderItem {
   gameUrl              String?           @map("game_url") @db.VarChar(500)
   memo                 String?           @map("memo")
   estimatedCompletedAt DateTime?         @map("estimated_completed_at") @db.Timestamptz(6)
+  autoExtendCount      Int               @default(0) @map("auto_extend_count")
   completedAt          DateTime?         @map("completed_at") @db.Timestamptz(6)
   createdAt            DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt            DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)

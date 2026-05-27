@@ -10,6 +10,7 @@ import { runZqbgGiftStatusPolling } from './services/zqbgPollingService'
 import { generateWeeklySettlement } from './services/settlementService'
 import { expireOldParties } from './services/own/ownProductService'
 import { sendDailySalesReport } from './services/dailySalesReportService'
+import { runAutoExtendCheck } from './services/steamOrderService'
 
 const PORT = Number(process.env.PORT ?? 4000)
 const POLL_INTERVAL_MS = Number(process.env['ORDER_POLL_INTERVAL_SECONDS'] ?? 300) * 1000
@@ -130,4 +131,12 @@ app.listen(PORT, () => {
   }, 60_000)
 
   console.log('일일 종합 리포트 스케줄러 시작: 매일 23:59')
+
+  // 진행중 주문 예상 완료시각 자동 +10분 연장 (1분 주기)
+  // 트리거 조건은 service runAutoExtendCheck에서 처리: estimatedCompletedAt ≤ now+2분 + autoExtendCount<5
+  setInterval(() => {
+    runAutoExtendCheck().catch((err) => console.error('[AUTO_EXTEND] 실패', err))
+  }, 60_000)
+
+  console.log('주문 예상시각 자동 연장 스케줄러 시작: 1분 간격')
 })

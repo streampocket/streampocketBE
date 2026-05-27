@@ -6,6 +6,7 @@ import {
 } from '../services/steamFulfillmentService'
 import { naverOrderSource } from '../services/platform/naverOrderSource'
 import { runZqbgGiftStatusPolling } from '../services/zqbgPollingService'
+import { runAutoExtendCheck } from '../services/steamOrderService'
 
 const BACKUP_SCAN_HOURS_BACK = 6
 
@@ -27,4 +28,9 @@ export async function dailyReconcileOrders(_req: Request, res: Response): Promis
 export async function zqbgPollOrders(_req: Request, res: Response): Promise<void> {
   const result = await runZqbgGiftStatusPolling()
   res.json({ message: 'zqbg 발송상태 폴링 완료', ...result })
+}
+
+export async function autoExtendCheckHandler(_req: Request, res: Response): Promise<void> {
+  const result = await runAutoExtendCheck()
+  res.json({ message: '예상 완료시각 자동 연장 점검 완료', ...result })
 }

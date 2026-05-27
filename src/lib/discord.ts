@@ -7,6 +7,7 @@ export type DiscordChannel =
   | 'partyApply'
   | 'chatbot'
   | 'alimtalk'
+  | 'auto_extend'
 
 const CHANNEL_META: Record<DiscordChannel, { title: string; color: number }> = {
   order: { title: '주문 알림', color: 0x57f287 },
@@ -17,6 +18,7 @@ const CHANNEL_META: Record<DiscordChannel, { title: string; color: number }> = {
   partyApply: { title: '파티원 참여 알림', color: 0x2ecc71 },
   chatbot: { title: '챗봇 알림', color: 0xfee500 },
   alimtalk: { title: '알림톡 발송', color: 0xfee500 },
+  auto_extend: { title: '자동 연장 알림', color: 0x9b59b6 },
 }
 
 function getWebhookUrl(channel: DiscordChannel): string | undefined {
@@ -26,6 +28,14 @@ function getWebhookUrl(channel: DiscordChannel): string | undefined {
   // 챗봇·알림톡 발송 알림 — 챗봇 웹훅 공유, 미설정 시 메인 웹훅으로 fallback
   if (channel === 'chatbot' || channel === 'alimtalk') {
     return process.env['DISCORD_CHATBOT_WEBHOOK_URL'] ?? process.env['DISCORD_WEBHOOK_URL']
+  }
+  // 자동 연장 알림 — 전용 웹훅 미설정 시 챗봇 웹훅(=봇 알림 채널)으로 fallback, 그래도 없으면 메인 웹훅
+  if (channel === 'auto_extend') {
+    return (
+      process.env['DISCORD_AUTO_EXTEND_WEBHOOK_URL'] ??
+      process.env['DISCORD_CHATBOT_WEBHOOK_URL'] ??
+      process.env['DISCORD_WEBHOOK_URL']
+    )
   }
   return process.env['DISCORD_WEBHOOK_URL']
 }

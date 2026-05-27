@@ -9,6 +9,8 @@ import {
   createManualOrderItem,
   generateManualProductOrderId,
   deleteOrderItemById,
+  findOrdersForAutoExtend,
+  incrementAutoExtendCount,
 } from '../repositories/steamOrderRepository'
 import { findExpenseBySteamOrderItemId } from '../repositories/expenseRepository'
 import { findAccountById, markAccountAsSent } from '../repositories/steamAccountRepository'
@@ -24,6 +26,12 @@ import { detectProductType } from '../utils/productType'
 
 // 진행중 주문 시간 연장 단위(분)
 const EXTEND_MINUTES = 10
+
+// 자동 연장 주문당 최대 횟수 (총 +50분). 한도 초과 시 더 이상 자동 연장 안 함
+const AUTO_EXTEND_MAX_COUNT = 5
+
+// 자동 연장 임계치 (분) — estimatedCompletedAt까지 이 시간 이하로 남으면 트리거
+const AUTO_EXTEND_THRESHOLD_MINUTES = 2
 
 type ListOrdersInput = {
   status?: FulfillmentStatus
@@ -343,6 +351,55 @@ export async function extendOrderEstimatedTime(id: string): Promise<void> {
 
   const extended = new Date(order.estimatedCompletedAt.getTime() + EXTEND_MINUTES * 60_000)
   await updateOrderItem(order.id, { estimatedCompletedAt: extended })
+}
+
+// 자동 +10분 연장 — 1분 주기 스케줄러에서 호출. 후보 주문을 찾아 한 건씩 연장 + Discord 알림
+// 한도(AUTO_EXTEND_MAX_COUNT) 도달 주문은 후보에서 제외되므로 더 이상 연장되지 않는다.
+type AutoExtendResult = {
+  scanned: number
+  extended: number
+  skipped: number
+}
+
+export async function runAutoExtendCheck(): Promise<AutoExtendResult> {
+  const thresholdAt = new Date(Date.now() + AUTO_EXTEND_THRESHOLD_MINUTES * 60_000)
+  const candidates = await findOrdersForAutoExtend(thresholdAt, AUTO_EXTEND_MAX_COUNT)
+
+  let extended = 0
+  let skipped = 0
+
+  for (const order of candidates) {
+    // 한도 재검증 — 동시성으로 인해 후보 조회 후 다른 경로에서 카운트가 증가했을 가능성 차단
+    if (order.autoExtendCount + 1 > AUTO_EXTEND_MAX_COUNT) {
+      skipped += 1
+      continue
+    }
+    if (!order.estimatedCompletedAt) {
+      skipped += 1
+      continue
+    }
+
+    const newEstimatedAt = new Date(order.estimatedCompletedAt.getTime() + EXTEND_MINUTES * 60_000)
+
+    try {
+      const { autoExtendCount: newCount } = await incrementAutoExtendCount(
+        order.id,
+        newEstimatedAt,
+      )
+      extended += 1
+
+      const receiver = order.receiverName ?? '미확인'
+      const message = `⏰ **예상 완료시각 자동 +${EXTEND_MINUTES}분 연장**\n상품: ${order.productName}\n수신자: ${receiver}\n주문: ${order.productOrderId}\n자동 연장: ${newCount}/${AUTO_EXTEND_MAX_COUNT}회`
+      sendDiscordAlert('auto_extend', message).catch((err) => {
+        console.error('[AUTO_EXTEND] Discord 알림 실패', err)
+      })
+    } catch (err) {
+      console.error('[AUTO_EXTEND] 연장 실패', { orderId: order.id, err })
+      skipped += 1
+    }
+  }
+
+  return { scanned: candidates.length, extended, skipped }
 }
 
 export async function manualCompleteOrder(id: string): Promise<void> {

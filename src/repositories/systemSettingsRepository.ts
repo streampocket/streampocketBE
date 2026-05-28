@@ -7,7 +7,6 @@ export async function getSystemSettingsRow(): Promise<SystemSettings | null> {
 
 type SystemSettingsUpdate = {
   defaultDurationMinutes?: number
-  chatbotWelcomeMessage?: string | null
 }
 
 export async function upsertSystemSettings(data: SystemSettingsUpdate): Promise<SystemSettings> {

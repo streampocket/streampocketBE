@@ -1,23 +1,11 @@
 import { Router } from 'express'
 import { authMiddleware } from '../../middlewares/auth'
-import {
-  getRegistrationByOrderHandler,
-  getRegistrationDetailHandler,
-  getRegistrationsHandler,
-  linkOrderHandler,
-  unlinkOrderHandler,
-  updateRegistrationHandler,
-} from '../../controllers/steamRegistrationController'
+import { getRegistrationByOrderHandler } from '../../controllers/steamRegistrationController'
 import { asyncHandler } from '../../utils/asyncHandler'
 
+// 자동 친구링크 기능이 주문에 연결된 스팀 자격증명을 조회하기 위해 사용한다.
 export const adminRegistrationsRouter = Router()
 
 adminRegistrationsRouter.use(authMiddleware)
 
-// 고정 경로(/by-order)를 :id 보다 먼저 등록
 adminRegistrationsRouter.get('/by-order', asyncHandler(getRegistrationByOrderHandler))
-adminRegistrationsRouter.get('/', asyncHandler(getRegistrationsHandler))
-adminRegistrationsRouter.get('/:id', asyncHandler(getRegistrationDetailHandler))
-adminRegistrationsRouter.patch('/:id', asyncHandler(updateRegistrationHandler))
-adminRegistrationsRouter.post('/:id/link', asyncHandler(linkOrderHandler))
-adminRegistrationsRouter.post('/:id/unlink', asyncHandler(unlinkOrderHandler))

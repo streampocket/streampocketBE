@@ -11,7 +11,6 @@ import { authRouter } from './routes/auth'
 import { cronRouter } from './routes/cron'
 import { adminOrdersRouter } from './routes/admin/orders'
 import { steamTrackRouter } from './routes/steam/track'
-import { steamChatbotRouter } from './routes/steam/chatbot'
 import { adminRegistrationsRouter } from './routes/admin/registrations'
 import { adminProductsRouter } from './routes/admin/products'
 import { adminAccountsRouter } from './routes/admin/accounts'
@@ -22,7 +21,6 @@ import { adminReviewCodesRouter } from './routes/admin/reviewCodes'
 import { adminExpensesRouter } from './routes/admin/expenses'
 import { adminBackfillRouter } from './routes/admin/backfill'
 import { adminManualRevenuesRouter } from './routes/admin/manualRevenues'
-import { adminChatbotMenusRouter } from './routes/admin/chatbotMenus'
 import { ownAuthRouter } from './routes/own/auth'
 import { ownUsersRouter } from './routes/own/users'
 import { ownCategoriesRouter } from './routes/own/categories'
@@ -75,7 +73,6 @@ app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
 app.use('/auth', authRouter)
 app.use('/steam/cron', cronRouter)
 app.use('/steam/track', steamTrackRouter)
-app.use('/steam/chatbot', steamChatbotRouter)
 app.use('/steam/admin/orders', adminOrdersRouter)
 app.use('/steam/admin/registrations', adminRegistrationsRouter)
 app.use('/steam/admin/products', adminProductsRouter)
@@ -87,7 +84,6 @@ app.use('/steam/admin/review-codes', adminReviewCodesRouter)
 app.use('/steam/admin/expenses', adminExpensesRouter)
 app.use('/steam/admin/backfill', adminBackfillRouter)
 app.use('/steam/admin/manual-revenues', adminManualRevenuesRouter)
-app.use('/steam/admin/chatbot-menus', adminChatbotMenusRouter)
 
 // ───────────────────────── Own (OTTALL) ─────────────────────────
 app.use('/own/auth', ownAuthRouter)

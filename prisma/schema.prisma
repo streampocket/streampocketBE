@@ -249,26 +249,9 @@ model SystemSettings {
   id                     String   @id @default(uuid()) @db.Uuid
   alimtalkUnitCost       Decimal  @default(6.5) @map("alimtalk_unit_cost") @db.Decimal(7, 1)
   defaultDurationMinutes Int      @default(60) @map("default_duration_minutes")
-  chatbotWelcomeMessage  String?  @map("chatbot_welcome_message") @db.Text // 카카오 챗봇 웰컴 인사말
   updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@map("system_settings")
-}
-
-// 카카오 챗봇 메뉴 항목 — 관리자 페이지에서 CRUD, 챗봇이 클릭형 메뉴로 노출
-model ChatbotMenuItem {
-  id        String   @id @default(uuid()) @db.Uuid
-  label     String   @db.VarChar(100) // 버튼 텍스트(이모지 포함) — 챗봇 발화 매칭 키
-  body      String   @db.Text // 응답 본문
-  imageUrl  String?  @map("image_url") @db.VarChar(500) // 응답 이미지(선택)
-  buttons   Json     @default("[]") // 외부링크 버튼 배열 [{ label, url }]
-  sortOrder Int      @default(0) @map("sort_order") // 메뉴 노출 순서
-  isActive  Boolean  @default(true) @map("is_active") // 노출 여부
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  @@index([isActive, sortOrder])
-  @@map("chatbot_menu_items")
 }
 
 model ManualRevenue {

@@ -120,7 +120,15 @@ export async function sendDailySalesReport(): Promise<void> {
   if (expenses.length > 0) {
     const settlementBase = Math.max(expenseTotal - manualTotal, 0)
     const perPerson = Math.round(settlementBase / 2)
-    const settlement = Math.round((songTotal - imTotal) / 2)
+    const includingManual = Math.round((expenseTotal - manualTotal) / 2)
+    const excludingManual = Math.round(expenseTotal / 2)
+
+    const settlementLine = (amount: number): string => {
+      if (amount <= 0) return '없음 (동일 금액)'
+      if (songTotal > imTotal) return `임정빈 → 송동건 ${fmt(amount)}원`
+      if (songTotal < imTotal) return `송동건 → 임정빈 ${fmt(amount)}원`
+      return '없음 (동일 금액)'
+    }
 
     lines.push('')
     lines.push(`💸 **분담 정산**`)
@@ -128,16 +136,10 @@ export async function sendDailySalesReport(): Promise<void> {
       lines.push(`  분담 대상: 0원 (수동 매출이 비용을 초과)`)
     } else {
       lines.push(
-        `  분담 대상 = 비용 ${fmt(expenseTotal)} − 수동 매출 ${fmt(manualTotal)} = ${fmt(settlementBase)}원`,
+        `  분담 대상 = 비용 ${fmt(expenseTotal)} − 수동 매출 ${fmt(manualTotal)} = ${fmt(settlementBase)}원 (인당 ${fmt(perPerson)}원)`,
       )
-      lines.push(`  인당 부담: ${fmt(perPerson)}원`)
-      if (settlement > 0) {
-        lines.push(`  정산: 임정빈 → 송동건 ${fmt(settlement)}원`)
-      } else if (settlement < 0) {
-        lines.push(`  정산: 송동건 → 임정빈 ${fmt(Math.abs(settlement))}원`)
-      } else {
-        lines.push(`  정산: 없음 (동일 금액)`)
-      }
+      lines.push(`  수동매출 포함: ${settlementLine(includingManual)}`)
+      lines.push(`  수동매출 미포함: ${settlementLine(excludingManual)}`)
     }
   }
 

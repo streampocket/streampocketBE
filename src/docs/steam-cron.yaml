@@ -37,6 +37,18 @@ paths:
         '200':
           description: 폴링 완료 (checked/completed/pending/abnormal/failed/skipped 반환)
 
+  /steam/cron/auto-extend-check:
+    post:
+      summary: 진행중 주문 예상 완료시각 자동 +10분 연장 점검 (매 1분 자동 실행, 수동 트리거용)
+      description: |
+        진행중(in_progress) + estimatedCompletedAt ≤ now+2분 + autoExtendCount < 5 조건을 만족하는 주문을
+        모두 자동으로 +10분 연장하고, 주문당 Discord `auto_extend` 채널에 알림(상품명·수신자명·상품주문번호·횟수 N/5) 발송.
+        주문당 최대 5회까지만 자동 연장된다(총 +50분). 수동 +10분 버튼은 본 카운터와 무관하게 동작.
+      tags: [SteamCron]
+      responses:
+        '200':
+          description: 점검 완료 (scanned/extended/skipped 반환)
+
   /steam/cron/weekly-settlement:
     post:
       summary: 주간 정산 실행

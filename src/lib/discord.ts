@@ -6,6 +6,7 @@ export type DiscordChannel =
   | 'settlement'
   | 'partyApply'
   | 'alimtalk'
+  | 'auto_extend'
 
 const CHANNEL_META: Record<DiscordChannel, { title: string; color: number }> = {
   order: { title: '주문 알림', color: 0x57f287 },
@@ -15,12 +16,17 @@ const CHANNEL_META: Record<DiscordChannel, { title: string; color: number }> = {
   settlement: { title: '주간 정산', color: 0x5865f2 },
   partyApply: { title: '파티원 참여 알림', color: 0x2ecc71 },
   alimtalk: { title: '알림톡 발송', color: 0xfee500 },
+  auto_extend: { title: '자동 연장 알림', color: 0x9b59b6 },
 }
 
 function getWebhookUrl(channel: DiscordChannel): string | undefined {
   if (channel === 'expense') return process.env['DISCORD_EXPENSE_WEBHOOK_URL']
   if (channel === 'settlement') return process.env['DISCORD_SETTLEMENT_WEBHOOK_URL']
   if (channel === 'partyApply') return process.env['DISCORD_PARTNER_WEBHOOK_URL']
+  // 자동 연장 알림 — 전용 웹훅 미설정 시 메인 웹훅으로 fallback
+  if (channel === 'auto_extend') {
+    return process.env['DISCORD_AUTO_EXTEND_WEBHOOK_URL'] ?? process.env['DISCORD_WEBHOOK_URL']
+  }
   return process.env['DISCORD_WEBHOOK_URL']
 }
 

@@ -282,6 +282,52 @@ export async function updateOrderItem(
   return prisma.steamOrderItem.update({ where: { id }, data })
 }
 
+// 자동 +10분 연장 후보 조회 — in_progress + estimatedCompletedAt ≤ thresholdAt + 자동 연장 한도 미달
+export async function findOrdersForAutoExtend(
+  thresholdAt: Date,
+  maxAutoExtendCount: number,
+): Promise<
+  {
+    id: string
+    productName: string
+    receiverName: string | null
+    productOrderId: string
+    estimatedCompletedAt: Date | null
+    autoExtendCount: number
+  }[]
+> {
+  return prisma.steamOrderItem.findMany({
+    where: {
+      fulfillmentStatus: 'in_progress',
+      estimatedCompletedAt: { not: null, lte: thresholdAt },
+      autoExtendCount: { lt: maxAutoExtendCount },
+    },
+    select: {
+      id: true,
+      productName: true,
+      receiverName: true,
+      productOrderId: true,
+      estimatedCompletedAt: true,
+      autoExtendCount: true,
+    },
+  })
+}
+
+// 자동 연장 적용 — atomic increment + estimatedCompletedAt 갱신을 한 번에
+export async function incrementAutoExtendCount(
+  id: string,
+  newEstimatedAt: Date,
+): Promise<{ autoExtendCount: number }> {
+  return prisma.steamOrderItem.update({
+    where: { id },
+    data: {
+      autoExtendCount: { increment: 1 },
+      estimatedCompletedAt: newEstimatedAt,
+    },
+    select: { autoExtendCount: true },
+  })
+}
+
 export async function deleteOrderItemById(id: string): Promise<void> {
   await prisma.steamOrderItem.delete({ where: { id } })
 }

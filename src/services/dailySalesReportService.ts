@@ -117,30 +117,24 @@ export async function sendDailySalesReport(): Promise<void> {
     `✨ **순수익:** ${fmt(naverRevenue)} − ${fmt(naverFee)} − ${fmt(expenseTotal)} = ${fmt(netProfit)}원`,
   )
 
-  if (expenses.length > 0) {
-    const settlementBase = Math.max(expenseTotal - manualTotal, 0)
-    const perPerson = Math.round(settlementBase / 2)
-    const includingManual = Math.round((expenseTotal - manualTotal) / 2)
-    const excludingManual = Math.round(expenseTotal / 2)
+  if (expenses.length > 0 || manualTotal > 0) {
+    // 송금 기준액(부호 있음). 양수면 송동건이 더 부담 → 임정빈이 송금.
+    // 수동매출은 송동건이 수령하므로 송동건 부담에서 차감한다.
+    const baseIncludingManual = songTotal - imTotal - manualTotal
+    const baseExcludingManual = songTotal - imTotal
 
-    const settlementLine = (amount: number): string => {
-      if (amount <= 0) return '없음 (동일 금액)'
-      if (songTotal > imTotal) return `임정빈 → 송동건 ${fmt(amount)}원`
-      if (songTotal < imTotal) return `송동건 → 임정빈 ${fmt(amount)}원`
-      return '없음 (동일 금액)'
+    const settlementLine = (base: number): string => {
+      const amount = Math.round(Math.abs(base) / 2)
+      if (amount === 0) return '없음 (동일 부담)'
+      return base > 0
+        ? `임정빈 → 송동건 ${fmt(amount)}원`
+        : `송동건 → 임정빈 ${fmt(amount)}원`
     }
 
     lines.push('')
     lines.push(`💸 **분담 정산**`)
-    if (expenseTotal - manualTotal <= 0) {
-      lines.push(`  분담 대상: 0원 (수동 매출이 비용을 초과)`)
-    } else {
-      lines.push(
-        `  분담 대상 = 비용 ${fmt(expenseTotal)} − 수동 매출 ${fmt(manualTotal)} = ${fmt(settlementBase)}원 (인당 ${fmt(perPerson)}원)`,
-      )
-      lines.push(`  수동매출 포함: ${settlementLine(includingManual)}`)
-      lines.push(`  수동매출 미포함: ${settlementLine(excludingManual)}`)
-    }
+    lines.push(`  수동매출 반영: ${settlementLine(baseIncludingManual)}`)
+    lines.push(`  수동매출 미반영: ${settlementLine(baseExcludingManual)}`)
   }
 
   await sendDiscordAlert('expense', lines.join('\n'))

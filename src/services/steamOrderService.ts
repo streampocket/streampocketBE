@@ -267,7 +267,7 @@ export async function sendOrderStatusNotification(id: string): Promise<void> {
   await updateOrderItem(order.id, { orderStatusAlimtalkSentAt: new Date() })
 
   await notifyAlimtalkDiscord(
-    `📦 주문상황 알림톡 발송 완료\n상품: ${order.productName}\n수신: ${recipientLabel}`,
+    `📧 주문상황 알림톡 발송 완료\n상품: ${order.productName}\n수신: ${recipientLabel}`,
     ALIMTALK_ORDER_STATUS_COLOR,
   )
 }

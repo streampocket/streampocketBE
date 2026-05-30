@@ -280,6 +280,43 @@ paths:
         '404':
           description: 주문 없음
 
+  /steam/admin/orders/{id}/net-profit:
+    patch:
+      summary: 수동 주문 순수익 수정
+      description: >-
+        수동 주문(source=manual)의 순수익을 수정한다. 수수료가 없으므로 생성과 동일하게
+        `unitPrice`, `paymentAmount`, `settlementAmount` 세 금액 필드를 모두 동일 값으로 갱신해
+        목록(금액)·상세(순수익)·집계(일일 리포트·대시보드)를 일치시킨다. 네이버 주문은 수정할 수 없다.
+      tags: [SteamOrders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [netProfit]
+              properties:
+                netProfit:
+                  type: integer
+                  minimum: 0
+                  description: 새 순수익(원). 0 이상의 정수.
+      responses:
+        '200':
+          description: 수정 완료
+        '400':
+          description: 수동 주문 아님 또는 입력값 오류
+        '404':
+          description: 주문 없음
+
   /steam/admin/orders/{id}/order-status-alimtalk:
     post:
       summary: 주문 진행상황 조회 안내 알림톡 발송

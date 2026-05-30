@@ -14,6 +14,7 @@ import {
   sendOrderStatusNotification,
   createManualOrder,
   deleteManualOrder,
+  updateManualOrderNetProfit,
 } from '../services/steamOrderService'
 import { buildOrderExcelBuffer } from '../utils/excel'
 
@@ -207,4 +208,17 @@ export async function deleteManualOrderHandler(
   const { id } = deleteManualOrderParamsSchema.parse(req.params)
   await deleteManualOrder(id)
   res.json({ message: '수동 주문이 삭제되었습니다.' })
+}
+
+const updateNetProfitParamsSchema = z.object({ id: z.string().uuid() })
+const updateNetProfitBodySchema = z.object({ netProfit: z.number().int().min(0) })
+
+export async function updateManualOrderNetProfitHandler(
+  req: Request<{ id: string }>,
+  res: Response,
+): Promise<void> {
+  const { id } = updateNetProfitParamsSchema.parse(req.params)
+  const { netProfit } = updateNetProfitBodySchema.parse(req.body)
+  await updateManualOrderNetProfit(id, netProfit)
+  res.json({ message: '순수익이 수정되었습니다.' })
 }

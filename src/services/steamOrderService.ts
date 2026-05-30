@@ -303,6 +303,25 @@ export async function updateFriendLinks(
   })
 }
 
+// 수동 주문 순수익 수정 — 수수료가 없으므로 생성과 동일하게 세 금액 필드에 같은 값을
+// 갱신해 목록(금액)·상세(순수익)·집계(일일 리포트·대시보드)를 일치시킨다.
+export async function updateManualOrderNetProfit(id: string, netProfit: number): Promise<void> {
+  const order = await findOrderById(id)
+  if (!order) {
+    throw Object.assign(new Error('주문을 찾을 수 없습니다.'), { statusCode: 404 })
+  }
+
+  if (order.source !== 'manual') {
+    throw Object.assign(new Error('수동 주문만 순수익을 수정할 수 있습니다.'), { statusCode: 400 })
+  }
+
+  await updateOrderItem(id, {
+    unitPrice: netProfit,
+    paymentAmount: netProfit,
+    settlementAmount: netProfit,
+  })
+}
+
 // 대기 → 진행중 수동 전환 (구매자 진행상황 페이지 2단계)
 // 전역 기본 소요시간을 읽어 예상 완료시각을 함께 저장한다.
 export async function markOrderInProgress(id: string): Promise<void> {

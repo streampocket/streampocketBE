@@ -39,6 +39,7 @@ type UpdateOrderItemInput = {
   errorMessage?: string
   returnedAt?: Date | null
   decisionDate?: Date
+  unitPrice?: number
   settlementAmount?: number
   paymentAmount?: number
   friendLink1?: string | null

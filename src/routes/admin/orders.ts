@@ -12,6 +12,7 @@ import {
   sendOrderStatusAlimtalkHandler,
   createManualOrderHandler,
   deleteManualOrderHandler,
+  updateManualOrderNetProfitHandler,
 } from '../../controllers/steamOrderController'
 import { sendReviewGameHandler } from '../../controllers/reviewGameController'
 import {
@@ -38,6 +39,7 @@ adminOrdersRouter.post('/:id/complete', asyncHandler(manualCompleteHandler))
 adminOrdersRouter.post('/:id/return', asyncHandler(manualReturnHandler))
 adminOrdersRouter.post('/:id/review-game', asyncHandler(sendReviewGameHandler))
 adminOrdersRouter.patch('/:id/friend-links', asyncHandler(updateFriendLinksHandler))
+adminOrdersRouter.patch('/:id/net-profit', asyncHandler(updateManualOrderNetProfitHandler))
 adminOrdersRouter.post('/:id/auto-friend-link', asyncHandler(autoFriendLinkHandler))
 adminOrdersRouter.post(
   '/:id/auto-friend-link/guard-code',

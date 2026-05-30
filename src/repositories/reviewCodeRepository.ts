@@ -127,3 +127,12 @@ export async function reserveReviewCodes(
     return codes.map((c) => ({ ...c, status: 'used' as const, usedBy, usedAt: now }))
   })
 }
+
+// 발송 실패 롤백용 — 예약(used)했던 리뷰 코드를 미사용(unused)으로 되돌려 재고 누수를 막는다.
+export async function releaseReviewCodes(ids: string[]): Promise<void> {
+  if (ids.length === 0) return
+  await prisma.reviewCode.updateMany({
+    where: { id: { in: ids } },
+    data: { status: 'unused', usedBy: null, usedAt: null },
+  })
+}

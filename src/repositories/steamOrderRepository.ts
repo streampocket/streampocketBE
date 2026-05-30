@@ -348,9 +348,20 @@ export async function listManualOrdersPaidOn(
   })
 }
 
-export async function updateReviewGameSentAt(id: string): Promise<SteamOrderItem> {
-  return prisma.steamOrderItem.update({
-    where: { id },
+// 리뷰게임 발송 원자적 선점 — reviewGameSentAt가 비어있고 구매확정 상태인 주문만 현재 시각으로 채운다.
+// 동시 요청이 들어와도 DB 행 잠금으로 단 하나만 count===1을 받아 true를 반환하므로 중복 발송을 차단한다.
+export async function claimReviewGameSend(id: string): Promise<boolean> {
+  const result = await prisma.steamOrderItem.updateMany({
+    where: { id, reviewGameSentAt: null, fulfillmentStatus: 'purchase_decided' },
     data: { reviewGameSentAt: new Date() },
+  })
+  return result.count === 1
+}
+
+// 선점 후 발송이 실패했을 때 reviewGameSentAt를 다시 null로 되돌려 재발송을 허용한다.
+export async function rollbackReviewGameSend(id: string): Promise<void> {
+  await prisma.steamOrderItem.update({
+    where: { id },
+    data: { reviewGameSentAt: null },
   })
 }

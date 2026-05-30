@@ -1,5 +1,5 @@
-import { findOrderById, updateReviewGameSentAt } from '../repositories/steamOrderRepository'
-import { reserveReviewCodes } from '../repositories/reviewCodeRepository'
+import { findOrderById, claimReviewGameSend, rollbackReviewGameSend } from '../repositories/steamOrderRepository'
+import { reserveReviewCodes, releaseReviewCodes } from '../repositories/reviewCodeRepository'
 import { sendReviewGameAlimtalk } from './alimtalkService'
 import { isAlimtalkEnabled } from './alimtalkService'
 import { parseReviewGameCount } from '../utils/reviewGameParser'
@@ -43,9 +43,18 @@ export async function sendReviewGame(orderItemId: string): Promise<SendReviewGam
     )
   }
 
-  const codes = await reserveReviewCodes(reviewGameCount, order.receiverName ?? order.productOrderId)
+  // ★ 원자적 선점 — 위 사전 검증은 빠른 에러용일 뿐, 동시 발송을 막는 진짜 게이트는 이 단계다.
+  // 동시 요청 중 단 하나만 선점에 성공(true)하고, 나머지는 false를 받아 409로 거부된다.
+  const claimed = await claimReviewGameSend(order.id)
+  if (!claimed) {
+    throw Object.assign(new Error('이미 리뷰게임이 발송되었거나 발송 처리 중입니다.'), { statusCode: 409 })
+  }
 
+  let reservedCodeIds: string[] = []
   try {
+    const codes = await reserveReviewCodes(reviewGameCount, order.receiverName ?? order.productOrderId)
+    reservedCodeIds = codes.map((c) => c.id)
+
     await sendReviewGameAlimtalk({
       orderItemId: order.id,
       recipientPhoneNumber: order.receiverPhoneNumber,
@@ -53,8 +62,6 @@ export async function sendReviewGame(orderItemId: string): Promise<SendReviewGam
       productName: order.productName,
       codes: codes.map((c) => ({ gameName: c.gameName, code: c.code })),
     })
-
-    await updateReviewGameSentAt(order.id)
 
     await sendDiscordAlert(
       'order',
@@ -64,6 +71,10 @@ export async function sendReviewGame(orderItemId: string): Promise<SendReviewGam
 
     return { count: reviewGameCount }
   } catch (error) {
+    // 발송 실패 → 선점 해제(재발송 가능) + 예약했던 코드 반납(재고 누수 방지)
+    await releaseReviewCodes(reservedCodeIds).catch(() => {})
+    await rollbackReviewGameSend(order.id).catch(() => {})
+
     await sendDiscordAlert(
       'error',
       `❌ 리뷰게임 발송 실패\n상품: ${order.productName}\n오류: ${error instanceof Error ? error.message : String(error)}`,

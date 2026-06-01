@@ -1,4 +1,5 @@
 import type { ExpenseCategory, ExpensePayer } from '@prisma/client'
+import { NAVER_FEE_RATE } from '../constants/fees'
 import { sendDiscordAlert } from '../lib/discord'
 import {
   countOrdersDecidedOn,
@@ -8,8 +9,6 @@ import {
 } from '../repositories/dailySalesRepository'
 import { findExpensesByDateRange } from '../repositories/expenseRepository'
 import { listManualOrdersPaidOn } from '../repositories/steamOrderRepository'
-
-const NAVER_FEE_RATE = 0.066
 
 const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   game_purchase: '게임 구매비',
@@ -78,7 +77,7 @@ export async function sendDailySalesReport(): Promise<void> {
   lines.push(`🔄 반품건수: ${returnedCount}건`)
   lines.push('')
   lines.push(`💰 네이버 매출: ${fmt(naverRevenue)}원`)
-  lines.push(`🏦 네이버 수수료(6.6%): ${fmt(naverFee)}원`)
+  lines.push(`🏦 네이버 수수료(6.63%): ${fmt(naverFee)}원`)
 
   if (manualOrders.length > 0) {
     lines.push('')

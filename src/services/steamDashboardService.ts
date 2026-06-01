@@ -1,33 +1,43 @@
 import { prisma } from '../lib/prisma'
+import { NAVER_FEE_RATE } from '../constants/fees'
 import { sumExpensesByCategory } from '../repositories/expenseRepository'
 import { sumManualRevenue } from '../repositories/manualRevenueRepository'
 
 type Period = 'today' | 'week' | 'month' | 'all'
 
+// KST 자정(00:00:00.000+09:00) Date 생성 — y/m/d는 KST 벽시계 기준
+function kstMidnight(year: number, month: number, day: number): Date {
+  const mm = String(month).padStart(2, '0')
+  const dd = String(day).padStart(2, '0')
+  return new Date(`${year}-${mm}-${dd}T00:00:00.000+09:00`)
+}
+
+// 기간 시작 경계를 KST 기준으로 산출 (서버 타임존 무관). 끝은 현재 시각.
 function getPeriodRange(period: Period): { start: Date; end: Date } {
   const now = new Date()
+  // KST 벽시계 필드를 얻기 위해 +9h 시프트 후 getUTC* 사용
+  const kstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000)
+  const year = kstNow.getUTCFullYear()
+  const month = kstNow.getUTCMonth() + 1
+  const day = kstNow.getUTCDate()
 
   switch (period) {
     case 'today': {
-      const start = new Date(now)
-      start.setHours(0, 0, 0, 0)
-      return { start, end: now }
+      return { start: kstMidnight(year, month, day), end: now }
     }
     case 'week': {
-      const start = new Date(now)
-      const day = start.getDay()
-      const diff = day === 0 ? 6 : day - 1
-      start.setDate(start.getDate() - diff)
-      start.setHours(0, 0, 0, 0)
+      // KST 기준 이번주 월요일 00:00
+      const weekday = kstNow.getUTCDay() // 0=일 ~ 6=토
+      const diff = weekday === 0 ? 6 : weekday - 1
+      const todayMidnight = kstMidnight(year, month, day)
+      const start = new Date(todayMidnight.getTime() - diff * 24 * 60 * 60 * 1000)
       return { start, end: now }
     }
     case 'month': {
-      const start = new Date(now.getFullYear(), now.getMonth(), 1)
-      return { start, end: now }
+      return { start: kstMidnight(year, month, 1), end: now }
     }
     case 'all': {
-      const start = new Date(0)
-      return { start, end: now }
+      return { start: new Date(0), end: now }
     }
   }
 }
@@ -49,32 +59,21 @@ type RevenueSummary = {
 }
 
 export async function getRevenueSummary(startDate: Date, endDate: Date): Promise<RevenueSummary> {
-  const [decidedTotals, pendingTotals, manualOrderTotals, alimtalkCount, expenseSums, manualRevenueTotal] =
+  const [naverTotals, manualOrderTotals, alimtalkCount, expenseSums, manualRevenueTotal] =
     await Promise.all([
-      prisma.$queryRaw<{ revenue: bigint; settlement: bigint; commission: bigint }[]>`
+      // 네이버 가능매출 — 결제일(paid_at) 기준, 반품 제외. 구매확정 여부와 무관하게 결제된 전부.
+      // pending = 그중 아직 구매확정 안 된 건의 결제금액(구매확정 대기 금액).
+      // 일일리포트 sumPaymentAmountPaidOn과 동일 공식(SUM(payment_amount), returned_at IS NULL)
+      prisma.$queryRaw<{ revenue: bigint; pending: bigint }[]>`
         SELECT
-          COALESCE(SUM(COALESCE(payment_amount, unit_price)), 0)::bigint AS revenue,
+          COALESCE(SUM(payment_amount), 0)::bigint AS revenue,
           COALESCE(SUM(
-            CASE WHEN fulfillment_status = 'purchase_decided'
-                 THEN settlement_amount ELSE 0 END
-          ), 0)::bigint AS settlement,
-          COALESCE(SUM(
-            CASE WHEN fulfillment_status = 'purchase_decided'
-                 THEN COALESCE(payment_amount, unit_price) - settlement_amount ELSE 0 END
-          ), 0)::bigint AS commission
+            CASE WHEN fulfillment_status <> 'purchase_decided'
+                 THEN payment_amount ELSE 0 END
+          ), 0)::bigint AS pending
         FROM steam_order_items
         WHERE source = 'naver'
-          AND fulfillment_status IN ('completed', 'purchase_decided')
-          AND decision_date IS NOT NULL
-          AND decision_date >= ${startDate}
-          AND decision_date <= ${endDate}
-      `,
-      prisma.$queryRaw<{ revenue: bigint }[]>`
-        SELECT COALESCE(SUM(COALESCE(payment_amount, unit_price)), 0)::bigint AS revenue
-        FROM steam_order_items
-        WHERE source = 'naver'
-          AND fulfillment_status = 'completed'
-          AND decision_date IS NULL
+          AND returned_at IS NULL
           AND paid_at >= ${startDate}
           AND paid_at <= ${endDate}
       `,
@@ -97,13 +96,15 @@ export async function getRevenueSummary(startDate: Date, endDate: Date): Promise
       sumManualRevenue(startDate, endDate),
     ])
 
-  const naverRevenue = Number(decidedTotals[0]?.revenue ?? 0n)
-  const naverSettlement = Number(decidedTotals[0]?.settlement ?? 0n)
-  const naverCommission = Number(decidedTotals[0]?.commission ?? 0n)
-  const pendingSettlement = Number(pendingTotals[0]?.revenue ?? 0n)
+  const naverRevenue = Number(naverTotals[0]?.revenue ?? 0n)
+  const pendingSettlement = Number(naverTotals[0]?.pending ?? 0n)
   const manualOrderProfit = Number(manualOrderTotals[0]?.profit ?? 0n)
 
-  // 수동 주문 순수익은 판매금=정산금=순수익으로 가산 → netProfit/인당수익에 반영
+  // 네이버 수수료/정산금은 6.63% 고정으로 재계산 (실제 정산금은 구매확정 후에야 채워지므로)
+  const naverCommission = Math.round(naverRevenue * NAVER_FEE_RATE)
+  const naverSettlement = naverRevenue - naverCommission
+
+  // 수동 주문/수동 매출은 수수료 없이 입력 순수익을 판매금=정산금=순수익으로 가산
   const totalRevenue = naverRevenue + manualRevenueTotal + manualOrderProfit
   const totalSettlement = naverSettlement + manualRevenueTotal + manualOrderProfit
 
@@ -170,21 +171,16 @@ export async function getRevenueChart(days: number) {
   startDate.setHours(0, 0, 0, 0)
 
   const revenueByDay = await prisma.$queryRaw<
-    Array<{ date: Date; total_revenue: bigint; total_settlement: bigint }>
+    Array<{ date: Date; total_revenue: bigint }>
   >`
     SELECT
-      DATE_TRUNC('day', decision_date) AS date,
-      COALESCE(SUM(COALESCE(payment_amount, unit_price)), 0) AS total_revenue,
-      COALESCE(SUM(
-        CASE WHEN fulfillment_status = 'purchase_decided'
-             THEN settlement_amount ELSE 0 END
-      ), 0) AS total_settlement
+      DATE_TRUNC('day', paid_at) AS date,
+      COALESCE(SUM(payment_amount), 0) AS total_revenue
     FROM steam_order_items
     WHERE source = 'naver'
-      AND fulfillment_status IN ('completed', 'purchase_decided')
-      AND decision_date IS NOT NULL
-      AND decision_date >= ${startDate}
-    GROUP BY DATE_TRUNC('day', decision_date)
+      AND returned_at IS NULL
+      AND paid_at >= ${startDate}
+    GROUP BY DATE_TRUNC('day', paid_at)
     ORDER BY date
   `
 
@@ -205,13 +201,10 @@ export async function getRevenueChart(days: number) {
     expenseMap.set(key, Number(row.total_expense))
   }
 
-  const revenueMap = new Map<string, { totalRevenue: number; totalSettlement: number }>()
+  const revenueMap = new Map<string, number>()
   for (const row of revenueByDay) {
     const key = new Date(row.date).toISOString().slice(0, 10)
-    revenueMap.set(key, {
-      totalRevenue: Number(row.total_revenue),
-      totalSettlement: Number(row.total_settlement),
-    })
+    revenueMap.set(key, Number(row.total_revenue))
   }
 
   const result: Array<{ date: string; totalRevenue: number; netProfit: number }> = []
@@ -220,12 +213,14 @@ export async function getRevenueChart(days: number) {
 
   while (current <= now) {
     const key = current.toISOString().slice(0, 10)
-    const rev = revenueMap.get(key)
+    const dayRevenue = revenueMap.get(key) ?? 0
     const expense = expenseMap.get(key) ?? 0
+    // 정산금 = 가능매출 - 6.63% 수수료 → 순이익 = 정산금 - 비용
+    const daySettlement = dayRevenue - Math.round(dayRevenue * NAVER_FEE_RATE)
     result.push({
       date: key,
-      totalRevenue: rev?.totalRevenue ?? 0,
-      netProfit: (rev?.totalSettlement ?? 0) - expense,
+      totalRevenue: dayRevenue,
+      netProfit: daySettlement - expense,
     })
     current.setDate(current.getDate() + 1)
   }

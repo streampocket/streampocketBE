@@ -141,10 +141,12 @@ export async function bulkCreateAccounts(
   productId: string,
   accounts: BulkCreateAccountInput[],
   productName?: string,
+  gameId?: string | null,
 ): Promise<number> {
   const result = await prisma.steamAccount.createMany({
     data: accounts.map(({ username, password, email, emailPassword, emailSiteUrl, secondaryEmail, secondaryEmailPassword, secondaryEmailSiteUrl }) => ({
       productId,
+      gameId: gameId ?? null,
       productNameSnapshot: productName ?? null,
       username,
       password,

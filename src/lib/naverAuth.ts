@@ -1,9 +1,31 @@
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
+import { Store } from '@prisma/client'
+import { DEFAULT_STORE } from '../constants/stores'
 
 type TokenCache = {
   accessToken: string
   expiresAt: number // Unix timestamp (ms)
+}
+
+// 스토어별 네이버 자격증명 환경변수 키. 신규 스토어 추가 시 여기에만 등록.
+type StoreEnvKeys = {
+  clientId: string
+  clientSecret: string
+  baseUrl: string
+}
+
+const STORE_ENV_KEYS: Record<Store, StoreEnvKeys> = {
+  streampocket: {
+    clientId: 'NAVER_CLIENT_ID',
+    clientSecret: 'NAVER_CLIENT_SECRET',
+    baseUrl: 'NAVER_API_BASE_URL',
+  },
+  pokemon_steam: {
+    clientId: 'NAVER_CLIENT_ID_POKEMON',
+    clientSecret: 'NAVER_CLIENT_SECRET_POKEMON',
+    baseUrl: 'NAVER_API_BASE_URL_POKEMON',
+  },
 }
 
 type NaverErrorDetail = {
@@ -23,8 +45,8 @@ const tokenResponseSchema = z.object({
   expires_in: z.number().int().positive(),
 })
 
-// 메모리 캐시 (서버 재시작 시 초기화)
-let tokenCache: TokenCache | null = null
+// 메모리 캐시 (서버 재시작 시 초기화) — 스토어별로 분리해 교차 토큰 충돌 방지
+const tokenCacheByStore = new Map<Store, TokenCache>()
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -52,14 +74,17 @@ function validateBaseUrl(baseUrl: string): string {
   return baseUrl
 }
 
-function getCredentials() {
-  const clientId = process.env['NAVER_CLIENT_ID']
-  const clientSecret = process.env['NAVER_CLIENT_SECRET']
+function getCredentials(store: Store) {
+  const keys = STORE_ENV_KEYS[store]
+  const clientId = process.env[keys.clientId]
+  const clientSecret = process.env[keys.clientSecret]
   const baseUrl = validateBaseUrl(
-    process.env['NAVER_API_BASE_URL'] ?? 'https://api.commerce.naver.com/external',
+    process.env[keys.baseUrl] ??
+      process.env['NAVER_API_BASE_URL'] ??
+      'https://api.commerce.naver.com/external',
   )
   if (!clientId || !clientSecret) {
-    throw new Error('NAVER_CLIENT_ID, NAVER_CLIENT_SECRET 환경변수를 설정해 주세요.')
+    throw new Error(`${keys.clientId}, ${keys.clientSecret} 환경변수를 설정해 주세요.`)
   }
   return { clientId, clientSecret, baseUrl }
 }
@@ -127,8 +152,8 @@ function buildNaverTokenError(status: number, text: string): Error {
   return new Error(`네이버 토큰 발급 실패 (${status})${details.length > 0 ? `: ${details.join(' | ')}` : ''}`)
 }
 
-async function fetchAccessToken(): Promise<TokenCache> {
-  const { clientId, clientSecret, baseUrl } = getCredentials()
+async function fetchAccessToken(store: Store): Promise<TokenCache> {
+  const { clientId, clientSecret, baseUrl } = getCredentials(store)
   const timestamp = Date.now()
   const signature = await generateSignature(clientId, clientSecret, timestamp)
 
@@ -156,22 +181,25 @@ async function fetchAccessToken(): Promise<TokenCache> {
   }
 }
 
-// 유효한 액세스 토큰 반환 (만료 시 자동 재발급)
-export async function getNaverAccessToken(): Promise<string> {
-  if (tokenCache && tokenCache.expiresAt > Date.now()) {
-    return tokenCache.accessToken
+// 유효한 액세스 토큰 반환 (만료 시 자동 재발급) — 스토어별 캐시
+export async function getNaverAccessToken(store: Store = DEFAULT_STORE): Promise<string> {
+  const cached = tokenCacheByStore.get(store)
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.accessToken
   }
-  tokenCache = await fetchAccessToken()
-  return tokenCache.accessToken
+  const fresh = await fetchAccessToken(store)
+  tokenCacheByStore.set(store, fresh)
+  return fresh.accessToken
 }
 
-// 네이버 API 공통 요청 헬퍼
-export async function naverApiRequest(
+// 스토어 지정 네이버 API 요청 헬퍼 — 멀티스토어 진입점
+export async function naverApiRequestAs(
+  store: Store,
   path: string,
   options: RequestInit = {},
 ): Promise<Response> {
-  const { baseUrl } = getCredentials()
-  const token = await getNaverAccessToken()
+  const { baseUrl } = getCredentials(store)
+  const token = await getNaverAccessToken(store)
   return fetch(`${baseUrl}${path}`, {
     ...options,
     headers: {
@@ -180,4 +208,13 @@ export async function naverApiRequest(
       ...(options.headers ?? {}),
     },
   })
+}
+
+// 기존 시그니처 유지 — 기본 스토어(streampocket) 바인딩 래퍼.
+// 주문 호출부(confirm/dispatch/폴링)는 이 함수를 그대로 사용해 변경 없이 동작한다.
+export async function naverApiRequest(
+  path: string,
+  options: RequestInit = {},
+): Promise<Response> {
+  return naverApiRequestAs(DEFAULT_STORE, path, options)
 }

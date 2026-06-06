@@ -77,7 +77,8 @@ export async function deleteProductHandler(
   res.status(204).send()
 }
 
+// 레거시 엔드포인트 — 스트림포켓 기준 동기화 (신규 페이지는 /steam/admin/games/sync 사용)
 export async function syncProductsHandler(req: Request, res: Response): Promise<void> {
-  const result = await syncNaverProducts()
+  const result = await syncNaverProducts('streampocket')
   res.json({ data: result })
 }

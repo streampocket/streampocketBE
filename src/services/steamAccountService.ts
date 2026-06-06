@@ -10,6 +10,7 @@ import {
   deleteAccount as deleteAccountRepo,
 } from '../repositories/steamAccountRepository'
 import { findProductById } from '../repositories/steamProductRepository'
+import { findGameIdByProductId } from '../repositories/storeListingRepository'
 
 type ListAccountsInput = {
   productId?: string
@@ -61,7 +62,9 @@ export async function bulkCreate(input: BulkCreateInput) {
   if (!product) {
     throw Object.assign(new Error('상품을 찾을 수 없습니다.'), { statusCode: 404 })
   }
-  const count = await bulkCreateAccounts(input.productId, input.accounts, product.name)
+  // game_id 동반 기록 — 신규 상품 페이지의 재고(게임 단위)에 잡히도록 리스팅 경유로 해석
+  const gameId = await findGameIdByProductId(input.productId)
+  const count = await bulkCreateAccounts(input.productId, input.accounts, product.name, gameId)
   const available = await countAvailableAccounts(input.productId)
   return { created: count, availableTotal: available }
 }

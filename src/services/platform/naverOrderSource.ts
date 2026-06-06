@@ -1,5 +1,6 @@
 import { z } from 'zod'
-import { naverApiRequest } from '../../lib/naverAuth'
+import { Store } from '@prisma/client'
+import { naverApiRequest, naverApiRequestAs } from '../../lib/naverAuth'
 import { sendDiscordAlert } from '../../lib/discord'
 import {
   IOrderSource,
@@ -225,8 +226,11 @@ export async function fetchProductOrderDetails(
   return body.data
 }
 
-async function fetchNaverProductsPage(page: number): Promise<NaverProductListResponse> {
-  const res = await naverApiRequest('/v1/products/search', {
+async function fetchNaverProductsPage(
+  store: Store,
+  page: number,
+): Promise<NaverProductListResponse> {
+  const res = await naverApiRequestAs(store, '/v1/products/search', {
     method: 'POST',
     body: JSON.stringify({
       page,
@@ -243,7 +247,7 @@ async function fetchNaverProductsPage(page: number): Promise<NaverProductListRes
   return naverProductListResponseSchema.parse(await res.json())
 }
 
-export async function fetchNaverProducts(): Promise<{
+export async function fetchNaverProducts(store: Store): Promise<{
   productId: string
   name: string
   price: number | null
@@ -255,7 +259,7 @@ export async function fetchNaverProducts(): Promise<{
   let totalPages: number | undefined
 
   while (page <= NAVER_PRODUCT_MAX_PAGES) {
-    const body = await fetchNaverProductsPage(page)
+    const body = await fetchNaverProductsPage(store, page)
     collected.push(...body.contents)
 
     totalPages = body.totalPages

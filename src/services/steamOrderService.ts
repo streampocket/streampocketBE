@@ -161,14 +161,17 @@ export async function retryOrder(id: string): Promise<void> {
   }
 
   if (productType === 'AA') {
-    await sendOrderAlimtalk({
-      productType: 'AA',
-      orderItemId: order.id,
-      recipientPhoneNumber: order.receiverPhoneNumber,
-      recipientName: order.receiverName,
-      productName: order.productName,
-      paidAt: order.paidAt ?? order.createdAt,
-    })
+    await sendOrderAlimtalk(
+      {
+        productType: 'AA',
+        orderItemId: order.id,
+        recipientPhoneNumber: order.receiverPhoneNumber,
+        recipientName: order.receiverName,
+        productName: order.productName,
+        paidAt: order.paidAt ?? order.createdAt,
+      },
+      order.store,
+    )
     await updateOrderItem(order.id, { fulfillmentStatus: 'pending', errorMessage: undefined })
     await sendDiscordAlert(
       'order',
@@ -188,22 +191,25 @@ export async function retryOrder(id: string): Promise<void> {
     throw Object.assign(new Error('연결된 계정을 찾을 수 없습니다.'), { statusCode: 404 })
   }
 
-  await sendOrderAlimtalk({
-    productType: 'NA',
-    orderItemId: order.id,
-    recipientPhoneNumber: order.receiverPhoneNumber,
-    recipientName: order.receiverName,
-    productName: order.productName,
-    accountUsername: account.username,
-    accountPassword: account.password,
-    accountEmail: account.email,
-    accountEmailPassword: account.emailPassword,
-    accountEmailSiteUrl: account.emailSiteUrl,
-    accountSecondaryEmail: account.secondaryEmail,
-    accountSecondaryEmailPassword: account.secondaryEmailPassword,
-    accountSecondaryEmailSiteUrl: account.secondaryEmailSiteUrl,
-    paidAt: order.paidAt ?? order.createdAt,
-  })
+  await sendOrderAlimtalk(
+    {
+      productType: 'NA',
+      orderItemId: order.id,
+      recipientPhoneNumber: order.receiverPhoneNumber,
+      recipientName: order.receiverName,
+      productName: order.productName,
+      accountUsername: account.username,
+      accountPassword: account.password,
+      accountEmail: account.email,
+      accountEmailPassword: account.emailPassword,
+      accountEmailSiteUrl: account.emailSiteUrl,
+      accountSecondaryEmail: account.secondaryEmail,
+      accountSecondaryEmailPassword: account.secondaryEmailPassword,
+      accountSecondaryEmailSiteUrl: account.secondaryEmailSiteUrl,
+      paidAt: order.paidAt ?? order.createdAt,
+    },
+    order.store,
+  )
 
   await markAccountAsSent(account.id)
   await updateOrderItem(order.id, { fulfillmentStatus: 'pending', errorMessage: undefined })
@@ -251,12 +257,15 @@ export async function sendOrderStatusNotification(id: string): Promise<void> {
   const recipientLabel = `${order.receiverName ?? '미확인'} (${order.receiverPhoneNumber})`
 
   try {
-    await sendOrderStatusAlimtalk({
-      orderItemId: order.id,
-      recipientPhoneNumber: order.receiverPhoneNumber,
-      recipientName: order.receiverName,
-      productOrderId: order.productOrderId,
-    })
+    await sendOrderStatusAlimtalk(
+      {
+        orderItemId: order.id,
+        recipientPhoneNumber: order.receiverPhoneNumber,
+        recipientName: order.receiverName,
+        productOrderId: order.productOrderId,
+      },
+      order.store,
+    )
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)
     await notifyAlimtalkDiscord(
@@ -463,11 +472,14 @@ export async function manualCompleteOrder(id: string): Promise<void> {
   ) {
     const recipientLabel = `${order.receiverName ?? '미확인'} (${phone})`
     try {
-      await sendOrderCompletedAlimtalk({
-        orderItemId: order.id,
-        recipientPhoneNumber: phone,
-        recipientName: order.receiverName,
-      })
+      await sendOrderCompletedAlimtalk(
+        {
+          orderItemId: order.id,
+          recipientPhoneNumber: phone,
+          recipientName: order.receiverName,
+        },
+        order.store,
+      )
       await notifyAlimtalkDiscord(
         `🎉 게임선물 완료 알림톡 발송 완료\n상품: ${order.productName}\n수신: ${recipientLabel}`,
         ALIMTALK_GIFT_COMPLETE_COLOR,

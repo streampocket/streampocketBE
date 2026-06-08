@@ -260,6 +260,8 @@ export async function createManualOrderItem(
       fulfillmentStatus: data.fulfillmentStatus,
       paidAt: data.paidAt,
       source: 'manual',
+      // 수동주문은 스토어 무귀속 — 매출 집계에서 "전체"에만 포함(스토어별 보기 제외). 기본값(streampocket) 덮어씀.
+      store: null,
     },
   })
 }

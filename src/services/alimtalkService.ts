@@ -217,22 +217,24 @@ function aligoEnv(key: string, store: Store): string {
   return process.env[`${key}${STORE_ALIGO_SUFFIX[store]}`] ?? ''
 }
 
-export function getEnvConfig(store: Store = DEFAULT_STORE): EnvConfig {
+// store=null(수동주문 등 스토어 무귀속)이면 기본 스토어(streampocket) 알리고 설정 사용.
+export function getEnvConfig(store: Store | null = DEFAULT_STORE): EnvConfig {
+  const resolved = store ?? DEFAULT_STORE
   return {
-    apiKey: aligoEnv('ALIGO_API_KEY', store),
-    userId: aligoEnv('ALIGO_USER_ID', store),
-    senderKey: aligoEnv('ALIGO_SENDER_KEY', store),
-    templateCodeNA: aligoEnv('ALIGO_TEMPLATE_CODE_NA', store),
-    templateCodeAA: aligoEnv('ALIGO_TEMPLATE_CODE_AA', store),
-    templateCodeNASecondary: aligoEnv('ALIGO_TEMPLATE_CODE_NA_SECONDARY', store),
-    templateCodeNAOutOfStock: aligoEnv('ALIGO_TEMPLATE_CODE_NA_OUT_OF_STOCK', store),
-    templateCodeReviewGame: aligoEnv('ALIGO_TEMPLATE_CODE_REVIEW_GAME', store),
-    templateCodeBG: aligoEnv('ALIGO_TEMPLATE_CODE_BG', store),
-    templateCodePartyApply: aligoEnv('ALIGO_TEMPLATE_CODE_PARTY_APPLY', store),
-    templateCodeOrderStatus: aligoEnv('ALIGO_TEMPLATE_CODE_ORDER_STATUS', store),
-    templateCodeOrderCompleted: aligoEnv('ALIGO_TEMPLATE_CODE_ORDER_COMPLETED', store),
-    templateCodePhoneVerify: aligoEnv('ALIGO_TEMPLATE_CODE_PHONE_VERIFY', store),
-    sender: aligoEnv('ALIGO_SENDER', store),
+    apiKey: aligoEnv('ALIGO_API_KEY', resolved),
+    userId: aligoEnv('ALIGO_USER_ID', resolved),
+    senderKey: aligoEnv('ALIGO_SENDER_KEY', resolved),
+    templateCodeNA: aligoEnv('ALIGO_TEMPLATE_CODE_NA', resolved),
+    templateCodeAA: aligoEnv('ALIGO_TEMPLATE_CODE_AA', resolved),
+    templateCodeNASecondary: aligoEnv('ALIGO_TEMPLATE_CODE_NA_SECONDARY', resolved),
+    templateCodeNAOutOfStock: aligoEnv('ALIGO_TEMPLATE_CODE_NA_OUT_OF_STOCK', resolved),
+    templateCodeReviewGame: aligoEnv('ALIGO_TEMPLATE_CODE_REVIEW_GAME', resolved),
+    templateCodeBG: aligoEnv('ALIGO_TEMPLATE_CODE_BG', resolved),
+    templateCodePartyApply: aligoEnv('ALIGO_TEMPLATE_CODE_PARTY_APPLY', resolved),
+    templateCodeOrderStatus: aligoEnv('ALIGO_TEMPLATE_CODE_ORDER_STATUS', resolved),
+    templateCodeOrderCompleted: aligoEnv('ALIGO_TEMPLATE_CODE_ORDER_COMPLETED', resolved),
+    templateCodePhoneVerify: aligoEnv('ALIGO_TEMPLATE_CODE_PHONE_VERIFY', resolved),
+    sender: aligoEnv('ALIGO_SENDER', resolved),
   }
 }
 
@@ -516,7 +518,7 @@ export async function isAlimtalkEnabled(): Promise<boolean> {
 
 export async function sendOrderAlimtalk(
   input: SendOrderAlimtalkInput,
-  store: Store = DEFAULT_STORE,
+  store: Store | null = DEFAULT_STORE,
 ): Promise<void> {
   const config = getEnvConfig(store)
   if (!isConfigured(config)) {
@@ -551,13 +553,12 @@ export async function sendOrderAlimtalk(
           이메일: input.accountEmail,
           이메일비밀번호: input.accountEmailPassword,
           이메일플렛폼: input.accountEmailSiteUrl,
-          ...(input.accountSecondaryEmail
-            ? {
-                '2차이메일': input.accountSecondaryEmail,
-                '2차이메일비밀번호': input.accountSecondaryEmailPassword ?? '',
-                '2차이메일플렛폼': input.accountSecondaryEmailSiteUrl ?? '',
-              }
-            : {}),
+          // 2차 이메일 변수는 항상 포함(없으면 빈값). 2차 변수를 가진 단일 템플릿(예: 포켓 UI_4989)에
+          // 2차 없는 계정을 보낼 때 #{2차이메일} 리터럴이 남아 발송 거부되는 것을 방지.
+          // 2차 자리가 없는 템플릿(예: 스트림 UG_5955)은 빈값 치환이 매칭 없이 무시되어 무영향.
+          '2차이메일': input.accountSecondaryEmail ?? '',
+          '2차이메일비밀번호': input.accountSecondaryEmailPassword ?? '',
+          '2차이메일플렛폼': input.accountSecondaryEmailSiteUrl ?? '',
         }
       : {
           상품명: input.productName,
@@ -630,10 +631,12 @@ export async function sendAlimtalkTest(): Promise<AlimtalkTestResult> {
   }
 }
 
+// store별 알리고 설정 사용 — 주문이 들어온 스토어 발신프로필로 발송(교차 발신 방지)
 export async function sendReviewGameAlimtalk(
   input: SendReviewGameAlimtalkInput,
+  store: Store | null = DEFAULT_STORE,
 ): Promise<void> {
-  const config = getEnvConfig()
+  const config = getEnvConfig(store)
   if (!isConfigured(config)) {
     throw new Error('알리고 환경변수가 모두 설정되지 않았습니다.')
   }
@@ -765,7 +768,7 @@ type SendOutOfStockAlimtalkInput = {
 
 export async function sendOutOfStockAlimtalk(
   input: SendOutOfStockAlimtalkInput,
-  store: Store = DEFAULT_STORE,
+  store: Store | null = DEFAULT_STORE,
 ): Promise<void> {
   const config = getEnvConfig(store)
   if (!isConfigured(config)) {
@@ -823,10 +826,12 @@ type SendOrderStatusAlimtalkInput = {
 }
 
 // 주문 진행상황 조회 안내 알림톡 (관리자가 주문 상세 모달에서 수동 발송)
+// store별 알리고 설정 사용 — 주문이 들어온 스토어 발신프로필로 발송(교차 발신 방지)
 export async function sendOrderStatusAlimtalk(
   input: SendOrderStatusAlimtalkInput,
+  store: Store | null = DEFAULT_STORE,
 ): Promise<void> {
-  const config = getEnvConfig()
+  const config = getEnvConfig(store)
   if (!isConfigured(config)) {
     throw new Error('알리고 환경변수가 모두 설정되지 않았습니다.')
   }
@@ -887,10 +892,12 @@ type SendOrderCompletedAlimtalkInput = {
 }
 
 // 주문 완료 처리 시 게임선물 완료 안내 알림톡 (고정 메시지, 변수 없음)
+// store별 알리고 설정 사용 — 주문이 들어온 스토어 발신프로필로 발송(교차 발신 방지)
 export async function sendOrderCompletedAlimtalk(
   input: SendOrderCompletedAlimtalkInput,
+  store: Store | null = DEFAULT_STORE,
 ): Promise<void> {
-  const config = getEnvConfig()
+  const config = getEnvConfig(store)
   if (!isConfigured(config)) {
     throw new Error('알리고 환경변수가 모두 설정되지 않았습니다.')
   }

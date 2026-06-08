@@ -179,7 +179,7 @@ model SteamOrderItem {
   productOrderId            String              @unique @map("product_order_id") @db.VarChar(100)
   naverOrderId              String              @map("naver_order_id") @db.VarChar(100)
   source                    OrderSource         @default(naver) @map("source")
-  store                     Store               @default(streampocket)
+  store                     Store?              @default(streampocket)
   productId                 String?             @map("product_id") @db.Uuid
   gameId                    String?             @map("game_id") @db.Uuid
   accountId                 String?             @map("account_id") @db.Uuid

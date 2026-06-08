@@ -29,6 +29,7 @@ const fulfillmentStatusEnum = z.enum([
 ])
 
 const orderSourceEnum = z.enum(['naver', 'manual'])
+const storeEnum = z.enum(['streampocket', 'pokemon_steam'])
 
 const listQuerySchema = z.object({
   status: fulfillmentStatusEnum.optional(),
@@ -45,6 +46,7 @@ const listQuerySchema = z.object({
     .optional()
     .transform((v) => v === 'true'),
   source: orderSourceEnum.optional(),
+  store: storeEnum.optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 })
@@ -62,10 +64,11 @@ export async function getOrdersHandler(req: Request, res: Response): Promise<voi
       excludeStatuses: query.excludeStatuses,
       excludeWithExpense: query.excludeWithExpense,
       source: query.source,
+      store: query.store,
       page: query.page,
       pageSize: query.pageSize,
     }),
-    getOrderCounts({ from, to, receiverName: query.receiverName, source: query.source }),
+    getOrderCounts({ from, to, receiverName: query.receiverName, source: query.source, store: query.store }),
   ])
   res.json({
     data: result.items,

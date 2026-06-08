@@ -63,6 +63,7 @@ type ListOrdersInput = {
   excludeStatuses?: FulfillmentStatus[]
   excludeWithExpense?: boolean
   source?: OrderSource
+  store?: Store
   page: number
   pageSize: number
 }
@@ -117,6 +118,7 @@ export async function listOrders(input: ListOrdersInput): Promise<ListOrdersResu
       : {}),
     ...(input.excludeWithExpense ? { expense: null } : {}),
     ...(input.source ? { source: input.source } : {}),
+    ...(input.store ? { store: input.store } : {}),
   }
   const [items, total] = await prisma.$transaction([
     prisma.steamOrderItem.findMany({
@@ -136,6 +138,7 @@ type CountOrdersInput = {
   to?: Date
   receiverName?: string
   source?: OrderSource
+  store?: Store
 }
 
 export async function groupOrderCountsByStatus(input: CountOrdersInput) {
@@ -152,6 +155,7 @@ export async function groupOrderCountsByStatus(input: CountOrdersInput) {
       ? { receiverName: { contains: input.receiverName, mode: 'insensitive' as const } }
       : {}),
     ...(input.source ? { source: input.source } : {}),
+    ...(input.store ? { store: input.store } : {}),
   }
   return prisma.steamOrderItem.groupBy({
     by: ['fulfillmentStatus'],

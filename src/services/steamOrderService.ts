@@ -1,4 +1,4 @@
-import { FulfillmentStatus, OrderSource } from '@prisma/client'
+import { FulfillmentStatus, OrderSource, Store } from '@prisma/client'
 import {
   listOrders,
   exportOrders,
@@ -41,6 +41,7 @@ type ListOrdersInput = {
   excludeStatuses?: FulfillmentStatus[]
   excludeWithExpense?: boolean
   source?: OrderSource
+  store?: Store
   page: number
   pageSize: number
 }
@@ -57,6 +58,7 @@ type GetOrderCountsInput = {
   to?: Date
   receiverName?: string
   source?: OrderSource
+  store?: Store
 }
 
 // 수동 주문 생성 입력 — 상품주문번호·상태(대기)·결제일시(생성 시각)는 서버가 자동 설정

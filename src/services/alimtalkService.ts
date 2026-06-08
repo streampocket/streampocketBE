@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { Store } from '@prisma/client'
+import { DEFAULT_STORE } from '../constants/stores'
 import {
   getAlimtalkSettings as getAlimtalkSettingsRecord,
   upsertAlimtalkSettings,
@@ -204,22 +206,33 @@ function normalizeTemplateVars(vars: Record<string, string>): Record<string, str
   )
 }
 
-export function getEnvConfig(): EnvConfig {
+// 스토어별 ALIGO 환경변수 접미사 — streampocket: 기존 키, pokemon_steam: _POKEMON 접미사.
+// 폴백 없음(포켓 미설정 시 isConfigured 실패 → manual_review). 교차 발신 방지.
+const STORE_ALIGO_SUFFIX: Record<Store, string> = {
+  streampocket: '',
+  pokemon_steam: '_POKEMON',
+}
+
+function aligoEnv(key: string, store: Store): string {
+  return process.env[`${key}${STORE_ALIGO_SUFFIX[store]}`] ?? ''
+}
+
+export function getEnvConfig(store: Store = DEFAULT_STORE): EnvConfig {
   return {
-    apiKey: process.env['ALIGO_API_KEY'] ?? '',
-    userId: process.env['ALIGO_USER_ID'] ?? '',
-    senderKey: process.env['ALIGO_SENDER_KEY'] ?? '',
-    templateCodeNA: process.env['ALIGO_TEMPLATE_CODE_NA'] ?? '',
-    templateCodeAA: process.env['ALIGO_TEMPLATE_CODE_AA'] ?? '',
-    templateCodeNASecondary: process.env['ALIGO_TEMPLATE_CODE_NA_SECONDARY'] ?? '',
-    templateCodeNAOutOfStock: process.env['ALIGO_TEMPLATE_CODE_NA_OUT_OF_STOCK'] ?? '',
-    templateCodeReviewGame: process.env['ALIGO_TEMPLATE_CODE_REVIEW_GAME'] ?? '',
-    templateCodeBG: process.env['ALIGO_TEMPLATE_CODE_BG'] ?? '',
-    templateCodePartyApply: process.env['ALIGO_TEMPLATE_CODE_PARTY_APPLY'] ?? '',
-    templateCodeOrderStatus: process.env['ALIGO_TEMPLATE_CODE_ORDER_STATUS'] ?? '',
-    templateCodeOrderCompleted: process.env['ALIGO_TEMPLATE_CODE_ORDER_COMPLETED'] ?? '',
-    templateCodePhoneVerify: process.env['ALIGO_TEMPLATE_CODE_PHONE_VERIFY'] ?? '',
-    sender: process.env['ALIGO_SENDER'] ?? '',
+    apiKey: aligoEnv('ALIGO_API_KEY', store),
+    userId: aligoEnv('ALIGO_USER_ID', store),
+    senderKey: aligoEnv('ALIGO_SENDER_KEY', store),
+    templateCodeNA: aligoEnv('ALIGO_TEMPLATE_CODE_NA', store),
+    templateCodeAA: aligoEnv('ALIGO_TEMPLATE_CODE_AA', store),
+    templateCodeNASecondary: aligoEnv('ALIGO_TEMPLATE_CODE_NA_SECONDARY', store),
+    templateCodeNAOutOfStock: aligoEnv('ALIGO_TEMPLATE_CODE_NA_OUT_OF_STOCK', store),
+    templateCodeReviewGame: aligoEnv('ALIGO_TEMPLATE_CODE_REVIEW_GAME', store),
+    templateCodeBG: aligoEnv('ALIGO_TEMPLATE_CODE_BG', store),
+    templateCodePartyApply: aligoEnv('ALIGO_TEMPLATE_CODE_PARTY_APPLY', store),
+    templateCodeOrderStatus: aligoEnv('ALIGO_TEMPLATE_CODE_ORDER_STATUS', store),
+    templateCodeOrderCompleted: aligoEnv('ALIGO_TEMPLATE_CODE_ORDER_COMPLETED', store),
+    templateCodePhoneVerify: aligoEnv('ALIGO_TEMPLATE_CODE_PHONE_VERIFY', store),
+    sender: aligoEnv('ALIGO_SENDER', store),
   }
 }
 
@@ -503,8 +516,9 @@ export async function isAlimtalkEnabled(): Promise<boolean> {
 
 export async function sendOrderAlimtalk(
   input: SendOrderAlimtalkInput,
+  store: Store = DEFAULT_STORE,
 ): Promise<void> {
-  const config = getEnvConfig()
+  const config = getEnvConfig(store)
   if (!isConfigured(config)) {
     throw new Error('알리고 환경변수가 모두 설정되지 않았습니다.')
   }
@@ -751,8 +765,9 @@ type SendOutOfStockAlimtalkInput = {
 
 export async function sendOutOfStockAlimtalk(
   input: SendOutOfStockAlimtalkInput,
+  store: Store = DEFAULT_STORE,
 ): Promise<void> {
-  const config = getEnvConfig()
+  const config = getEnvConfig(store)
   if (!isConfigured(config)) {
     throw new Error('알리고 환경변수가 모두 설정되지 않았습니다.')
   }

@@ -28,6 +28,13 @@ const STORE_ENV_KEYS: Record<Store, StoreEnvKeys> = {
   },
 }
 
+// 해당 스토어의 네이버 커머스 자격증명이 환경변수에 설정돼 있는지 확인.
+// 단계적 오픈용 — 미설정 스토어는 폴링 루프에서 조용히 건너뛰어 에러/알림 스팸 방지.
+export function hasStoreCredentials(store: Store): boolean {
+  const keys = STORE_ENV_KEYS[store]
+  return Boolean(process.env[keys.clientId] && process.env[keys.clientSecret])
+}
+
 type NaverErrorDetail = {
   name: string | null
   message: string | null

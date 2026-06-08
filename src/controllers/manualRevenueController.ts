@@ -8,9 +8,13 @@ import {
 } from '../services/manualRevenueService'
 import { sumManualRevenue } from '../repositories/manualRevenueRepository'
 
+// store 미지정 = 전체(공통 포함). 지정 시 해당 store만(공통 제외).
+const storeQuerySchema = z.enum(['streampocket', 'pokemon_steam']).optional()
+
 const listQuerySchema = z.object({
   yearMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(),
   dateOrder: z.enum(['asc', 'desc']).default('desc'),
+  store: storeQuerySchema,
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 })
@@ -37,6 +41,7 @@ const idParamSchema = z.object({
 
 const summaryQuerySchema = z.object({
   yearMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(),
+  store: storeQuerySchema,
 })
 
 function yearMonthToRange(yearMonth: string): { startDate: Date; endDate: Date } {
@@ -62,6 +67,7 @@ export async function getManualRevenuesHandler(req: Request, res: Response): Pro
     startDate,
     endDate,
     dateOrder: query.dateOrder,
+    store: query.store,
     page: query.page,
     pageSize: query.pageSize,
   })
@@ -78,13 +84,13 @@ export async function getManualRevenuesHandler(req: Request, res: Response): Pro
 }
 
 export async function getManualRevenueSummaryHandler(req: Request, res: Response): Promise<void> {
-  const { yearMonth } = summaryQuerySchema.parse(req.query)
+  const { yearMonth, store } = summaryQuerySchema.parse(req.query)
 
   const now = new Date()
   const ym = yearMonth ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   const { startDate, endDate } = yearMonthToRange(ym)
 
-  const total = await sumManualRevenue(startDate, endDate)
+  const total = await sumManualRevenue(startDate, endDate, store)
   res.json({ data: { total } })
 }
 

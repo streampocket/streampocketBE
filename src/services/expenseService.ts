@@ -28,6 +28,7 @@ type GetExpensesInput = {
   startDate?: Date
   endDate?: Date
   dateOrder?: 'asc' | 'desc'
+  store?: Store
   page: number
   pageSize: number
 }
@@ -111,6 +112,6 @@ export async function deleteExpenseEntry(id: string) {
   return deleteRepo(id)
 }
 
-export async function getExpenseSummary(startDate: Date, endDate: Date) {
-  return sumExpensesByCategory(startDate, endDate)
+export async function getExpenseSummary(startDate: Date, endDate: Date, store?: Store) {
+  return sumExpensesByCategory(startDate, endDate, store)
 }

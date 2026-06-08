@@ -16,15 +16,17 @@ type FindExpensesParams = {
   startDate?: Date
   endDate?: Date
   dateOrder?: 'asc' | 'desc'
+  store?: Store
   page: number
   pageSize: number
 }
 
 export async function findExpenses(params: FindExpensesParams) {
-  const { category, startDate, endDate, dateOrder = 'desc', page, pageSize } = params
+  const { category, startDate, endDate, dateOrder = 'desc', store, page, pageSize } = params
 
   const where: Prisma.ExpenseWhereInput = {}
   if (category) where.category = category
+  if (store) where.store = store
   if (startDate || endDate) {
     where.date = {}
     if (startDate) where.date.gte = startDate

@@ -10,11 +10,14 @@ import {
 import { getRevenueSummary } from '../services/steamDashboardService'
 
 const expenseCategorySchema = z.nativeEnum(ExpenseCategory)
+// store 미지정 = 전체(공통 포함). 지정 시 해당 store만(공통 제외).
+const storeQuerySchema = z.enum(['streampocket', 'pokemon_steam']).optional()
 
 const expenseListQuerySchema = z.object({
   category: expenseCategorySchema.optional(),
   yearMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(),
   dateOrder: z.enum(['asc', 'desc']).default('desc'),
+  store: storeQuerySchema,
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 })
@@ -48,6 +51,7 @@ const idParamSchema = z.object({
 
 const summaryQuerySchema = z.object({
   yearMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(),
+  store: storeQuerySchema,
 })
 
 function yearMonthToRange(yearMonth: string): { startDate: Date; endDate: Date } {
@@ -76,6 +80,7 @@ export async function getExpensesHandler(req: Request, res: Response): Promise<v
     startDate,
     endDate,
     dateOrder: query.dateOrder,
+    store: query.store,
     page: query.page,
     pageSize: query.pageSize,
   })
@@ -92,13 +97,13 @@ export async function getExpensesHandler(req: Request, res: Response): Promise<v
 }
 
 export async function getExpenseSummaryHandler(req: Request, res: Response): Promise<void> {
-  const { yearMonth } = summaryQuerySchema.parse(req.query)
+  const { yearMonth, store } = summaryQuerySchema.parse(req.query)
 
   const now = new Date()
   const ym = yearMonth ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   const { startDate, endDate } = yearMonthToRange(ym)
 
-  const summary = await getRevenueSummary(startDate, endDate)
+  const summary = await getRevenueSummary(startDate, endDate, store)
   res.json({ data: summary })
 }
 

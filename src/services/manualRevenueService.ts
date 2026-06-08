@@ -11,6 +11,7 @@ type GetManualRevenuesInput = {
   startDate?: Date
   endDate?: Date
   dateOrder?: 'asc' | 'desc'
+  store?: Store
   page: number
   pageSize: number
 }

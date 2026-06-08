@@ -5,14 +5,16 @@ type FindManualRevenuesParams = {
   startDate?: Date
   endDate?: Date
   dateOrder?: 'asc' | 'desc'
+  store?: Store
   page: number
   pageSize: number
 }
 
 export async function findManualRevenues(params: FindManualRevenuesParams) {
-  const { startDate, endDate, dateOrder = 'desc', page, pageSize } = params
+  const { startDate, endDate, dateOrder = 'desc', store, page, pageSize } = params
 
   const where: Prisma.ManualRevenueWhereInput = {}
+  if (store) where.store = store
   if (startDate || endDate) {
     where.date = {}
     if (startDate) where.date.gte = startDate

@@ -124,8 +124,9 @@ model SteamGame {
   createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  listings StoreListing[]
-  accounts SteamAccount[]
+  listings   StoreListing[]
+  accounts   SteamAccount[]
+  orderItems SteamOrderItem[]
 
   @@map("steam_games")
 }
@@ -178,7 +179,9 @@ model SteamOrderItem {
   productOrderId            String              @unique @map("product_order_id") @db.VarChar(100)
   naverOrderId              String              @map("naver_order_id") @db.VarChar(100)
   source                    OrderSource         @default(naver) @map("source")
+  store                     Store               @default(streampocket)
   productId                 String?             @map("product_id") @db.Uuid
+  gameId                    String?             @map("game_id") @db.Uuid
   accountId                 String?             @map("account_id") @db.Uuid
   productName               String              @map("product_name") @db.VarChar(255)
   receiverPhoneNumber       String?             @map("receiver_phone_number") @db.VarChar(30)
@@ -204,6 +207,7 @@ model SteamOrderItem {
   createdAt                 DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                 DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
   product                   SteamProduct?       @relation(fields: [productId], references: [id], onDelete: SetNull)
+  game                      SteamGame?          @relation(fields: [gameId], references: [id], onDelete: SetNull)
   account                   SteamAccount?       @relation(fields: [accountId], references: [id], onDelete: SetNull)
   deliveryLogs              DeliveryLog[]
   registrations             SteamRegistration[]
@@ -212,6 +216,7 @@ model SteamOrderItem {
   @@index([fulfillmentStatus, createdAt])
   @@index([naverOrderId])
   @@index([source, fulfillmentStatus, createdAt])
+  @@index([store, fulfillmentStatus, createdAt])
   @@map("steam_order_items")
 }
 

@@ -7,12 +7,16 @@ import {
   updateOrderItem,
 } from '../repositories/steamOrderRepository'
 import { findProductByNaverId } from '../repositories/steamProductRepository'
+import { findListingWithGameByNaverProductId } from '../repositories/storeListingRepository'
 import {
   reserveNextAvailableAccount,
+  reserveNextAvailableAccountByGame,
   countAvailableAccounts,
+  countAvailableAccountsByGame,
   markAccountAsSent,
 } from '../repositories/steamAccountRepository'
 import { detectProductType } from '../utils/productType'
+import { DEFAULT_STORE } from '../constants/stores'
 import { IOrderSource, IncomingOrderItem } from './platform/IOrderSource'
 import { isAlimtalkEnabled, sendOrderAlimtalk, sendOutOfStockAlimtalk } from './alimtalkService'
 
@@ -90,6 +94,11 @@ export async function processOrder(
   if (existing) return
 
   const product = await findProductByNaverId(item.naverProductId)
+  // 게임/스토어 해석 — 리스팅이 있으면 store·gameId·productType 을 게임 기반으로 확보.
+  // 없으면 레거시 경로로 폴백(store=streampocket, gameId=null) → 기존 동작 무손상.
+  const listing = await findListingWithGameByNaverProductId(item.naverProductId)
+  const store = listing?.store ?? DEFAULT_STORE
+  const gameId = listing?.gameId ?? null
 
   const sourceTag = source === 'backup' ? ' (보조 스캔으로 사후 포착)' : ''
   const priceLines = formatOrderPriceLines(item.unitPrice, product).join('\n')
@@ -106,6 +115,8 @@ export async function processOrder(
     paymentAmount: item.paymentAmount,
     receiverPhoneNumber: item.receiverPhoneNumber ?? undefined,
     receiverName: item.receiverName ?? undefined,
+    store,
+    gameId,
     paidAt: item.paidAt,
   })
 
@@ -135,7 +146,8 @@ export async function processOrder(
 
   await updateOrderItem(orderItem.id, { productId: product.id })
 
-  const productType = detectProductType(product.name)
+  // 타입은 게임(productType) 우선, 리스팅 없으면 상품명 파싱으로 폴백(기존 동작).
+  const productType = listing?.game.productType ?? detectProductType(product.name)
   if (productType === null) {
     await updateOrderItem(orderItem.id, {
       fulfillmentStatus: 'manual_review',
@@ -294,7 +306,10 @@ export async function processOrder(
     return
   }
 
-  const account = await reserveNextAvailableAccount(product.id)
+  // NA 재고는 게임 단위 공유 → gameId 우선, 없으면 레거시 productId 폴백.
+  const account = gameId
+    ? await reserveNextAvailableAccountByGame(gameId)
+    : await reserveNextAvailableAccount(product.id)
   if (!account) {
     try {
       await orderSource.confirmOrder(item.productOrderId)
@@ -369,7 +384,9 @@ export async function processOrder(
 
   await updateOrderItem(orderItem.id, { accountId: account.id })
 
-  const remaining = await countAvailableAccounts(product.id)
+  const remaining = gameId
+    ? await countAvailableAccountsByGame(gameId)
+    : await countAvailableAccounts(product.id)
   if (remaining <= LOW_STOCK_THRESHOLD) {
     await sendDiscordAlert(
       'stock',

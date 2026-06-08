@@ -5,6 +5,7 @@ import {
   FulfillmentStatus,
   OrderSource,
   SteamOrderItem,
+  Store,
 } from '@prisma/client'
 
 type CreateOrderItemInput = {
@@ -15,7 +16,9 @@ type CreateOrderItemInput = {
   paymentAmount?: number | null
   receiverPhoneNumber?: string
   receiverName?: string
+  store?: Store
   productId?: string
+  gameId?: string | null
   paidAt?: Date
 }
 

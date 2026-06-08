@@ -1,4 +1,4 @@
-import { Store, StoreListing } from '@prisma/client'
+import { SteamGame, Store, StoreListing } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 
 type ListingFields = {
@@ -17,6 +17,16 @@ export async function findListingByNaverProductId(
   naverProductId: string,
 ): Promise<StoreListing | null> {
   return prisma.storeListing.findUnique({ where: { naverProductId } })
+}
+
+// 주문 해석용 — naverProductId 로 리스팅 + 게임(타입)을 한 번에 조회 (store/gameId/productType)
+export async function findListingWithGameByNaverProductId(
+  naverProductId: string,
+): Promise<(StoreListing & { game: SteamGame }) | null> {
+  return prisma.storeListing.findUnique({
+    where: { naverProductId },
+    include: { game: true },
+  })
 }
 
 export async function createListing(data: CreateListingInput): Promise<StoreListing> {

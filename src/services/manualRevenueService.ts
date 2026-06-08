@@ -1,3 +1,4 @@
+import { Store } from '@prisma/client'
 import {
   findManualRevenues,
   findManualRevenueById,
@@ -28,6 +29,7 @@ type CreateManualRevenueInput = {
   date: Date
   amount: number
   memo?: string
+  store?: Store | null
 }
 
 export async function createManualRevenueEntry(input: CreateManualRevenueInput) {

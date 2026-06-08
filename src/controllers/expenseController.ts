@@ -20,6 +20,8 @@ const expenseListQuerySchema = z.object({
 })
 
 const expensePayerSchema = z.nativeEnum(ExpensePayer)
+// store: 독립 비용의 사업 귀속. null/미지정 = 공통(전사). 주문연동 비용이면 서비스가 주문 store로 덮어씀.
+const storeSchema = z.enum(['streampocket', 'pokemon_steam']).nullable().optional()
 
 const expenseBodySchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -28,6 +30,7 @@ const expenseBodySchema = z.object({
   amount: z.number().int().min(0),
   memo: z.string().max(500).optional(),
   steamOrderItemId: z.string().uuid().nullable().optional(),
+  store: storeSchema,
 })
 
 const expenseUpdateBodySchema = z.object({
@@ -117,6 +120,7 @@ export async function createExpenseHandler(req: Request, res: Response): Promise
     amount: body.amount,
     memo: body.memo,
     steamOrderItemId: body.steamOrderItemId ?? null,
+    store: body.store ?? null,
   })
   res.status(201).json({ data: expense })
 }

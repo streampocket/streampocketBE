@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma'
-import { Prisma } from '@prisma/client'
+import { Prisma, Store } from '@prisma/client'
 
 type FindManualRevenuesParams = {
   startDate?: Date
@@ -37,6 +37,7 @@ export async function findManualRevenueById(id: string) {
 }
 
 type CreateManualRevenueData = {
+  store?: Store | null
   date: Date
   amount: number
   memo?: string
@@ -60,9 +61,13 @@ export async function deleteManualRevenue(id: string) {
   await prisma.manualRevenue.delete({ where: { id } })
 }
 
-export async function sumManualRevenue(startDate: Date, endDate: Date): Promise<number> {
+export async function sumManualRevenue(
+  startDate: Date,
+  endDate: Date,
+  store?: Store,
+): Promise<number> {
   const result = await prisma.manualRevenue.aggregate({
-    where: { date: { gte: startDate, lte: endDate } },
+    where: { date: { gte: startDate, lte: endDate }, ...(store ? { store } : {}) },
     _sum: { amount: true },
   })
   return result._sum.amount ?? 0

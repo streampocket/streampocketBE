@@ -221,11 +221,19 @@ export async function findInProgressGiftOrders(): Promise<
     productName: string
     receiverName: string | null
     source: OrderSource
+    store: Store | null
   }[]
 > {
   return prisma.steamOrderItem.findMany({
     where: { fulfillmentStatus: 'in_progress', giftCode: { not: null } },
-    select: { id: true, giftCode: true, productName: true, receiverName: true, source: true },
+    select: {
+      id: true,
+      giftCode: true,
+      productName: true,
+      receiverName: true,
+      source: true,
+      store: true,
+    },
   })
 }
 
@@ -304,6 +312,7 @@ export async function findOrdersForAutoExtend(
     productOrderId: string
     estimatedCompletedAt: Date | null
     autoExtendCount: number
+    store: Store | null
   }[]
 > {
   return prisma.steamOrderItem.findMany({
@@ -319,6 +328,7 @@ export async function findOrdersForAutoExtend(
       productOrderId: true,
       estimatedCompletedAt: true,
       autoExtendCount: true,
+      store: true,
     },
   })
 }

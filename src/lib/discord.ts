@@ -1,3 +1,6 @@
+import { Store } from '@prisma/client'
+import { STORE_LABELS } from '../constants/stores'
+
 export type DiscordChannel =
   | 'order'
   | 'stock'
@@ -33,12 +36,14 @@ function getWebhookUrl(channel: DiscordChannel): string | undefined {
 export async function sendDiscordAlert(
   channel: DiscordChannel,
   message: string,
-  options?: { color?: number },
+  // store 전달 시 제목에 스토어 라벨을 접미(예: '주문 알림 · 스트림포켓'). null/미전달이면 접미 없음.
+  options?: { color?: number; store?: Store | null },
 ): Promise<void> {
   const url = getWebhookUrl(channel)
   if (!url) return
 
-  const { title, color: defaultColor } = CHANNEL_META[channel]
+  const { title: baseTitle, color: defaultColor } = CHANNEL_META[channel]
+  const title = options?.store ? `${baseTitle} · ${STORE_LABELS[options.store]}` : baseTitle
   const color = options?.color ?? defaultColor
 
   await fetch(url, {
@@ -55,4 +60,13 @@ export async function sendDiscordAlert(
       ],
     }),
   })
+}
+
+// 특정 스토어에 고정된 알림 함수를 생성. 한 함수 안에서 여러 번 알릴 때 store를 매번 넘기지 않게 한다.
+export function discordNotifier(store: Store | null) {
+  return (
+    channel: DiscordChannel,
+    message: string,
+    options?: { color?: number },
+  ): Promise<void> => sendDiscordAlert(channel, message, { ...options, store })
 }

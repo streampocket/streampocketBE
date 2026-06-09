@@ -4,6 +4,8 @@ import {
   getGames,
   getGameStoreCounts,
   mergeListingToGame,
+  mergeGameInto,
+  splitListingToNewGame,
   updateGame,
 } from '../services/steamGameService'
 import { syncNaverProducts, syncAllStores } from '../services/steamProductService'
@@ -24,6 +26,10 @@ const syncQuerySchema = z.object({
 
 const mergeSchema = z.object({
   gameId: z.string().uuid(),
+})
+
+const mergeGameSchema = z.object({
+  targetGameId: z.string().uuid(),
 })
 
 const updateGameSchema = z.object({
@@ -62,6 +68,27 @@ export async function mergeListingHandler(
   const { gameId } = mergeSchema.parse(req.body)
   const listing = await mergeListingToGame(id, gameId)
   res.json({ data: listing })
+}
+
+// 게임 병합 — 소스 게임(:id)을 대상 게임(body.targetGameId)으로 합침
+export async function mergeGameHandler(
+  req: Request<{ id: string }>,
+  res: Response,
+): Promise<void> {
+  const { id } = req.params
+  const { targetGameId } = mergeGameSchema.parse(req.body)
+  const game = await mergeGameInto(id, targetGameId)
+  res.json({ data: game })
+}
+
+// 되돌리기(분리) — 리스팅(:id)을 새 게임으로 떼어냄
+export async function splitListingHandler(
+  req: Request<{ id: string }>,
+  res: Response,
+): Promise<void> {
+  const { id } = req.params
+  const game = await splitListingToNewGame(id)
+  res.json({ data: game })
 }
 
 export async function updateGameHandler(

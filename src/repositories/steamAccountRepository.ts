@@ -229,3 +229,15 @@ export async function bulkDisableByProductIds(productIds: string[]): Promise<num
   })
   return result.count
 }
+
+// 게임 병합 — 계정 재고를 원 게임에서 대상 게임으로 일괄 이동(NA 재고 공유 보존)
+export async function reassignAccountsToGame(
+  fromGameId: string,
+  toGameId: string,
+): Promise<number> {
+  const result = await prisma.steamAccount.updateMany({
+    where: { gameId: fromGameId },
+    data: { gameId: toGameId },
+  })
+  return result.count
+}

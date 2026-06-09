@@ -71,6 +71,10 @@ export async function findListingById(id: string): Promise<StoreListing | null> 
   return prisma.storeListing.findUnique({ where: { id } })
 }
 
+export async function findListingsByGameId(gameId: string): Promise<StoreListing[]> {
+  return prisma.storeListing.findMany({ where: { gameId } })
+}
+
 export async function findListingByStoreAndGame(
   store: Store,
   gameId: string,

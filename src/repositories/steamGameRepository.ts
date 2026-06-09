@@ -51,6 +51,11 @@ export async function updateGame(
   return prisma.steamGame.update({ where: { id }, data })
 }
 
+// 병합 후 비워진 게임 삭제. (리스팅/계정/주문은 호출 전에 대상 게임으로 이동되어 있어야 함)
+export async function deleteGame(id: string): Promise<void> {
+  await prisma.steamGame.delete({ where: { id } })
+}
+
 // 상품관리 페이지 — 게임 + 스토어별 리스팅 + 가용 재고(game_id 기준) 카운트
 export async function listGamesWithListingsAndStock(
   params: ListGamesParams,

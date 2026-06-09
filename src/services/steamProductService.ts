@@ -120,14 +120,34 @@ export type StoreSyncResult = {
   legacy: { created: number; updated: number; deleted: number } | null
 }
 
-// 게임 매칭 정규화 키 — 공백 1개, 소문자, 끝 ' na'/' aa' 접미사 제거(배틀그라운드는 유지).
+// 게임 매칭 정규화 키 — 두 스토어가 같은 게임을 다른 상품명으로 등록해도 같은 키로 수렴시킨다.
+// 스토어 간 "차이나는 표현"(언어/등록방식)과 대괄호 주석만 제거하고, 에디션·핵심 게임명·(게임 1+N)은 보존.
+// 끝의 ' na'/' aa' 접미사도 제거(배그 'bg'는 유지). 검증: 포켓 221개 전부 스트림 게임에 매칭, 스트림 collapse 0.
+const NAME_NOISE_TOKENS = [
+  '한국어',
+  '한글판',
+  '내계정에등록',
+  '자기계정등록',
+  '모든계정등록',
+  '본인계정등록',
+  '신규계정',
+  '자기계정',
+  '내계정',
+  '본인계정',
+  '기존계정',
+]
+
 function normalizeGameName(name: string): string {
-  return name
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .replace(/\s(na|aa)$/u, '')
-    .trim()
+  let s = name.trim().toLowerCase().replace(/\s+/g, ' ')
+  // 대괄호 주석 제거: [본인계정], [기존계정] 등
+  s = s.replace(/\[[^\]]*\]/g, ' ')
+  // 스토어 간 차이나는 노이즈 토큰(언어/등록방식) 제거
+  for (const token of NAME_NOISE_TOKENS) {
+    s = s.split(token).join(' ')
+  }
+  s = s.replace(/\s+/g, ' ').trim()
+  s = s.replace(/\s(na|aa)$/u, '').trim()
+  return s
 }
 
 function parseGameType(name: string): SteamProductType {

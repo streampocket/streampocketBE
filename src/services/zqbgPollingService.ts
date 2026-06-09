@@ -1,4 +1,4 @@
-import { OrderSource } from '@prisma/client'
+import { OrderSource, Store } from '@prisma/client'
 import { findInProgressGiftOrders } from '../repositories/steamOrderRepository'
 import { manualCompleteOrder } from './steamOrderService'
 import { checkZqbgOrderStatus, ZQBG_STATUS } from '../lib/zqbgClient'
@@ -24,6 +24,7 @@ type GiftOrder = {
   productName: string
   receiverName: string | null
   source: OrderSource
+  store: Store | null
 }
 
 // 발송완료 감지 → 자동 완료 알림 강조색 (밝은 파랑)
@@ -137,7 +138,7 @@ async function completeOrder(order: GiftOrder): Promise<boolean> {
     await sendDiscordAlert(
       'order',
       `🤖 zqbg 발송완료 감지 → 자동 완료 처리${sourceTag}\n상품: ${order.productName}\n수신자: ${order.receiverName ?? '-'}`,
-      { color: DISCORD_BLUE },
+      { color: DISCORD_BLUE, store: order.store },
     )
     return true
   } catch (error) {
@@ -159,6 +160,7 @@ async function alertAbnormal(
   await sendDiscordAlert(
     'error',
     `⚠️ zqbg 미지정 발송상태\n상품: ${order.productName}\n주문번호: ${orderNo}\nstatus: ${status} (${message})\n자동완료 보류, 진행중 유지 — 수동 확인 필요`,
+    { store: order.store },
   )
 }
 
@@ -171,5 +173,6 @@ async function maybeAlertStale(order: GiftOrder, orderNo: string, state: PollSta
   await sendDiscordAlert(
     'error',
     `⏳ zqbg 자동완료 지연\n상품: ${order.productName}\n주문번호: ${orderNo}\n진행중 ${STALE_ALERT_HOURS}시간 경과했으나 발송완료(status 6) 미감지 — 수동 확인 필요`,
+    { store: order.store },
   )
 }

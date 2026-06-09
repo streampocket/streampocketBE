@@ -118,6 +118,7 @@ export async function createManualOrder(input: CreateManualOrderInput) {
   await sendDiscordAlert(
     'order',
     `🔔 신규 주문 등록 [수동]\n상품: ${order.productName}\n수신자: ${order.receiverName ?? '-'}\n순수익: ${input.netProfit.toLocaleString('ko-KR')}원\n주문: ${order.productOrderId}`,
+    { store: order.store },
   ).catch(() => {})
 
   return order
@@ -176,6 +177,7 @@ export async function retryOrder(id: string): Promise<void> {
     await sendDiscordAlert(
       'order',
       `✅ 재시도 처리 완료\n상품: ${order.productName}\n수신번호: ${order.receiverPhoneNumber}`,
+      { store: order.store },
     )
     return
   }
@@ -217,6 +219,7 @@ export async function retryOrder(id: string): Promise<void> {
   await sendDiscordAlert(
     'order',
     `✅ 재시도 처리 완료\n상품: ${order.productName}\n수신번호: ${order.receiverPhoneNumber}`,
+    { store: order.store },
   )
 }
 
@@ -226,9 +229,13 @@ const ALIMTALK_ORDER_STATUS_COLOR = 0x00b0f4 // 하늘색 — 주문상황
 
 // 알림톡 발송 결과 Discord 알림 — best-effort (실패해도 본 동작에 영향 없음)
 // color 미전달 시 alimtalk 채널 기본색(노랑)으로 표시된다 (실패 알림 등).
-async function notifyAlimtalkDiscord(message: string, color?: number): Promise<void> {
+async function notifyAlimtalkDiscord(
+  message: string,
+  store: Store | null,
+  color?: number,
+): Promise<void> {
   try {
-    await sendDiscordAlert('alimtalk', message, { color })
+    await sendDiscordAlert('alimtalk', message, { color, store })
   } catch (error) {
     console.error('[ALIMTALK_DISCORD] Discord 알림 전송 실패', error)
   }
@@ -270,6 +277,7 @@ export async function sendOrderStatusNotification(id: string): Promise<void> {
     const reason = error instanceof Error ? error.message : String(error)
     await notifyAlimtalkDiscord(
       `⚠️ 주문상황 알림톡 발송 실패\n상품: ${order.productName}\n수신: ${recipientLabel}\n사유: ${reason}`,
+      order.store,
     )
     throw error
   }
@@ -279,6 +287,7 @@ export async function sendOrderStatusNotification(id: string): Promise<void> {
 
   await notifyAlimtalkDiscord(
     `📧 주문상황 알림톡 발송 완료\n상품: ${order.productName}\n수신: ${recipientLabel}`,
+    order.store,
     ALIMTALK_ORDER_STATUS_COLOR,
   )
 }
@@ -420,7 +429,7 @@ export async function runAutoExtendCheck(): Promise<AutoExtendResult> {
 
       const receiver = order.receiverName ?? '미확인'
       const message = `⏰ **예상 완료시각 자동 +${EXTEND_MINUTES}분 연장**\n상품: ${order.productName}\n수신자: ${receiver}\n주문: ${order.productOrderId}\n자동 연장: ${newCount}/${AUTO_EXTEND_MAX_COUNT}회`
-      sendDiscordAlert('auto_extend', message).catch((err) => {
+      sendDiscordAlert('auto_extend', message, { store: order.store }).catch((err) => {
         console.error('[AUTO_EXTEND] Discord 알림 실패', err)
       })
     } catch (err) {
@@ -482,6 +491,7 @@ export async function manualCompleteOrder(id: string): Promise<void> {
       )
       await notifyAlimtalkDiscord(
         `🎉 게임선물 완료 알림톡 발송 완료\n상품: ${order.productName}\n수신: ${recipientLabel}`,
+        order.store,
         ALIMTALK_GIFT_COMPLETE_COLOR,
       )
     } catch (error) {
@@ -489,6 +499,7 @@ export async function manualCompleteOrder(id: string): Promise<void> {
       const reason = error instanceof Error ? error.message : String(error)
       await notifyAlimtalkDiscord(
         `⚠️ 게임선물 완료 알림톡 발송 실패\n상품: ${order.productName}\n수신: ${recipientLabel}\n사유: ${reason}`,
+        order.store,
       )
     }
   }
@@ -567,5 +578,6 @@ export async function manualReturnOrder(id: string): Promise<void> {
   await sendDiscordAlert(
     'order',
     `📦 수동 반품 처리${sourceTag}\n주문: ${order.productOrderId}\n상품: ${order.productName}`,
+    { store: order.store },
   )
 }

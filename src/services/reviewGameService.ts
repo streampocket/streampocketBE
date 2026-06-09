@@ -69,7 +69,7 @@ export async function sendReviewGame(orderItemId: string): Promise<SendReviewGam
     await sendDiscordAlert(
       'order',
       `🎮 리뷰게임 발송 완료\n상품: ${order.productName}\n코드 ${reviewGameCount}개 발송\n수신자: ${order.receiverName ?? '미확인'} (${order.receiverPhoneNumber})`,
-      { color: REVIEW_GAME_COLOR },
+      { color: REVIEW_GAME_COLOR, store: order.store },
     ).catch(() => {})
 
     return { count: reviewGameCount }
@@ -81,6 +81,7 @@ export async function sendReviewGame(orderItemId: string): Promise<SendReviewGam
     await sendDiscordAlert(
       'error',
       `❌ 리뷰게임 발송 실패\n상품: ${order.productName}\n오류: ${error instanceof Error ? error.message : String(error)}`,
+      { store: order.store },
     ).catch(() => {})
     throw error
   }

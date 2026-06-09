@@ -126,6 +126,7 @@ async function recordFailure(orderItemId: string, label: string, err: unknown): 
   await sendDiscordAlert(
     'error',
     `⚠️ 자동 친구링크 생성 실패\n주문: ${order?.productOrderId ?? orderItemId}\n양식: ${label}\n사유: ${reason}`,
+    { store: order?.store ?? null },
   )
 }
 

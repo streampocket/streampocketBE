@@ -1,5 +1,5 @@
 import { SteamProduct, Store } from '@prisma/client'
-import { sendDiscordAlert } from '../lib/discord'
+import { discordNotifier } from '../lib/discord'
 import {
   createOrderItem,
   findOrderByProductOrderId,
@@ -91,6 +91,7 @@ export async function processOrder(
   source: OrderSource = 'main',
   store: Store = DEFAULT_STORE,
 ): Promise<void> {
+  const notify = discordNotifier(store)
   const existing = await findOrderByProductOrderId(item.productOrderId)
   if (existing) return
 
@@ -103,7 +104,7 @@ export async function processOrder(
 
   const sourceTag = source === 'backup' ? ' (보조 스캔으로 사후 포착)' : ''
   const priceLines = formatOrderPriceLines(item.unitPrice, product).join('\n')
-  await sendDiscordAlert(
+  await notify(
     'order',
     `🔔 신규 주문 감지${sourceTag}\n상품: ${item.productName}\n${priceLines}\n수신자: ${item.receiverName ?? '-'}\n주문: ${item.productOrderId}`,
   )
@@ -126,7 +127,7 @@ export async function processOrder(
       fulfillmentStatus: 'manual_review',
       errorMessage: '구매자 연락처 조회 실패',
     })
-    await sendDiscordAlert(
+    await notify(
       'error',
       `⚠️ 구매자 연락처 조회 실패 및 수동 처리 필요\n주문: ${item.productOrderId}\n상품: ${item.productName}`,
     )
@@ -138,7 +139,7 @@ export async function processOrder(
       fulfillmentStatus: 'manual_review',
       errorMessage: `네이버 상품 ID(${item.naverProductId})와 매핑되는 상품 없음 (동기화 필요)`,
     })
-    await sendDiscordAlert(
+    await notify(
       'error',
       `⚠️ 상품 매핑 실패 및 수동 처리 필요\n주문: ${item.productOrderId}\n네이버 상품 ID: ${item.naverProductId}`,
     )
@@ -157,7 +158,7 @@ export async function processOrder(
       fulfillmentStatus: 'manual_review',
       errorMessage: '상품 타입(NA/AA) 미감지',
     })
-    await sendDiscordAlert(
+    await notify(
       'error',
       `⚠️ 상품 타입 미감지\n상품: ${item.productName}\n주문번호: ${item.productOrderId}`,
     )
@@ -173,7 +174,7 @@ export async function processOrder(
         fulfillmentStatus: 'failed',
         errorMessage: `발주 확인 실패: ${message}`,
       })
-      await sendDiscordAlert(
+      await notify(
         'error',
         `❌ 발주 확인 실패\n주문: ${item.productOrderId}\n오류: ${message}`,
       )
@@ -188,7 +189,7 @@ export async function processOrder(
         fulfillmentStatus: 'failed',
         errorMessage: `발송 처리 실패: ${message}`,
       })
-      await sendDiscordAlert(
+      await notify(
         'error',
         `❌ 발송 처리 실패\n주문: ${item.productOrderId}\n오류: ${message}`,
       )
@@ -202,7 +203,7 @@ export async function processOrder(
           fulfillmentStatus: 'manual_review',
           errorMessage: '알림톡 발송이 비활성화되어 수동 처리로 전환됨',
         })
-        await sendDiscordAlert(
+        await notify(
           'error',
           `⚠️ 알림톡 발송 비활성화 및 수동 처리 필요\n주문: ${item.productOrderId}\n수신번호: ${item.receiverPhoneNumber}`,
         )
@@ -219,7 +220,7 @@ export async function processOrder(
       }, store)
 
       await updateOrderItem(orderItem.id, { fulfillmentStatus: 'pending' })
-      await sendDiscordAlert(
+      await notify(
         'order',
         `🎮 BG 코드 주문\n상품: ${item.productName}\n주문번호: ${item.productOrderId}\n알림톡: ✅ 발송 성공`,
       )
@@ -229,7 +230,7 @@ export async function processOrder(
         fulfillmentStatus: 'manual_review',
         errorMessage: `알림톡 발송 실패: ${message}`,
       })
-      await sendDiscordAlert(
+      await notify(
         'error',
         `🎮 BG 코드 주문 — 알림톡 발송 실패\n상품: ${item.productName}\n주문번호: ${item.productOrderId}\n알림톡: ❌ ${message}`,
       )
@@ -246,7 +247,7 @@ export async function processOrder(
         fulfillmentStatus: 'failed',
         errorMessage: `발주 확인 실패: ${message}`,
       })
-      await sendDiscordAlert(
+      await notify(
         'error',
         `❌ 발주 확인 실패\n주문: ${item.productOrderId}\n오류: ${message}`,
       )
@@ -261,7 +262,7 @@ export async function processOrder(
         fulfillmentStatus: 'failed',
         errorMessage: `발송 처리 실패: ${message}`,
       })
-      await sendDiscordAlert(
+      await notify(
         'error',
         `❌ 발송 처리 실패\n주문: ${item.productOrderId}\n오류: ${message}`,
       )
@@ -275,7 +276,7 @@ export async function processOrder(
           fulfillmentStatus: 'manual_review',
           errorMessage: '알림톡 발송이 비활성화되어 수동 처리로 전환됨',
         })
-        await sendDiscordAlert(
+        await notify(
           'error',
           `⚠️ 알림톡 발송 비활성화 및 수동 처리 필요\n주문: ${item.productOrderId}\n수신번호: ${item.receiverPhoneNumber}`,
         )
@@ -292,7 +293,7 @@ export async function processOrder(
       }, store)
 
       await updateOrderItem(orderItem.id, { fulfillmentStatus: 'pending' })
-      await sendDiscordAlert(
+      await notify(
         'order',
         `🛒 AA 계정 주문\n상품: ${item.productName}\n주문번호: ${item.productOrderId}\n알림톡: ✅ 발송 성공`,
       )
@@ -302,7 +303,7 @@ export async function processOrder(
         fulfillmentStatus: 'manual_review',
         errorMessage: `알림톡 발송 실패: ${message}`,
       })
-      await sendDiscordAlert(
+      await notify(
         'error',
         `🛒 AA 계정 주문 — 알림톡 발송 실패\n상품: ${item.productName}\n주문번호: ${item.productOrderId}\n알림톡: ❌ ${message}`,
       )
@@ -325,7 +326,7 @@ export async function processOrder(
         fulfillmentStatus: 'failed',
         errorMessage: `발주 확인 실패: ${message}`,
       })
-      await sendDiscordAlert(
+      await notify(
         'error',
         `❌ 발주 확인 실패\n주문: ${item.productOrderId}\n오류: ${message}`,
       )
@@ -340,7 +341,7 @@ export async function processOrder(
         fulfillmentStatus: 'failed',
         errorMessage: `발송 처리 실패: ${message}`,
       })
-      await sendDiscordAlert(
+      await notify(
         'error',
         `❌ 발송 처리 실패\n주문: ${item.productOrderId}\n오류: ${message}`,
       )
@@ -354,7 +355,7 @@ export async function processOrder(
           fulfillmentStatus: 'manual_review',
           errorMessage: '알림톡 발송이 비활성화되어 수동 처리로 전환됨',
         })
-        await sendDiscordAlert(
+        await notify(
           'error',
           `⚠️ 알림톡 발송 비활성화 및 수동 처리 필요\n주문: ${item.productOrderId}\n수신번호: ${item.receiverPhoneNumber}`,
         )
@@ -372,7 +373,7 @@ export async function processOrder(
         fulfillmentStatus: 'manual_review',
         errorMessage: `재고없음 안내 알림톡 발송 실패: ${message}`,
       })
-      await sendDiscordAlert(
+      await notify(
         'error',
         `❌ 재고없음 안내 알림톡 발송 실패 및 수동 개입 필요\n주문: ${item.productOrderId}\n수신번호: ${item.receiverPhoneNumber}`,
       )
@@ -381,7 +382,7 @@ export async function processOrder(
 
     await updateOrderItem(orderItem.id, { fulfillmentStatus: 'pending' })
 
-    await sendDiscordAlert(
+    await notify(
       'stock',
       `🚨 재고 부족 — 안내 알림톡 발송 완료. 카톡 응대 + 코드 수동 발송 필요\n상품: ${item.productName}\n주문: ${item.productOrderId}\n수신번호: ${item.receiverPhoneNumber}`,
     )
@@ -396,7 +397,7 @@ export async function processOrder(
       ? await countAvailableAccounts(product.id)
       : 0
   if (remaining <= LOW_STOCK_THRESHOLD) {
-    await sendDiscordAlert(
+    await notify(
       'stock',
       `⚠️ 재고 부족 경고\n상품: ${item.productName}\n남은 코드: ${remaining}개`,
     )
@@ -410,7 +411,7 @@ export async function processOrder(
       fulfillmentStatus: 'failed',
       errorMessage: `발주 확인 실패: ${message}`,
     })
-    await sendDiscordAlert(
+    await notify(
       'error',
       `❌ 발주 확인 실패\n주문: ${item.productOrderId}\n오류: ${message}`,
     )
@@ -425,14 +426,14 @@ export async function processOrder(
       fulfillmentStatus: 'failed',
       errorMessage: `발송 처리 실패: ${message}`,
     })
-    await sendDiscordAlert(
+    await notify(
       'error',
       `❌ 발송 처리 실패\n주문: ${item.productOrderId}\n오류: ${message}`,
     )
     return
   }
 
-  await sendDiscordAlert(
+  await notify(
     'order',
     `✅ 주문 처리 완료 (네이버)\n상품: ${item.productName}\n주문번호: ${item.productOrderId}`,
   )
@@ -444,7 +445,7 @@ export async function processOrder(
         fulfillmentStatus: 'manual_review',
         errorMessage: '알림톡 발송이 비활성화되어 수동 처리로 전환됨',
       })
-      await sendDiscordAlert(
+      await notify(
         'error',
         `⚠️ 알림톡 발송 비활성화 및 수동 처리 필요\n주문: ${item.productOrderId}\n수신번호: ${item.receiverPhoneNumber}`,
       )
@@ -473,7 +474,7 @@ export async function processOrder(
       fulfillmentStatus: 'manual_review',
       errorMessage: `알림톡 발송 실패: ${message}`,
     })
-    await sendDiscordAlert(
+    await notify(
       'error',
       `❌ 알림톡 발송 실패 및 수동 개입 필요\n주문: ${item.productOrderId}\n수신번호: ${item.receiverPhoneNumber}`,
     )
@@ -483,7 +484,7 @@ export async function processOrder(
   await markAccountAsSent(account.id)
   await updateOrderItem(orderItem.id, { fulfillmentStatus: 'pending' })
 
-  await sendDiscordAlert(
+  await notify(
     'order',
     `✅ 알림톡 발송 성공\n주문: ${item.productOrderId}\n수신번호: ${item.receiverPhoneNumber}`,
   )
@@ -493,6 +494,7 @@ export async function processReturnedOrders(
   orderSource: IOrderSource,
   store: Store = DEFAULT_STORE,
 ): Promise<number> {
+  const notify = discordNotifier(store)
   const returnedItems = await orderSource.fetchReturnedOrders()
   let returnedCount = 0
 
@@ -517,7 +519,7 @@ export async function processReturnedOrders(
         })
         returnedCount += 1
 
-        await sendDiscordAlert(
+        await notify(
           'order',
           `🔁 사후 포착된 반품 주문 (PAYED 지연으로 신규 알림 미발송)\n주문: ${item.productOrderId}\n상품: ${item.productName}\n수신자: ${item.receiverName ?? '-'}\n클레임 상태: ${item.claimStatus}`,
         )
@@ -532,13 +534,13 @@ export async function processReturnedOrders(
       })
       returnedCount += 1
 
-      await sendDiscordAlert(
+      await notify(
         'order',
         `📦 반품 감지\n주문: ${item.productOrderId}\n상품: ${existing.productName}\n클레임 상태: ${item.claimStatus}`,
       )
     } catch (error) {
       const message = toErrorMessage(error)
-      await sendDiscordAlert(
+      await notify(
         'error',
         `❌ 반품 처리 중 예외 발생\n주문: ${item.productOrderId}\n오류: ${message}`,
       )
@@ -585,6 +587,7 @@ export async function pollAndProcess(
   orderSource: IOrderSource,
   store: Store = DEFAULT_STORE,
 ): Promise<OrderPollingResult> {
+  const notify = discordNotifier(store)
   const items = await orderSource.fetchNewOrders()
   let processedCount = 0
   let failedCount = 0
@@ -596,7 +599,7 @@ export async function pollAndProcess(
     } catch (error) {
       failedCount += 1
       const message = toErrorMessage(error)
-      await sendDiscordAlert(
+      await notify(
         'error',
         `❌ 주문 처리 중 예외 발생\n주문: ${item.productOrderId}\n오류: ${message}`,
       )
@@ -638,6 +641,7 @@ export async function runBackupOrderScan(
   isPollingInProgress = true
   const startedAt = Date.now()
   console.log(`[BACKUP_SCAN] start hoursBack=${hoursBack}`)
+  const notify = discordNotifier(store)
 
   try {
     const items = await orderSource.fetchPaidOrdersInWindow(hoursBack)
@@ -662,7 +666,7 @@ export async function runBackupOrderScan(
             completedAt: null,
             errorMessage: '반품 클레임 종료 후 자동 복귀',
           })
-          await sendDiscordAlert(
+          await notify(
             'order',
             `↩️ 반품 클레임 종료 → 정상 복귀\n주문: ${item.productOrderId}\n상품: ${item.productName}\n네이버 상태: ${item.naverProductOrderStatus}${item.naverClaimStatus ? ` (claimStatus: ${item.naverClaimStatus})` : ''}`,
           )
@@ -675,7 +679,7 @@ export async function runBackupOrderScan(
       } catch (error) {
         failedCount += 1
         const message = toErrorMessage(error)
-        await sendDiscordAlert(
+        await notify(
           'error',
           `❌ 보조 스캔 처리 중 예외 발생\n주문: ${item.productOrderId}\n오류: ${message}`,
         )
@@ -700,7 +704,7 @@ export async function runBackupOrderScan(
     const message = toErrorMessage(error)
     const durationMs = Date.now() - startedAt
     console.error(`[BACKUP_SCAN] failed duration_ms=${durationMs}`, error)
-    await sendDiscordAlert('error', `❌ 보조 스캔 실패\n오류: ${message}`)
+    await notify('error', `❌ 보조 스캔 실패\n오류: ${message}`)
     throw error
   } finally {
     isPollingInProgress = false
@@ -722,6 +726,7 @@ export async function runDailyOrderReconciliation(
   store: Store = DEFAULT_STORE,
 ): Promise<DailyReconciliationResult> {
   const storeLabel = STORE_LABELS[store]
+  const notify = discordNotifier(store)
   const yesterdayKstMs = Date.now() - 24 * 60 * 60 * 1000 + 9 * 60 * 60 * 1000
   const yesterday = new Date(yesterdayKstMs).toISOString().slice(0, 10)
   const startedAt = Date.now()
@@ -757,7 +762,7 @@ export async function runDailyOrderReconciliation(
           `- ${item.productOrderId} / ${item.productName} / ${item.receiverName ?? '-'}`,
       )
     const moreLine = missing.length > 20 ? `\n... 외 ${missing.length - 20}건` : ''
-    await sendDiscordAlert(
+    await notify(
       'error',
       `⚠️ [${storeLabel}] ${yesterday} 누락 주문 ${missing.length}건 발견 — 수동 확인 필요\n${lines.join('\n')}${moreLine}`,
     )
@@ -771,7 +776,7 @@ export async function runDailyOrderReconciliation(
           `- ${item.productOrderId} / ${item.productName} / ${item.naverProductOrderStatus ?? '-'}`,
       )
     const moreLine = staleReturned.length > 20 ? `\n... 외 ${staleReturned.length - 20}건` : ''
-    await sendDiscordAlert(
+    await notify(
       'error',
       `⚠️ [${storeLabel}] ${yesterday} DB는 returned인데 네이버는 정상 상태인 주문 ${staleReturned.length}건 — 보조 스캔이 못 잡았는지 확인 필요\n${lines.join('\n')}${moreLine}`,
     )
@@ -814,6 +819,7 @@ export async function runOrderPolling(
   isPollingInProgress = true
   const startedAt = Date.now()
   console.log(`[ORDER_POLL] start trigger=${trigger} store=${store}`)
+  const notify = discordNotifier(store)
 
   try {
     const result = await pollAndProcess(orderSource, store)
@@ -826,7 +832,7 @@ export async function runOrderPolling(
     const message = toErrorMessage(error)
     const durationMs = Date.now() - startedAt
     console.error(`[ORDER_POLL] failed trigger=${trigger} store=${store} duration_ms=${durationMs}`, error)
-    await sendDiscordAlert('error', `❌ 주문 폴링 실패 [${STORE_LABELS[store]}]\n트리거: ${trigger}\n오류: ${message}`)
+    await notify('error', `❌ 주문 폴링 실패 [${STORE_LABELS[store]}]\n트리거: ${trigger}\n오류: ${message}`)
     throw error
   } finally {
     isPollingInProgress = false

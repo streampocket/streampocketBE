@@ -82,6 +82,7 @@ type UpdateExpenseData = {
   amount?: number
   memo?: string | null
   steamOrderItemId?: string | null
+  store?: Store | null
 }
 
 export async function updateExpense(id: string, data: UpdateExpenseData) {

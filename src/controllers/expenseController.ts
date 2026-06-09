@@ -43,6 +43,7 @@ const expenseUpdateBodySchema = z.object({
   amount: z.number().int().min(0).optional(),
   memo: z.string().max(500).nullable().optional(),
   steamOrderItemId: z.string().uuid().nullable().optional(),
+  store: storeSchema,
 })
 
 const idParamSchema = z.object({

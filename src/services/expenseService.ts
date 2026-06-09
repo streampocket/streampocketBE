@@ -82,14 +82,18 @@ type UpdateExpenseInput = {
   amount?: number
   memo?: string | null
   steamOrderItemId?: string | null
+  store?: Store | null
 }
 
 export async function updateExpenseEntry(id: string, input: UpdateExpenseInput) {
   await getExpenseById(id)
+  // store 결정: 주문연동 비용이면 주문의 store를 상속, 독립 비용이면 입력값(공통=null 허용) — 생성과 동일
+  let store = input.store
   if (input.steamOrderItemId) {
-    await assertOrderAvailableForExpense(input.steamOrderItemId, id)
+    const order = await assertOrderAvailableForExpense(input.steamOrderItemId, id)
+    store = order.store
   }
-  return updateRepo(id, input)
+  return updateRepo(id, { ...input, store })
 }
 
 async function assertOrderAvailableForExpense(

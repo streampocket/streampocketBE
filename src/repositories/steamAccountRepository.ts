@@ -137,14 +137,37 @@ export async function countAvailableAccounts(productId: string): Promise<number>
   return prisma.steamAccount.count({ where: { productId, status: 'available' } })
 }
 
+// 게임 단위 재고 선점 — NA 재고는 게임(steam_games) 단위로 두 스토어가 공유. FIFO(등록순).
+export async function reserveNextAvailableAccountByGame(
+  gameId: string,
+): Promise<SteamAccount | null> {
+  return prisma.$transaction(async (tx) => {
+    const account = await tx.steamAccount.findFirst({
+      where: { gameId, status: 'available' },
+      orderBy: { createdAt: 'asc' },
+    })
+    if (!account) return null
+    return tx.steamAccount.update({
+      where: { id: account.id },
+      data: { status: 'reserved' },
+    })
+  })
+}
+
+export async function countAvailableAccountsByGame(gameId: string): Promise<number> {
+  return prisma.steamAccount.count({ where: { gameId, status: 'available' } })
+}
+
 export async function bulkCreateAccounts(
   productId: string,
   accounts: BulkCreateAccountInput[],
   productName?: string,
+  gameId?: string | null,
 ): Promise<number> {
   const result = await prisma.steamAccount.createMany({
     data: accounts.map(({ username, password, email, emailPassword, emailSiteUrl, secondaryEmail, secondaryEmailPassword, secondaryEmailSiteUrl }) => ({
       productId,
+      gameId: gameId ?? null,
       productNameSnapshot: productName ?? null,
       username,
       password,

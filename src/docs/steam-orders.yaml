@@ -28,6 +28,12 @@ paths:
             type: string
             enum: [naver, manual]
         - in: query
+          name: store
+          description: 스토어 필터 (미지정 시 전체)
+          schema:
+            type: string
+            enum: [streampocket, pokemon_steam]
+        - in: query
           name: page
           schema:
             type: integer

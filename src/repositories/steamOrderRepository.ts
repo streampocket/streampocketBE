@@ -5,6 +5,7 @@ import {
   FulfillmentStatus,
   OrderSource,
   SteamOrderItem,
+  Store,
 } from '@prisma/client'
 
 type CreateOrderItemInput = {
@@ -15,7 +16,9 @@ type CreateOrderItemInput = {
   paymentAmount?: number | null
   receiverPhoneNumber?: string
   receiverName?: string
+  store?: Store
   productId?: string
+  gameId?: string | null
   paidAt?: Date
 }
 
@@ -60,6 +63,7 @@ type ListOrdersInput = {
   excludeStatuses?: FulfillmentStatus[]
   excludeWithExpense?: boolean
   source?: OrderSource
+  store?: Store
   page: number
   pageSize: number
 }
@@ -114,6 +118,7 @@ export async function listOrders(input: ListOrdersInput): Promise<ListOrdersResu
       : {}),
     ...(input.excludeWithExpense ? { expense: null } : {}),
     ...(input.source ? { source: input.source } : {}),
+    ...(input.store ? { store: input.store } : {}),
   }
   const [items, total] = await prisma.$transaction([
     prisma.steamOrderItem.findMany({
@@ -133,6 +138,7 @@ type CountOrdersInput = {
   to?: Date
   receiverName?: string
   source?: OrderSource
+  store?: Store
 }
 
 export async function groupOrderCountsByStatus(input: CountOrdersInput) {
@@ -149,6 +155,7 @@ export async function groupOrderCountsByStatus(input: CountOrdersInput) {
       ? { receiverName: { contains: input.receiverName, mode: 'insensitive' as const } }
       : {}),
     ...(input.source ? { source: input.source } : {}),
+    ...(input.store ? { store: input.store } : {}),
   }
   return prisma.steamOrderItem.groupBy({
     by: ['fulfillmentStatus'],
@@ -253,6 +260,8 @@ export async function createManualOrderItem(
       fulfillmentStatus: data.fulfillmentStatus,
       paidAt: data.paidAt,
       source: 'manual',
+      // 수동주문은 스토어 무귀속 — 매출 집계에서 "전체"에만 포함(스토어별 보기 제외). 기본값(streampocket) 덮어씀.
+      store: null,
     },
   })
 }

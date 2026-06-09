@@ -1,4 +1,4 @@
-import { ExpenseCategory, ExpensePayer } from '@prisma/client'
+import { ExpenseCategory, ExpensePayer, Store } from '@prisma/client'
 import {
   findExpenses,
   findExpenseById,
@@ -28,6 +28,7 @@ type GetExpensesInput = {
   startDate?: Date
   endDate?: Date
   dateOrder?: 'asc' | 'desc'
+  store?: Store
   page: number
   pageSize: number
 }
@@ -49,14 +50,18 @@ type CreateExpenseInput = {
   amount: number
   memo?: string
   steamOrderItemId?: string | null
+  store?: Store | null
 }
 
 export async function createExpenseEntry(input: CreateExpenseInput) {
+  // store 결정: 주문연동 비용이면 주문의 store를 상속, 독립 비용이면 입력값(공통=null 허용)
+  let store: Store | null = input.store ?? null
   if (input.steamOrderItemId) {
-    await assertOrderAvailableForExpense(input.steamOrderItemId, null)
+    const order = await assertOrderAvailableForExpense(input.steamOrderItemId, null)
+    store = order.store
   }
 
-  const expense = await createRepo(input)
+  const expense = await createRepo({ ...input, store })
 
   const perPerson = Math.round(expense.amount / 2)
   const label = CATEGORY_LABELS[expense.category]
@@ -99,6 +104,7 @@ async function assertOrderAvailableForExpense(
   if (existing && existing.id !== currentExpenseId) {
     throw Object.assign(new Error('이미 비용이 등록된 주문입니다.'), { statusCode: 409 })
   }
+  return order
 }
 
 export async function deleteExpenseEntry(id: string) {
@@ -106,6 +112,6 @@ export async function deleteExpenseEntry(id: string) {
   return deleteRepo(id)
 }
 
-export async function getExpenseSummary(startDate: Date, endDate: Date) {
-  return sumExpensesByCategory(startDate, endDate)
+export async function getExpenseSummary(startDate: Date, endDate: Date, store?: Store) {
+  return sumExpensesByCategory(startDate, endDate, store)
 }

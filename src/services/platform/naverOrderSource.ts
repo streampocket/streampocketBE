@@ -1,5 +1,7 @@
 import { z } from 'zod'
-import { naverApiRequest } from '../../lib/naverAuth'
+import { Store } from '@prisma/client'
+import { naverApiRequestAs } from '../../lib/naverAuth'
+import { DEFAULT_STORE } from '../../constants/stores'
 import { sendDiscordAlert } from '../../lib/discord'
 import {
   IOrderSource,
@@ -186,6 +188,7 @@ function logFetchedOrderFields(
 
 async function fetchLastChangedStatuses(
   lastChangedType: string = 'PAYED',
+  store: Store = DEFAULT_STORE,
 ): Promise<NaverLastChangedStatus[]> {
   const query = new URLSearchParams({
     lastChangedType,
@@ -193,7 +196,8 @@ async function fetchLastChangedStatuses(
     limitCount: '300',
   })
 
-  const res = await naverApiRequest(
+  const res = await naverApiRequestAs(
+    store,
     `/v1/pay-order/seller/product-orders/last-changed-statuses?${query.toString()}`,
   )
 
@@ -208,10 +212,11 @@ async function fetchLastChangedStatuses(
 
 export async function fetchProductOrderDetails(
   productOrderIds: string[],
+  store: Store = DEFAULT_STORE,
 ): Promise<NaverQueryProductOrderItem[]> {
   if (productOrderIds.length === 0) return []
 
-  const res = await naverApiRequest('/v1/pay-order/seller/product-orders/query', {
+  const res = await naverApiRequestAs(store, '/v1/pay-order/seller/product-orders/query', {
     method: 'POST',
     body: JSON.stringify({ productOrderIds }),
   })
@@ -225,8 +230,11 @@ export async function fetchProductOrderDetails(
   return body.data
 }
 
-async function fetchNaverProductsPage(page: number): Promise<NaverProductListResponse> {
-  const res = await naverApiRequest('/v1/products/search', {
+async function fetchNaverProductsPage(
+  store: Store,
+  page: number,
+): Promise<NaverProductListResponse> {
+  const res = await naverApiRequestAs(store, '/v1/products/search', {
     method: 'POST',
     body: JSON.stringify({
       page,
@@ -243,7 +251,7 @@ async function fetchNaverProductsPage(page: number): Promise<NaverProductListRes
   return naverProductListResponseSchema.parse(await res.json())
 }
 
-export async function fetchNaverProducts(): Promise<{
+export async function fetchNaverProducts(store: Store): Promise<{
   productId: string
   name: string
   price: number | null
@@ -255,7 +263,7 @@ export async function fetchNaverProducts(): Promise<{
   let totalPages: number | undefined
 
   while (page <= NAVER_PRODUCT_MAX_PAGES) {
-    const body = await fetchNaverProductsPage(page)
+    const body = await fetchNaverProductsPage(store, page)
     collected.push(...body.contents)
 
     totalPages = body.totalPages
@@ -315,6 +323,7 @@ function detailToIncomingOrderItem(detail: NaverQueryProductOrderItem): Incoming
 async function fetchPaidOrdersSearchPage(
   fromIso: string,
   page: number,
+  store: Store = DEFAULT_STORE,
 ): Promise<{
   contents: { productOrderId: string; content: NaverQueryProductOrderItem }[]
   hasNext: boolean
@@ -325,7 +334,8 @@ async function fetchPaidOrdersSearchPage(
     page: String(page),
   })
 
-  const res = await naverApiRequest(
+  const res = await naverApiRequestAs(
+    store,
     `/v1/pay-order/seller/product-orders?${query.toString()}`,
   )
 
@@ -341,12 +351,15 @@ async function fetchPaidOrdersSearchPage(
   }
 }
 
-async function fetchPaidOrdersSince(fromIso: string): Promise<NaverQueryProductOrderItem[]> {
+async function fetchPaidOrdersSince(
+  fromIso: string,
+  store: Store = DEFAULT_STORE,
+): Promise<NaverQueryProductOrderItem[]> {
   const collected: NaverQueryProductOrderItem[] = []
   let page = 1
 
   while (page <= PAID_ORDERS_MAX_PAGES) {
-    const { contents, hasNext } = await fetchPaidOrdersSearchPage(fromIso, page)
+    const { contents, hasNext } = await fetchPaidOrdersSearchPage(fromIso, page, store)
     for (const entry of contents) {
       collected.push(entry.content)
     }
@@ -363,139 +376,145 @@ async function fetchPaidOrdersSince(fromIso: string): Promise<NaverQueryProductO
   return collected
 }
 
-export const naverOrderSource: IOrderSource = {
-  async fetchNewOrders(): Promise<IncomingOrderItem[]> {
-    const changedStatuses = await fetchLastChangedStatuses('PAYED')
-    const productOrderIds = changedStatuses.map((status) => status.productOrderId)
-    const details = await fetchProductOrderDetails(productOrderIds)
-    const changedStatusByProductOrderId = new Map(
-      changedStatuses.map((status) => [status.productOrderId, status]),
-    )
-
-    return details.map((detail) => {
-      const changedStatus = changedStatusByProductOrderId.get(detail.productOrder.productOrderId)
-      logFetchedOrderFields(changedStatus, detail)
-      const item = detailToIncomingOrderItem(detail)
-      const fallbackPaidAt = changedStatus?.paymentDate
-      if (!detail.order.paymentDate && fallbackPaidAt) {
-        item.paidAt = new Date(fallbackPaidAt)
-      }
-      return item
-    })
-  },
-
-  async fetchPaidOrdersInWindow(hoursBack: number): Promise<IncomingOrderItem[]> {
-    const fromIso = new Date(Date.now() - hoursBack * 60 * 60 * 1000).toISOString()
-    const details = await fetchPaidOrdersSince(fromIso)
-    return details.map(detailToIncomingOrderItem)
-  },
-
-  async fetchPaidOrdersForDay(dateKST: string): Promise<IncomingOrderItem[]> {
-    const fromIso = `${dateKST}T00:00:00.000+09:00`
-    const dayStartUtc = new Date(fromIso).getTime()
-    const dayEndUtc = dayStartUtc + 24 * 60 * 60 * 1000
-    const details = await fetchPaidOrdersSince(fromIso)
-    return details
-      .filter((detail) => {
-        const paymentDate = detail.order.paymentDate
-        if (!paymentDate) return false
-        const paidMs = new Date(paymentDate).getTime()
-        return paidMs >= dayStartUtc && paidMs < dayEndUtc
-      })
-      .map(detailToIncomingOrderItem)
-  },
-
-  async fetchReturnedOrders(): Promise<ReturnedOrderInfo[]> {
-    const changedStatuses = await fetchLastChangedStatuses('CLAIM_REQUESTED')
-    const productOrderIds = changedStatuses.map((status) => status.productOrderId)
-    const details = await fetchProductOrderDetails(productOrderIds)
-    const changedStatusByProductOrderId = new Map(
-      changedStatuses.map((status) => [status.productOrderId, status]),
-    )
-
-    return details
-      .filter((detail) => detail.productOrder.claimType === 'RETURN')
-      .map((detail) => {
-        const changedStatus = changedStatusByProductOrderId.get(detail.productOrder.productOrderId)
-        const paidAt = detail.order.paymentDate ?? changedStatus?.paymentDate
-
-        return {
-          productOrderId: detail.productOrder.productOrderId,
-          claimType: detail.productOrder.claimType ?? 'RETURN',
-          claimStatus: detail.productOrder.claimStatus ?? '',
-          externalOrderId: detail.order.orderId,
-          productName: detail.productOrder.productName,
-          naverProductId: detail.productOrder.productId,
-          unitPrice: detail.productOrder.unitPrice,
-          paidAt: paidAt ? new Date(paidAt) : new Date(),
-          receiverPhoneNumber: detail.order.ordererTel ?? null,
-          receiverName: detail.order.ordererName ?? null,
-        }
-      })
-  },
-
-  async fetchPurchaseDecidedOrders(): Promise<PurchaseDecidedInfo[]> {
-    const changedStatuses = await fetchLastChangedStatuses('PURCHASE_DECIDED')
-    const productOrderIds = changedStatuses.map((status) => status.productOrderId)
-    const details = await fetchProductOrderDetails(productOrderIds)
-
-    return details
-      .filter(
-        (detail) =>
-          detail.productOrder.productOrderStatus === 'PURCHASE_DECIDED' &&
-          detail.productOrder.decisionDate != null &&
-          detail.productOrder.expectedSettlementAmount != null,
+// 스토어 바인딩 주문 소스 팩토리 — store 를 클로저로 캡처해 모든 호출이 해당 스토어 자격증명을 사용.
+export function createNaverOrderSource(store: Store = DEFAULT_STORE): IOrderSource {
+  return {
+    async fetchNewOrders(): Promise<IncomingOrderItem[]> {
+      const changedStatuses = await fetchLastChangedStatuses('PAYED', store)
+      const productOrderIds = changedStatuses.map((status) => status.productOrderId)
+      const details = await fetchProductOrderDetails(productOrderIds, store)
+      const changedStatusByProductOrderId = new Map(
+        changedStatuses.map((status) => [status.productOrderId, status]),
       )
-      .map((detail) => ({
-        productOrderId: detail.productOrder.productOrderId,
-        decisionDate: new Date(detail.productOrder.decisionDate!),
-        settlementAmount: detail.productOrder.expectedSettlementAmount!,
-      }))
-  },
 
-  async confirmOrder(productOrderId: string): Promise<void> {
-    const res = await naverApiRequest('/v1/pay-order/seller/product-orders/confirm', {
-      method: 'POST',
-      body: JSON.stringify({ productOrderIds: [productOrderId] }),
-    })
+      return details.map((detail) => {
+        const changedStatus = changedStatusByProductOrderId.get(detail.productOrder.productOrderId)
+        logFetchedOrderFields(changedStatus, detail)
+        const item = detailToIncomingOrderItem(detail)
+        const fallbackPaidAt = changedStatus?.paymentDate
+        if (!detail.order.paymentDate && fallbackPaidAt) {
+          item.paidAt = new Date(fallbackPaidAt)
+        }
+        return item
+      })
+    },
 
-    if (!res.ok) {
-      const text = await res.text()
-      throw buildNaverError('발주 확인 실패', res.status, text)
-    }
+    async fetchPaidOrdersInWindow(hoursBack: number): Promise<IncomingOrderItem[]> {
+      const fromIso = new Date(Date.now() - hoursBack * 60 * 60 * 1000).toISOString()
+      const details = await fetchPaidOrdersSince(fromIso, store)
+      return details.map(detailToIncomingOrderItem)
+    },
 
-    const body = await res.json()
-    const failMessages = readFailMessages(body)
-    if (failMessages.length > 0) {
-      throw new Error(`발주 확인 실패: ${failMessages.join(', ')}`)
-    }
-  },
+    async fetchPaidOrdersForDay(dateKST: string): Promise<IncomingOrderItem[]> {
+      const fromIso = `${dateKST}T00:00:00.000+09:00`
+      const dayStartUtc = new Date(fromIso).getTime()
+      const dayEndUtc = dayStartUtc + 24 * 60 * 60 * 1000
+      const details = await fetchPaidOrdersSince(fromIso, store)
+      return details
+        .filter((detail) => {
+          const paymentDate = detail.order.paymentDate
+          if (!paymentDate) return false
+          const paidMs = new Date(paymentDate).getTime()
+          return paidMs >= dayStartUtc && paidMs < dayEndUtc
+        })
+        .map(detailToIncomingOrderItem)
+    },
 
-  async dispatchOrder(productOrderId: string): Promise<void> {
-    const res = await naverApiRequest('/v1/pay-order/seller/product-orders/dispatch', {
-      method: 'POST',
-      body: JSON.stringify({
-        dispatchProductOrders: [
-          {
-            productOrderId: productOrderId,
-            dispatchDate: buildDispatchDate(),
-            deliveryMethod: 'DIRECT_DELIVERY',
-            deliveryCompanyCode: 'DIRECT',
-            trackingNumber: productOrderId,
-          },
-        ],
-      }),
-    })
+    async fetchReturnedOrders(): Promise<ReturnedOrderInfo[]> {
+      const changedStatuses = await fetchLastChangedStatuses('CLAIM_REQUESTED', store)
+      const productOrderIds = changedStatuses.map((status) => status.productOrderId)
+      const details = await fetchProductOrderDetails(productOrderIds, store)
+      const changedStatusByProductOrderId = new Map(
+        changedStatuses.map((status) => [status.productOrderId, status]),
+      )
 
-    if (!res.ok) {
-      const text = await res.text()
-      throw buildNaverError('발송 처리 실패', res.status, text)
-    }
+      return details
+        .filter((detail) => detail.productOrder.claimType === 'RETURN')
+        .map((detail) => {
+          const changedStatus = changedStatusByProductOrderId.get(detail.productOrder.productOrderId)
+          const paidAt = detail.order.paymentDate ?? changedStatus?.paymentDate
 
-    const body = await res.json().catch(() => null)
-    const failMessages = readFailMessages(body)
-    if (failMessages.length > 0) {
-      throw new Error(`발송 처리 실패: ${failMessages.join(', ')}`)
-    }
-  },
+          return {
+            productOrderId: detail.productOrder.productOrderId,
+            claimType: detail.productOrder.claimType ?? 'RETURN',
+            claimStatus: detail.productOrder.claimStatus ?? '',
+            externalOrderId: detail.order.orderId,
+            productName: detail.productOrder.productName,
+            naverProductId: detail.productOrder.productId,
+            unitPrice: detail.productOrder.unitPrice,
+            paidAt: paidAt ? new Date(paidAt) : new Date(),
+            receiverPhoneNumber: detail.order.ordererTel ?? null,
+            receiverName: detail.order.ordererName ?? null,
+          }
+        })
+    },
+
+    async fetchPurchaseDecidedOrders(): Promise<PurchaseDecidedInfo[]> {
+      const changedStatuses = await fetchLastChangedStatuses('PURCHASE_DECIDED', store)
+      const productOrderIds = changedStatuses.map((status) => status.productOrderId)
+      const details = await fetchProductOrderDetails(productOrderIds, store)
+
+      return details
+        .filter(
+          (detail) =>
+            detail.productOrder.productOrderStatus === 'PURCHASE_DECIDED' &&
+            detail.productOrder.decisionDate != null &&
+            detail.productOrder.expectedSettlementAmount != null,
+        )
+        .map((detail) => ({
+          productOrderId: detail.productOrder.productOrderId,
+          decisionDate: new Date(detail.productOrder.decisionDate!),
+          settlementAmount: detail.productOrder.expectedSettlementAmount!,
+        }))
+    },
+
+    async confirmOrder(productOrderId: string): Promise<void> {
+      const res = await naverApiRequestAs(store, '/v1/pay-order/seller/product-orders/confirm', {
+        method: 'POST',
+        body: JSON.stringify({ productOrderIds: [productOrderId] }),
+      })
+
+      if (!res.ok) {
+        const text = await res.text()
+        throw buildNaverError('발주 확인 실패', res.status, text)
+      }
+
+      const body = await res.json()
+      const failMessages = readFailMessages(body)
+      if (failMessages.length > 0) {
+        throw new Error(`발주 확인 실패: ${failMessages.join(', ')}`)
+      }
+    },
+
+    async dispatchOrder(productOrderId: string): Promise<void> {
+      const res = await naverApiRequestAs(store, '/v1/pay-order/seller/product-orders/dispatch', {
+        method: 'POST',
+        body: JSON.stringify({
+          dispatchProductOrders: [
+            {
+              productOrderId: productOrderId,
+              dispatchDate: buildDispatchDate(),
+              deliveryMethod: 'DIRECT_DELIVERY',
+              deliveryCompanyCode: 'DIRECT',
+              trackingNumber: productOrderId,
+            },
+          ],
+        }),
+      })
+
+      if (!res.ok) {
+        const text = await res.text()
+        throw buildNaverError('발송 처리 실패', res.status, text)
+      }
+
+      const body = await res.json().catch(() => null)
+      const failMessages = readFailMessages(body)
+      if (failMessages.length > 0) {
+        throw new Error(`발송 처리 실패: ${failMessages.join(', ')}`)
+      }
+    },
+  }
 }
+
+// 기존 임포트 호환 — 기본 스토어(streampocket) 바인딩 인스턴스.
+export const naverOrderSource: IOrderSource = createNaverOrderSource(DEFAULT_STORE)

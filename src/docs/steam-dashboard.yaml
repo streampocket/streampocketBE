@@ -5,6 +5,59 @@ paths:
       tags: [SteamDashboard]
       security:
         - bearerAuth: []
+      parameters:
+        - in: query
+          name: period
+          description: 매출 집계 기간 (기본 today)
+          schema:
+            type: string
+            enum: [today, week, month, all]
+            default: today
+        - in: query
+          name: store
+          description: 스토어 필터 (미지정 시 전체=공통 포함, 지정 시 해당 store만=공통 제외)
+          schema:
+            type: string
+            enum: [streampocket, pokemon_steam]
       responses:
         '200':
-          description: 오늘 주문 수, 상태별 주문 수, 상품별 재고 현황
+          description: 주문 카드 통계 + 매출 요약 (store별 분리)
+  /steam/admin/dashboard/revenue-chart:
+    get:
+      summary: 매출/순이익 일별 차트 조회
+      tags: [SteamDashboard]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: days
+          description: 조회 일수
+          schema:
+            type: integer
+            enum: [7, 30, 90]
+            default: 30
+        - in: query
+          name: store
+          description: 스토어 필터 (미지정 시 전체=공통 포함, 지정 시 해당 store만=공통 제외)
+          schema:
+            type: string
+            enum: [streampocket, pokemon_steam]
+      responses:
+        '200':
+          description: 일별 매출/순이익 배열
+  /steam/admin/dashboard/extras:
+    get:
+      summary: 상품 랭킹 + 평균 구매확정일 조회
+      tags: [SteamDashboard]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: store
+          description: 스토어 필터 (미지정 시 전체)
+          schema:
+            type: string
+            enum: [streampocket, pokemon_steam]
+      responses:
+        '200':
+          description: 상품별 판매 랭킹과 평균 구매확정 소요일

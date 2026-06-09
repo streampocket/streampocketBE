@@ -1,11 +1,14 @@
 import 'dotenv/config'
 import { app } from './app'
 import {
+  OrderPollingTrigger,
   runBackupOrderScan,
   runDailyOrderReconciliation,
   runOrderPolling,
 } from './services/steamFulfillmentService'
-import { naverOrderSource } from './services/platform/naverOrderSource'
+import { createNaverOrderSource } from './services/platform/naverOrderSource'
+import { hasStoreCredentials } from './lib/naverAuth'
+import { STORES } from './constants/stores'
 import { runZqbgGiftStatusPolling } from './services/zqbgPollingService'
 import { generateWeeklySettlement } from './services/settlementService'
 import { expireOldParties } from './services/own/ownProductService'
@@ -18,22 +21,59 @@ const BACKUP_SCAN_INTERVAL_MS = 15 * 60 * 1000
 const BACKUP_SCAN_HOURS_BACK = 6
 const ZQBG_POLL_INTERVAL_MS = Number(process.env['ZQBG_POLL_INTERVAL_SECONDS'] ?? 120) * 1000
 
+// 멀티스토어 — 스토어별 순차 처리(레이트리밋 회피) + 스토어 오류 격리(한 스토어 실패가 다른 스토어를 막지 않음).
+async function pollAllStores(trigger: OrderPollingTrigger): Promise<void> {
+  for (const store of STORES) {
+    if (!hasStoreCredentials(store)) {
+      console.log(`[ORDER_POLL] skip store=${store} reason=no_credentials`)
+      continue
+    }
+    try {
+      await runOrderPolling(createNaverOrderSource(store), trigger, store)
+    } catch (err) {
+      console.error(`[ORDER_POLL] store=${store} 실패`, err)
+    }
+  }
+}
+
+async function backupScanAllStores(): Promise<void> {
+  for (const store of STORES) {
+    if (!hasStoreCredentials(store)) continue
+    try {
+      await runBackupOrderScan(createNaverOrderSource(store), BACKUP_SCAN_HOURS_BACK, store)
+    } catch (err) {
+      console.error(`[BACKUP_SCAN] store=${store} 실패`, err)
+    }
+  }
+}
+
+async function reconcileAllStores(): Promise<void> {
+  for (const store of STORES) {
+    if (!hasStoreCredentials(store)) continue
+    try {
+      await runDailyOrderReconciliation(createNaverOrderSource(store), store)
+    } catch (err) {
+      console.error(`[DAILY_RECONCILE] store=${store} 실패`, err)
+    }
+  }
+}
+
 app.listen(PORT, () => {
   console.log(`서버 실행 중: http://localhost:${PORT}`)
   console.log(`Swagger: http://localhost:${PORT}/api/docs`)
 
-  // 주문 폴링
-  runOrderPolling(naverOrderSource, 'startup').catch(console.error)
+  // 주문 폴링 (스토어별 순차)
+  pollAllStores('startup').catch(console.error)
 
   setInterval(() => {
-    runOrderPolling(naverOrderSource, 'interval').catch(console.error)
+    pollAllStores('interval').catch(console.error)
   }, POLL_INTERVAL_MS)
 
-  console.log(`주문 폴링 시작: ${POLL_INTERVAL_MS / 1000}초 간격`)
+  console.log(`주문 폴링 시작: ${POLL_INTERVAL_MS / 1000}초 간격 (스토어 ${STORES.length}개 순차)`)
 
-  // 주문 보조 스캔 (15분 주기 — 네이버 last-changed-statuses 누락 대비)
+  // 주문 보조 스캔 (15분 주기 — 네이버 last-changed-statuses 누락 대비, 스토어별)
   setInterval(() => {
-    runBackupOrderScan(naverOrderSource, BACKUP_SCAN_HOURS_BACK).catch(console.error)
+    backupScanAllStores().catch(console.error)
   }, BACKUP_SCAN_INTERVAL_MS)
 
   console.log(`주문 보조 스캔 시작: ${BACKUP_SCAN_INTERVAL_MS / 1000}초 간격`)
@@ -57,8 +97,8 @@ app.listen(PORT, () => {
 
     if (hour === 9 && minute === 0 && lastReconcileDate !== today) {
       lastReconcileDate = today
-      console.log('[DAILY_RECONCILE] 일일 주문 누락 대조 실행')
-      runDailyOrderReconciliation(naverOrderSource).catch((err) => {
+      console.log('[DAILY_RECONCILE] 일일 주문 누락 대조 실행 (스토어별)')
+      reconcileAllStores().catch((err) => {
         console.error('[DAILY_RECONCILE] 일일 대조 실패', err)
       })
     }

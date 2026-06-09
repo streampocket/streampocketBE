@@ -1,4 +1,4 @@
-import { SteamProduct } from '@prisma/client'
+import { SteamProduct, Store } from '@prisma/client'
 import { sendDiscordAlert } from '../lib/discord'
 import {
   createOrderItem,
@@ -7,12 +7,16 @@ import {
   updateOrderItem,
 } from '../repositories/steamOrderRepository'
 import { findProductByNaverId } from '../repositories/steamProductRepository'
+import { findListingWithGameByNaverProductId } from '../repositories/storeListingRepository'
 import {
   reserveNextAvailableAccount,
+  reserveNextAvailableAccountByGame,
   countAvailableAccounts,
+  countAvailableAccountsByGame,
   markAccountAsSent,
 } from '../repositories/steamAccountRepository'
 import { detectProductType } from '../utils/productType'
+import { DEFAULT_STORE, STORE_LABELS } from '../constants/stores'
 import { IOrderSource, IncomingOrderItem } from './platform/IOrderSource'
 import { isAlimtalkEnabled, sendOrderAlimtalk, sendOutOfStockAlimtalk } from './alimtalkService'
 
@@ -85,11 +89,17 @@ export async function processOrder(
   item: IncomingOrderItem,
   orderSource: IOrderSource,
   source: OrderSource = 'main',
+  store: Store = DEFAULT_STORE,
 ): Promise<void> {
   const existing = await findOrderByProductOrderId(item.productOrderId)
   if (existing) return
 
+  // 게임 해석 — 리스팅이 있으면 gameId·productType 을 게임 기반으로 확보.
+  // store 는 폴링 계정(파라미터)이 권위값(미동기화 상품도 올바른 store).
+  // product(레거시 steam_products)는 스트림포켓 폴백용 — 포켓은 없을 수 있음.
+  const listing = await findListingWithGameByNaverProductId(item.naverProductId)
   const product = await findProductByNaverId(item.naverProductId)
+  const gameId = listing?.gameId ?? null
 
   const sourceTag = source === 'backup' ? ' (보조 스캔으로 사후 포착)' : ''
   const priceLines = formatOrderPriceLines(item.unitPrice, product).join('\n')
@@ -106,6 +116,8 @@ export async function processOrder(
     paymentAmount: item.paymentAmount,
     receiverPhoneNumber: item.receiverPhoneNumber ?? undefined,
     receiverName: item.receiverName ?? undefined,
+    store,
+    gameId,
     paidAt: item.paidAt,
   })
 
@@ -121,10 +133,10 @@ export async function processOrder(
     return
   }
 
-  if (!product) {
+  if (!listing && !product) {
     await updateOrderItem(orderItem.id, {
       fulfillmentStatus: 'manual_review',
-      errorMessage: `네이버 상품 ID(${item.naverProductId})와 매핑되는 상품 없음`,
+      errorMessage: `네이버 상품 ID(${item.naverProductId})와 매핑되는 상품 없음 (동기화 필요)`,
     })
     await sendDiscordAlert(
       'error',
@@ -133,9 +145,13 @@ export async function processOrder(
     return
   }
 
-  await updateOrderItem(orderItem.id, { productId: product.id })
+  // 레거시 브리지 호환 — steam_products 가 있을 때만 productId 연결(포켓은 없음).
+  if (product) {
+    await updateOrderItem(orderItem.id, { productId: product.id })
+  }
 
-  const productType = detectProductType(product.name)
+  // 타입은 게임(productType) 우선, 리스팅 없으면 상품명 파싱으로 폴백(기존 동작).
+  const productType = listing?.game.productType ?? (product ? detectProductType(product.name) : null)
   if (productType === null) {
     await updateOrderItem(orderItem.id, {
       fulfillmentStatus: 'manual_review',
@@ -143,7 +159,7 @@ export async function processOrder(
     })
     await sendDiscordAlert(
       'error',
-      `⚠️ 상품 타입 미감지\n상품: ${product.name}\n주문번호: ${item.productOrderId}`,
+      `⚠️ 상품 타입 미감지\n상품: ${item.productName}\n주문번호: ${item.productOrderId}`,
     )
     return
   }
@@ -200,7 +216,7 @@ export async function processOrder(
         recipientName: item.receiverName,
         productName: item.productName,
         paidAt: item.paidAt,
-      })
+      }, store)
 
       await updateOrderItem(orderItem.id, { fulfillmentStatus: 'pending' })
       await sendDiscordAlert(
@@ -273,7 +289,7 @@ export async function processOrder(
         recipientName: item.receiverName,
         productName: item.productName,
         paidAt: item.paidAt,
-      })
+      }, store)
 
       await updateOrderItem(orderItem.id, { fulfillmentStatus: 'pending' })
       await sendDiscordAlert(
@@ -294,7 +310,12 @@ export async function processOrder(
     return
   }
 
-  const account = await reserveNextAvailableAccount(product.id)
+  // NA 재고는 게임 단위 공유 → gameId 우선, 없으면 레거시 productId 폴백.
+  const account = gameId
+    ? await reserveNextAvailableAccountByGame(gameId)
+    : product
+      ? await reserveNextAvailableAccount(product.id)
+      : null
   if (!account) {
     try {
       await orderSource.confirmOrder(item.productOrderId)
@@ -344,7 +365,7 @@ export async function processOrder(
         orderItemId: orderItem.id,
         recipientPhoneNumber: item.receiverPhoneNumber,
         recipientName: item.receiverName,
-      })
+      }, store)
     } catch (error) {
       const message = toErrorMessage(error)
       await updateOrderItem(orderItem.id, {
@@ -362,18 +383,22 @@ export async function processOrder(
 
     await sendDiscordAlert(
       'stock',
-      `🚨 재고 부족 — 안내 알림톡 발송 완료. 카톡 응대 + 코드 수동 발송 필요\n상품: ${product.name}\n주문: ${item.productOrderId}\n수신번호: ${item.receiverPhoneNumber}`,
+      `🚨 재고 부족 — 안내 알림톡 발송 완료. 카톡 응대 + 코드 수동 발송 필요\n상품: ${item.productName}\n주문: ${item.productOrderId}\n수신번호: ${item.receiverPhoneNumber}`,
     )
     return
   }
 
   await updateOrderItem(orderItem.id, { accountId: account.id })
 
-  const remaining = await countAvailableAccounts(product.id)
+  const remaining = gameId
+    ? await countAvailableAccountsByGame(gameId)
+    : product
+      ? await countAvailableAccounts(product.id)
+      : 0
   if (remaining <= LOW_STOCK_THRESHOLD) {
     await sendDiscordAlert(
       'stock',
-      `⚠️ 재고 부족 경고\n상품: ${product.name}\n남은 코드: ${remaining}개`,
+      `⚠️ 재고 부족 경고\n상품: ${item.productName}\n남은 코드: ${remaining}개`,
     )
   }
 
@@ -441,7 +466,7 @@ export async function processOrder(
       accountSecondaryEmailPassword: account.secondaryEmailPassword,
       accountSecondaryEmailSiteUrl: account.secondaryEmailSiteUrl,
       paidAt: item.paidAt,
-    })
+    }, store)
   } catch (error) {
     const message = toErrorMessage(error)
     await updateOrderItem(orderItem.id, {
@@ -464,7 +489,10 @@ export async function processOrder(
   )
 }
 
-export async function processReturnedOrders(orderSource: IOrderSource): Promise<number> {
+export async function processReturnedOrders(
+  orderSource: IOrderSource,
+  store: Store = DEFAULT_STORE,
+): Promise<number> {
   const returnedItems = await orderSource.fetchReturnedOrders()
   let returnedCount = 0
 
@@ -480,6 +508,7 @@ export async function processReturnedOrders(orderSource: IOrderSource): Promise<
           unitPrice: item.unitPrice,
           receiverPhoneNumber: item.receiverPhoneNumber ?? undefined,
           receiverName: item.receiverName ?? undefined,
+          store,
           paidAt: item.paidAt,
         })
         await updateOrderItem(created.id, {
@@ -552,14 +581,17 @@ export async function processPurchaseDecidedOrders(orderSource: IOrderSource): P
   return decidedCount
 }
 
-export async function pollAndProcess(orderSource: IOrderSource): Promise<OrderPollingResult> {
+export async function pollAndProcess(
+  orderSource: IOrderSource,
+  store: Store = DEFAULT_STORE,
+): Promise<OrderPollingResult> {
   const items = await orderSource.fetchNewOrders()
   let processedCount = 0
   let failedCount = 0
 
   for (const item of items) {
     try {
-      await processOrder(item, orderSource)
+      await processOrder(item, orderSource, 'main', store)
       processedCount += 1
     } catch (error) {
       failedCount += 1
@@ -571,7 +603,7 @@ export async function pollAndProcess(orderSource: IOrderSource): Promise<OrderPo
     }
   }
 
-  const returnedCount = await processReturnedOrders(orderSource)
+  const returnedCount = await processReturnedOrders(orderSource, store)
   const decidedCount = await processPurchaseDecidedOrders(orderSource)
 
   return {
@@ -588,6 +620,7 @@ export async function pollAndProcess(orderSource: IOrderSource): Promise<OrderPo
 export async function runBackupOrderScan(
   orderSource: IOrderSource,
   hoursBack: number,
+  store: Store = DEFAULT_STORE,
 ): Promise<OrderPollingResult> {
   if (isPollingInProgress) {
     console.log('[BACKUP_SCAN] skip reason=in_progress')
@@ -637,7 +670,7 @@ export async function runBackupOrderScan(
           continue
         }
 
-        await processOrder(item, orderSource, 'backup')
+        await processOrder(item, orderSource, 'backup', store)
         if (!before) processedCount += 1
       } catch (error) {
         failedCount += 1
@@ -686,11 +719,13 @@ export type DailyReconciliationResult = {
 
 export async function runDailyOrderReconciliation(
   orderSource: IOrderSource,
+  store: Store = DEFAULT_STORE,
 ): Promise<DailyReconciliationResult> {
+  const storeLabel = STORE_LABELS[store]
   const yesterdayKstMs = Date.now() - 24 * 60 * 60 * 1000 + 9 * 60 * 60 * 1000
   const yesterday = new Date(yesterdayKstMs).toISOString().slice(0, 10)
   const startedAt = Date.now()
-  console.log(`[DAILY_RECONCILE] start dateKST=${yesterday}`)
+  console.log(`[DAILY_RECONCILE] start store=${store} dateKST=${yesterday}`)
 
   const naverItems = await orderSource.fetchPaidOrdersForDay(yesterday)
   const naverProductOrderIds = naverItems.map((item) => item.productOrderId)
@@ -724,7 +759,7 @@ export async function runDailyOrderReconciliation(
     const moreLine = missing.length > 20 ? `\n... 외 ${missing.length - 20}건` : ''
     await sendDiscordAlert(
       'error',
-      `⚠️ ${yesterday} 누락 주문 ${missing.length}건 발견 — 수동 확인 필요\n${lines.join('\n')}${moreLine}`,
+      `⚠️ [${storeLabel}] ${yesterday} 누락 주문 ${missing.length}건 발견 — 수동 확인 필요\n${lines.join('\n')}${moreLine}`,
     )
   }
 
@@ -738,13 +773,13 @@ export async function runDailyOrderReconciliation(
     const moreLine = staleReturned.length > 20 ? `\n... 외 ${staleReturned.length - 20}건` : ''
     await sendDiscordAlert(
       'error',
-      `⚠️ ${yesterday} DB는 returned인데 네이버는 정상 상태인 주문 ${staleReturned.length}건 — 보조 스캔이 못 잡았는지 확인 필요\n${lines.join('\n')}${moreLine}`,
+      `⚠️ [${storeLabel}] ${yesterday} DB는 returned인데 네이버는 정상 상태인 주문 ${staleReturned.length}건 — 보조 스캔이 못 잡았는지 확인 필요\n${lines.join('\n')}${moreLine}`,
     )
   }
 
   const durationMs = Date.now() - startedAt
   console.log(
-    `[DAILY_RECONCILE] done dateKST=${yesterday} naver=${naverItems.length} db=${dbRows.length} missing=${missing.length} staleReturned=${staleReturned.length} duration_ms=${durationMs}`,
+    `[DAILY_RECONCILE] done store=${store} dateKST=${yesterday} naver=${naverItems.length} db=${dbRows.length} missing=${missing.length} staleReturned=${staleReturned.length} duration_ms=${durationMs}`,
   )
 
   return {
@@ -761,9 +796,10 @@ export async function runDailyOrderReconciliation(
 export async function runOrderPolling(
   orderSource: IOrderSource,
   trigger: OrderPollingTrigger,
+  store: Store = DEFAULT_STORE,
 ): Promise<OrderPollingResult> {
   if (isPollingInProgress) {
-    console.log(`[ORDER_POLL] skip trigger=${trigger} reason=in_progress`)
+    console.log(`[ORDER_POLL] skip trigger=${trigger} store=${store} reason=in_progress`)
     return {
       fetchedCount: 0,
       processedCount: 0,
@@ -777,20 +813,20 @@ export async function runOrderPolling(
 
   isPollingInProgress = true
   const startedAt = Date.now()
-  console.log(`[ORDER_POLL] start trigger=${trigger}`)
+  console.log(`[ORDER_POLL] start trigger=${trigger} store=${store}`)
 
   try {
-    const result = await pollAndProcess(orderSource)
+    const result = await pollAndProcess(orderSource, store)
     const durationMs = Date.now() - startedAt
     console.log(
-      `[ORDER_POLL] done trigger=${trigger} fetched=${result.fetchedCount} processed=${result.processedCount} failed=${result.failedCount} returned=${result.returnedCount} decided=${result.decidedCount} duration_ms=${durationMs}`,
+      `[ORDER_POLL] done trigger=${trigger} store=${store} fetched=${result.fetchedCount} processed=${result.processedCount} failed=${result.failedCount} returned=${result.returnedCount} decided=${result.decidedCount} duration_ms=${durationMs}`,
     )
     return result
   } catch (error) {
     const message = toErrorMessage(error)
     const durationMs = Date.now() - startedAt
-    console.error(`[ORDER_POLL] failed trigger=${trigger} duration_ms=${durationMs}`, error)
-    await sendDiscordAlert('error', `❌ 주문 폴링 실패\n트리거: ${trigger}\n오류: ${message}`)
+    console.error(`[ORDER_POLL] failed trigger=${trigger} store=${store} duration_ms=${durationMs}`, error)
+    await sendDiscordAlert('error', `❌ 주문 폴링 실패 [${STORE_LABELS[store]}]\n트리거: ${trigger}\n오류: ${message}`)
     throw error
   } finally {
     isPollingInProgress = false

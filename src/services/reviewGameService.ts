@@ -55,13 +55,16 @@ export async function sendReviewGame(orderItemId: string): Promise<SendReviewGam
     const codes = await reserveReviewCodes(reviewGameCount, order.receiverName ?? order.productOrderId)
     reservedCodeIds = codes.map((c) => c.id)
 
-    await sendReviewGameAlimtalk({
-      orderItemId: order.id,
-      recipientPhoneNumber: order.receiverPhoneNumber,
-      recipientName: order.receiverName,
-      productName: order.productName,
-      codes: codes.map((c) => ({ gameName: c.gameName, code: c.code })),
-    })
+    await sendReviewGameAlimtalk(
+      {
+        orderItemId: order.id,
+        recipientPhoneNumber: order.receiverPhoneNumber,
+        recipientName: order.receiverName,
+        productName: order.productName,
+        codes: codes.map((c) => ({ gameName: c.gameName, code: c.code })),
+      },
+      order.store,
+    )
 
     await sendDiscordAlert(
       'order',

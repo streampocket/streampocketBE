@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma'
-import { ExpenseCategory, ExpensePayer, Prisma } from '@prisma/client'
+import { ExpenseCategory, ExpensePayer, Prisma, Store } from '@prisma/client'
 
 const steamOrderItemInclude = {
   select: {
@@ -16,15 +16,17 @@ type FindExpensesParams = {
   startDate?: Date
   endDate?: Date
   dateOrder?: 'asc' | 'desc'
+  store?: Store
   page: number
   pageSize: number
 }
 
 export async function findExpenses(params: FindExpensesParams) {
-  const { category, startDate, endDate, dateOrder = 'desc', page, pageSize } = params
+  const { category, startDate, endDate, dateOrder = 'desc', store, page, pageSize } = params
 
   const where: Prisma.ExpenseWhereInput = {}
   if (category) where.category = category
+  if (store) where.store = store
   if (startDate || endDate) {
     where.date = {}
     if (startDate) where.date.gte = startDate
@@ -57,6 +59,7 @@ export async function findExpenseBySteamOrderItemId(steamOrderItemId: string) {
 }
 
 type CreateExpenseData = {
+  store?: Store | null
   date: Date
   category: ExpenseCategory
   payer: ExpensePayer
@@ -102,11 +105,11 @@ export async function findExpensesByDateRange(startOfDay: Date, endOfDay: Date) 
   })
 }
 
-export async function sumExpensesByCategory(startDate: Date, endDate: Date) {
+export async function sumExpensesByCategory(startDate: Date, endDate: Date, store?: Store) {
   const results = await prisma.expense.groupBy({
     by: ['category'],
     _sum: { amount: true },
-    where: { date: { gte: startDate, lte: endDate } },
+    where: { date: { gte: startDate, lte: endDate }, ...(store ? { store } : {}) },
   })
 
   const map: Record<string, number> = {}

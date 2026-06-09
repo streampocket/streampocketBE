@@ -13,6 +13,7 @@ import { adminOrdersRouter } from './routes/admin/orders'
 import { steamTrackRouter } from './routes/steam/track'
 import { adminRegistrationsRouter } from './routes/admin/registrations'
 import { adminProductsRouter } from './routes/admin/products'
+import { adminGamesRouter } from './routes/admin/games'
 import { adminAccountsRouter } from './routes/admin/accounts'
 import { adminAlimtalkRouter } from './routes/admin/alimtalk'
 import { adminDashboardRouter } from './routes/admin/dashboard'
@@ -76,6 +77,7 @@ app.use('/steam/track', steamTrackRouter)
 app.use('/steam/admin/orders', adminOrdersRouter)
 app.use('/steam/admin/registrations', adminRegistrationsRouter)
 app.use('/steam/admin/products', adminProductsRouter)
+app.use('/steam/admin/games', adminGamesRouter)
 app.use('/steam/admin/accounts', adminAccountsRouter)
 app.use('/steam/admin/alimtalk', adminAlimtalkRouter)
 app.use('/steam/admin/dashboard', adminDashboardRouter)

@@ -10,16 +10,21 @@ import {
 import { getRevenueSummary } from '../services/steamDashboardService'
 
 const expenseCategorySchema = z.nativeEnum(ExpenseCategory)
+// store 미지정 = 전체(공통 포함). 지정 시 해당 store만(공통 제외).
+const storeQuerySchema = z.enum(['streampocket', 'pokemon_steam']).optional()
 
 const expenseListQuerySchema = z.object({
   category: expenseCategorySchema.optional(),
   yearMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(),
   dateOrder: z.enum(['asc', 'desc']).default('desc'),
+  store: storeQuerySchema,
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 })
 
 const expensePayerSchema = z.nativeEnum(ExpensePayer)
+// store: 독립 비용의 사업 귀속. null/미지정 = 공통(전사). 주문연동 비용이면 서비스가 주문 store로 덮어씀.
+const storeSchema = z.enum(['streampocket', 'pokemon_steam']).nullable().optional()
 
 const expenseBodySchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -28,6 +33,7 @@ const expenseBodySchema = z.object({
   amount: z.number().int().min(0),
   memo: z.string().max(500).optional(),
   steamOrderItemId: z.string().uuid().nullable().optional(),
+  store: storeSchema,
 })
 
 const expenseUpdateBodySchema = z.object({
@@ -45,6 +51,7 @@ const idParamSchema = z.object({
 
 const summaryQuerySchema = z.object({
   yearMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(),
+  store: storeQuerySchema,
 })
 
 function yearMonthToRange(yearMonth: string): { startDate: Date; endDate: Date } {
@@ -73,6 +80,7 @@ export async function getExpensesHandler(req: Request, res: Response): Promise<v
     startDate,
     endDate,
     dateOrder: query.dateOrder,
+    store: query.store,
     page: query.page,
     pageSize: query.pageSize,
   })
@@ -89,13 +97,13 @@ export async function getExpensesHandler(req: Request, res: Response): Promise<v
 }
 
 export async function getExpenseSummaryHandler(req: Request, res: Response): Promise<void> {
-  const { yearMonth } = summaryQuerySchema.parse(req.query)
+  const { yearMonth, store } = summaryQuerySchema.parse(req.query)
 
   const now = new Date()
   const ym = yearMonth ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   const { startDate, endDate } = yearMonthToRange(ym)
 
-  const summary = await getRevenueSummary(startDate, endDate)
+  const summary = await getRevenueSummary(startDate, endDate, store)
   res.json({ data: summary })
 }
 
@@ -117,6 +125,7 @@ export async function createExpenseHandler(req: Request, res: Response): Promise
     amount: body.amount,
     memo: body.memo,
     steamOrderItemId: body.steamOrderItemId ?? null,
+    store: body.store ?? null,
   })
   res.status(201).json({ data: expense })
 }

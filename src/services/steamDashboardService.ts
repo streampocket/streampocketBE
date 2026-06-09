@@ -1,9 +1,15 @@
+import { Prisma, Store } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { NAVER_FEE_RATE } from '../constants/fees'
 import { sumExpensesByCategory } from '../repositories/expenseRepository'
 import { sumManualRevenue } from '../repositories/manualRevenueRepository'
 
 type Period = 'today' | 'week' | 'month' | 'all'
+
+// store 지정 시 `AND store = ?`(공통=null 제외), 미지정 시 빈 조건(전체=공통 포함). raw SQL 용.
+function storeSql(store?: Store): Prisma.Sql {
+  return store ? Prisma.sql`AND store = ${store}::"Store"` : Prisma.empty
+}
 
 // KST 자정(00:00:00.000+09:00) Date 생성 — y/m/d는 KST 벽시계 기준
 function kstMidnight(year: number, month: number, day: number): Date {
@@ -58,7 +64,11 @@ type RevenueSummary = {
   alimtalkCount: number
 }
 
-export async function getRevenueSummary(startDate: Date, endDate: Date): Promise<RevenueSummary> {
+export async function getRevenueSummary(
+  startDate: Date,
+  endDate: Date,
+  store?: Store,
+): Promise<RevenueSummary> {
   const [naverTotals, manualOrderTotals, alimtalkCount, expenseSums, manualRevenueTotal] =
     await Promise.all([
       // 네이버 가능매출 — 결제일(paid_at) 기준, 반품 제외. 구매확정 여부와 무관하게 결제된 전부.
@@ -76,6 +86,7 @@ export async function getRevenueSummary(startDate: Date, endDate: Date): Promise
           AND returned_at IS NULL
           AND paid_at >= ${startDate}
           AND paid_at <= ${endDate}
+          ${storeSql(store)}
       `,
       // 수동 주문 순수익 합산 — 반품 제외, paid_at 기준 (settlement_amount = 입력한 순수익)
       prisma.$queryRaw<{ profit: bigint }[]>`
@@ -85,15 +96,17 @@ export async function getRevenueSummary(startDate: Date, endDate: Date): Promise
           AND fulfillment_status <> 'returned'
           AND paid_at >= ${startDate}
           AND paid_at <= ${endDate}
+          ${storeSql(store)}
       `,
       prisma.deliveryLog.count({
         where: {
           status: 'sent',
           sentAt: { gte: startDate, lte: endDate },
+          ...(store ? { orderItem: { store } } : {}),
         },
       }),
-      sumExpensesByCategory(startDate, endDate),
-      sumManualRevenue(startDate, endDate),
+      sumExpensesByCategory(startDate, endDate, store),
+      sumManualRevenue(startDate, endDate, store),
     ])
 
   const naverRevenue = Number(naverTotals[0]?.revenue ?? 0n)
@@ -127,8 +140,9 @@ export async function getRevenueSummary(startDate: Date, endDate: Date): Promise
   }
 }
 
-export async function getDashboardStats(period: Period = 'today') {
+export async function getDashboardStats(period: Period = 'today', store?: Store) {
   const { start: periodStart, end: periodEnd } = getPeriodRange(period)
+  const storeWhere = store ? { store } : {}
 
   const [
     totalOrderCount,
@@ -136,23 +150,24 @@ export async function getDashboardStats(period: Period = 'today') {
     pendingDecisionCount,
     returnedCount,
   ] = await Promise.all([
-    prisma.steamOrderItem.count({ where: { source: 'naver' } }),
+    prisma.steamOrderItem.count({ where: { source: 'naver', ...storeWhere } }),
     prisma.steamOrderItem.count({
-      where: { source: 'naver', decisionDate: { not: null } },
+      where: { source: 'naver', decisionDate: { not: null }, ...storeWhere },
     }),
     prisma.steamOrderItem.count({
       where: {
         source: 'naver',
         fulfillmentStatus: { in: ['pending', 'in_progress', 'completed'] },
         decisionDate: null,
+        ...storeWhere,
       },
     }),
     prisma.steamOrderItem.count({
-      where: { source: 'naver', fulfillmentStatus: 'returned' },
+      where: { source: 'naver', fulfillmentStatus: 'returned', ...storeWhere },
     }),
   ])
 
-  const revenue = await getRevenueSummary(periodStart, periodEnd)
+  const revenue = await getRevenueSummary(periodStart, periodEnd, store)
 
   return {
     cards: {
@@ -165,7 +180,7 @@ export async function getDashboardStats(period: Period = 'today') {
   }
 }
 
-export async function getRevenueChart(days: number) {
+export async function getRevenueChart(days: number, store?: Store) {
   const startDate = new Date()
   startDate.setDate(startDate.getDate() - days)
   startDate.setHours(0, 0, 0, 0)
@@ -180,6 +195,7 @@ export async function getRevenueChart(days: number) {
     WHERE source = 'naver'
       AND returned_at IS NULL
       AND paid_at >= ${startDate}
+      ${storeSql(store)}
     GROUP BY DATE_TRUNC('day', paid_at)
     ORDER BY date
   `
@@ -192,6 +208,7 @@ export async function getRevenueChart(days: number) {
       COALESCE(SUM(amount), 0) AS total_expense
     FROM expenses
     WHERE date >= ${startDate}
+      ${storeSql(store)}
     GROUP BY DATE_TRUNC('day', date)
   `
 
@@ -228,12 +245,13 @@ export async function getRevenueChart(days: number) {
   return result
 }
 
-export async function getProductRanking() {
+export async function getProductRanking(store?: Store) {
   const rankings = await prisma.steamOrderItem.groupBy({
     by: ['productName'],
     where: {
       source: 'naver',
       fulfillmentStatus: { not: 'returned' },
+      ...(store ? { store } : {}),
     },
     _count: { id: true },
     _sum: { unitPrice: true },
@@ -248,7 +266,7 @@ export async function getProductRanking() {
   }))
 }
 
-export async function getAverageDecisionDays() {
+export async function getAverageDecisionDays(store?: Store) {
   const result = await prisma.$queryRaw<Array<{ avg_days: number | null }>>`
     SELECT AVG(
       EXTRACT(EPOCH FROM (decision_date - paid_at)) / 86400.0
@@ -257,6 +275,7 @@ export async function getAverageDecisionDays() {
     WHERE source = 'naver'
       AND decision_date IS NOT NULL
       AND paid_at IS NOT NULL
+      ${storeSql(store)}
   `
 
   const avgDays = result[0]?.avg_days

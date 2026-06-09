@@ -3,6 +3,8 @@ import {
   getGamesHandler,
   syncGamesHandler,
   mergeListingHandler,
+  mergeGameHandler,
+  splitListingHandler,
   updateGameHandler,
 } from '../../controllers/steamGameController'
 import { authMiddleware } from '../../middlewares/auth'
@@ -15,4 +17,6 @@ adminGamesRouter.use(authMiddleware)
 adminGamesRouter.get('/', asyncHandler(getGamesHandler))
 adminGamesRouter.post('/sync', asyncHandler(syncGamesHandler))
 adminGamesRouter.patch('/listings/:id/merge', asyncHandler(mergeListingHandler))
+adminGamesRouter.patch('/listings/:id/split', asyncHandler(splitListingHandler))
+adminGamesRouter.patch('/:id/merge-into', asyncHandler(mergeGameHandler))
 adminGamesRouter.patch('/:id', asyncHandler(updateGameHandler))

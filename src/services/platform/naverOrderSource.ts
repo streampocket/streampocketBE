@@ -94,6 +94,8 @@ const naverProductListResponseSchema = z.object({
               salePrice: z.number().optional(),
               discountedPrice: z.number().optional(),
               mobileDiscountedPrice: z.number().optional(),
+              // 네이버 실제 판매상태(SALE/OUTOFSTOCK/SUSPENSION/WAIT/CLOSE 등). 미정의 값 대비 string.
+              statusType: z.string().optional(),
             }),
           )
           .optional(),
@@ -239,7 +241,8 @@ async function fetchNaverProductsPage(
     body: JSON.stringify({
       page,
       size: NAVER_PRODUCT_PAGE_SIZE,
-      productStatusTypes: ['SALE', 'OUTOFSTOCK', 'WAIT'],
+      // 판매중지(SUSPENSION)·판매종료(CLOSE)까지 포함 — '판매안함' 상태도 가져와 표시(삭제 reconcile에서 빠지지 않게).
+      productStatusTypes: ['SALE', 'OUTOFSTOCK', 'WAIT', 'SUSPENSION', 'CLOSE'],
     }),
   })
 
@@ -257,6 +260,7 @@ export async function fetchNaverProducts(store: Store): Promise<{
   price: number | null
   discountPricePc: number | null
   discountPriceMobile: number | null
+  naverSaleStatus: string | null
 }[]> {
   const collected: NaverProductListResponse['contents'] = []
   let page = 1
@@ -298,6 +302,7 @@ export async function fetchNaverProducts(store: Store): Promise<{
       price: salePrice,
       discountPricePc: normalizeDiscount(channel?.discountedPrice),
       discountPriceMobile: normalizeDiscount(channel?.mobileDiscountedPrice),
+      naverSaleStatus: channel?.statusType ?? null,
     }
   })
 }

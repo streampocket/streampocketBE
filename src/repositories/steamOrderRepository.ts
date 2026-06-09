@@ -375,3 +375,15 @@ export async function rollbackReviewGameSend(id: string): Promise<void> {
     data: { reviewGameSentAt: null },
   })
 }
+
+// 게임 병합 — 주문의 game_id를 원 게임에서 대상 게임으로 일괄 이동(이력 일관성)
+export async function reassignOrderItemsToGame(
+  fromGameId: string,
+  toGameId: string,
+): Promise<number> {
+  const result = await prisma.steamOrderItem.updateMany({
+    where: { gameId: fromGameId },
+    data: { gameId: toGameId },
+  })
+  return result.count
+}

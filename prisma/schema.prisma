@@ -141,6 +141,9 @@ model StoreListing {
   discountPricePc     Int?          @map("discount_price_pc")
   discountPriceMobile Int?          @map("discount_price_mobile")
   status              ProductStatus @default(draft)
+  // 네이버 실제 판매상태(statusType: SALE/OUTOFSTOCK/SUSPENSION/WAIT/CLOSE 등). 동기화 시 갱신.
+  // 미정의 값 안전을 위해 enum 대신 String. null = 아직 미동기화.
+  naverSaleStatus     String?       @map("naver_sale_status") @db.VarChar(30)
   createdAt           DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
   game                SteamGame     @relation(fields: [gameId], references: [id], onDelete: Cascade)

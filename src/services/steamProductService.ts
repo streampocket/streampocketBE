@@ -108,6 +108,7 @@ type NaverProduct = {
   price: number | null
   discountPricePc: number | null
   discountPriceMobile: number | null
+  naverSaleStatus: string | null
 }
 
 export type StoreSyncResult = {
@@ -260,6 +261,7 @@ async function syncStoreListings(
         price: np.price,
         discountPricePc: np.discountPricePc,
         discountPriceMobile: np.discountPriceMobile,
+        naverSaleStatus: np.naverSaleStatus,
       })
       updated += 1
       continue
@@ -298,6 +300,7 @@ async function syncStoreListings(
       price: np.price,
       discountPricePc: np.discountPricePc,
       discountPriceMobile: np.discountPriceMobile,
+      naverSaleStatus: np.naverSaleStatus,
     })
     created += 1
   }

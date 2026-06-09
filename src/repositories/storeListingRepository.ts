@@ -5,6 +5,8 @@ type ListingFields = {
   price: number | null
   discountPricePc: number | null
   discountPriceMobile: number | null
+  // 네이버 실제 판매상태(statusType). 동기화 시 매번 최신값으로 갱신.
+  naverSaleStatus: string | null
 }
 
 type CreateListingInput = ListingFields & {
@@ -33,7 +35,7 @@ export async function createListing(data: CreateListingInput): Promise<StoreList
   return prisma.storeListing.create({ data })
 }
 
-// 가격/할인가만 갱신 — 상태(status)는 운영자 관리 항목이므로 동기화가 건드리지 않는다.
+// 동기화 시 가격/할인가/네이버 판매상태 갱신. (구 ProductStatus status는 건드리지 않음)
 export async function updateListingFields(
   id: string,
   data: ListingFields,

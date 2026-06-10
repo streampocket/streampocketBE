@@ -418,15 +418,19 @@ export async function getActiveTemplateOrThrow(
   return provider.activeTemplate
 }
 
-export async function sendAlimtalkMessage(input: {
-  templateCode: string
-  recipientPhoneNumber: string
-  recipientName: string | null
-  subject?: string
-  message: string
-  buttonJson?: string | null
-}): Promise<AligoSendResponse> {
-  const config = getEnvConfig()
+export async function sendAlimtalkMessage(
+  input: {
+    templateCode: string
+    recipientPhoneNumber: string
+    recipientName: string | null
+    subject?: string
+    message: string
+    buttonJson?: string | null
+  },
+  // store별 알리고 발신 계정(apikey/senderkey/sender)으로 발송 — 미지정 시 기본 스토어(streampocket)
+  store: Store | null = DEFAULT_STORE,
+): Promise<AligoSendResponse> {
+  const config = getEnvConfig(store)
   if (!isConfigured(config)) {
     throw new Error('알리고 환경변수가 모두 설정되지 않았습니다.')
   }
@@ -574,13 +578,16 @@ export async function sendOrderAlimtalk(
   })
 
   try {
-    const json = await sendAlimtalkMessage({
-      templateCode,
-      recipientPhoneNumber: input.recipientPhoneNumber,
-      recipientName: input.recipientName,
-      message,
-      buttonJson,
-    })
+    const json = await sendAlimtalkMessage(
+      {
+        templateCode,
+        recipientPhoneNumber: input.recipientPhoneNumber,
+        recipientName: input.recipientName,
+        message,
+        buttonJson,
+      },
+      store,
+    )
 
     await updateDeliveryLog(deliveryLog.id, {
       status: 'sent',
@@ -667,13 +674,16 @@ export async function sendReviewGameAlimtalk(
   })
 
   try {
-    const json = await sendAlimtalkMessage({
-      templateCode: config.templateCodeReviewGame,
-      recipientPhoneNumber: input.recipientPhoneNumber,
-      recipientName: input.recipientName,
-      message,
-      buttonJson,
-    })
+    const json = await sendAlimtalkMessage(
+      {
+        templateCode: config.templateCodeReviewGame,
+        recipientPhoneNumber: input.recipientPhoneNumber,
+        recipientName: input.recipientName,
+        message,
+        buttonJson,
+      },
+      store,
+    )
 
     await updateDeliveryLog(deliveryLog.id, {
       status: 'sent',
@@ -794,13 +804,16 @@ export async function sendOutOfStockAlimtalk(
   })
 
   try {
-    const json = await sendAlimtalkMessage({
-      templateCode: config.templateCodeNAOutOfStock,
-      recipientPhoneNumber: input.recipientPhoneNumber,
-      recipientName: input.recipientName,
-      message: templateContent,
-      buttonJson,
-    })
+    const json = await sendAlimtalkMessage(
+      {
+        templateCode: config.templateCodeNAOutOfStock,
+        recipientPhoneNumber: input.recipientPhoneNumber,
+        recipientName: input.recipientName,
+        message: templateContent,
+        buttonJson,
+      },
+      store,
+    )
 
     await updateDeliveryLog(deliveryLog.id, {
       status: 'sent',
@@ -861,13 +874,16 @@ export async function sendOrderStatusAlimtalk(
   })
 
   try {
-    const json = await sendAlimtalkMessage({
-      templateCode: config.templateCodeOrderStatus,
-      recipientPhoneNumber: input.recipientPhoneNumber,
-      recipientName: input.recipientName,
-      message,
-      buttonJson,
-    })
+    const json = await sendAlimtalkMessage(
+      {
+        templateCode: config.templateCodeOrderStatus,
+        recipientPhoneNumber: input.recipientPhoneNumber,
+        recipientName: input.recipientName,
+        message,
+        buttonJson,
+      },
+      store,
+    )
 
     await updateDeliveryLog(deliveryLog.id, {
       status: 'sent',
@@ -921,13 +937,16 @@ export async function sendOrderCompletedAlimtalk(
   })
 
   try {
-    const json = await sendAlimtalkMessage({
-      templateCode: config.templateCodeOrderCompleted,
-      recipientPhoneNumber: input.recipientPhoneNumber,
-      recipientName: input.recipientName,
-      message: templateContent,
-      buttonJson,
-    })
+    const json = await sendAlimtalkMessage(
+      {
+        templateCode: config.templateCodeOrderCompleted,
+        recipientPhoneNumber: input.recipientPhoneNumber,
+        recipientName: input.recipientName,
+        message: templateContent,
+        buttonJson,
+      },
+      store,
+    )
 
     await updateDeliveryLog(deliveryLog.id, {
       status: 'sent',

@@ -23,6 +23,7 @@ import {
 import { getSystemSettings } from './systemSettingsService'
 import { sendDiscordAlert } from '../lib/discord'
 import { detectProductType } from '../utils/productType'
+import { parseReviewGameCount } from '../utils/reviewGameParser'
 
 // 진행중 주문 시간 연장 단위(분)
 const EXTEND_MINUTES = 10
@@ -514,6 +515,8 @@ type OrderTrackingResult = {
   returnedAt: Date | null
   estimatedCompletedAt: Date | null
   completedAt: Date | null
+  // 리뷰게임 발송 개수 — 내부 store 정보를 노출하지 않기 위해 서버에서 파싱해 내려준다
+  reviewGameCount: number | null
 }
 
 export async function getOrderTracking(productOrderId: string): Promise<OrderTrackingResult> {
@@ -532,6 +535,7 @@ export async function getOrderTracking(productOrderId: string): Promise<OrderTra
     returnedAt: order.returnedAt,
     estimatedCompletedAt: order.estimatedCompletedAt,
     completedAt: order.completedAt,
+    reviewGameCount: parseReviewGameCount(order.productName, order.store),
   }
 }
 

@@ -35,10 +35,12 @@ export async function sendReviewGame(orderItemId: string): Promise<SendReviewGam
     throw Object.assign(new Error('알림톡이 비활성화되어 있습니다.'), { statusCode: 400 })
   }
 
-  const reviewGameCount = parseReviewGameCount(order.productName)
+  const reviewGameCount = parseReviewGameCount(order.productName, order.store)
   if (!reviewGameCount) {
     throw Object.assign(
-      new Error('상품명에서 리뷰게임 수를 파싱할 수 없습니다. (예: "게임 1+7 지급" 패턴 필요)'),
+      new Error(
+        '상품명에서 리뷰게임 수를 파싱할 수 없습니다. (예: "게임 1+7 지급" 또는 포켓몬스팀 "리뷰게임 7개" 패턴 필요)',
+      ),
       { statusCode: 400 },
     )
   }

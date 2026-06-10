@@ -121,7 +121,8 @@ export type StoreSyncResult = {
 }
 
 // 게임 매칭 정규화 키 — 두 스토어가 같은 게임을 다른 상품명으로 등록해도 같은 키로 수렴시킨다.
-// 스토어 간 "차이나는 표현"(언어/등록방식)과 대괄호 주석만 제거하고, 에디션·핵심 게임명·(게임 1+N)은 보존.
+// 스토어 간 "차이나는 표현"(언어/등록방식)과 대괄호 주석만 제거하고, 에디션·핵심 게임명은 보존.
+// 리뷰게임 표기는 "(게임 1+N)" / "리뷰게임 N개" 모두 공통 토큰 "리뷰게임N"으로 수렴 (개수 보존 — 1+3과 1+7은 분리 유지).
 // 끝의 ' na'/' aa' 접미사도 제거(배그 'bg'는 유지). 검증: 포켓 221개 전부 스트림 게임에 매칭, 스트림 collapse 0.
 const NAME_NOISE_TOKENS = [
   '한국어',
@@ -137,7 +138,7 @@ const NAME_NOISE_TOKENS = [
   '기존계정',
 ]
 
-function normalizeGameName(name: string): string {
+export function normalizeGameName(name: string): string {
   let s = name.trim().toLowerCase().replace(/\s+/g, ' ')
   // 대괄호 주석 제거: [본인계정], [기존계정] 등
   s = s.replace(/\[[^\]]*\]/g, ' ')
@@ -145,6 +146,10 @@ function normalizeGameName(name: string): string {
   for (const token of NAME_NOISE_TOKENS) {
     s = s.split(token).join(' ')
   }
+  // 리뷰게임 표기 정규화 — "(게임 1+3)" / "게임 1+3" / "1+3" / "리뷰게임 3개" → "리뷰게임3"
+  s = s.replace(/\(\s*(?:게임\s*)?\d+\s*\+\s*(\d+)\s*\)/g, ' 리뷰게임$1 ') // 괄호형 먼저 (괄호 잔존 방지)
+  s = s.replace(/(?:게임\s*)?\d+\s*\+\s*(\d+)/g, ' 리뷰게임$1 ')
+  s = s.replace(/리뷰\s*게임\s*(\d+)\s*개/g, ' 리뷰게임$1 ')
   s = s.replace(/\s+/g, ' ').trim()
   s = s.replace(/\s(na|aa)$/u, '').trim()
   return s

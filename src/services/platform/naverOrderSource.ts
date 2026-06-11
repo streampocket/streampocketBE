@@ -434,7 +434,12 @@ export function createNaverOrderSource(store: Store = DEFAULT_STORE): IOrderSour
       )
 
       return details
-        .filter((detail) => detail.productOrder.claimType === 'RETURN')
+        // 반품(RETURN) + 취소(CANCEL) 클레임 감지 — 발송처리 지연 도입으로 상품준비중 단계의 취소요청이 가능해짐
+        .filter(
+          (detail) =>
+            detail.productOrder.claimType === 'RETURN' ||
+            detail.productOrder.claimType === 'CANCEL',
+        )
         .map((detail) => {
           const changedStatus = changedStatusByProductOrderId.get(detail.productOrder.productOrderId)
           const paidAt = detail.order.paymentDate ?? changedStatus?.paymentDate

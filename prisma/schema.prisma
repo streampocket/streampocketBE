@@ -206,6 +206,8 @@ model SteamOrderItem {
   memo                      String?             @map("memo")
   estimatedCompletedAt      DateTime?           @map("estimated_completed_at") @db.Timestamptz(6)
   autoExtendCount           Int                 @default(0) @map("auto_extend_count")
+  // 네이버 발송처리(dispatch) 완료 시각 — null이면 미발송(진행중 전환/완료 처리 시점에 dispatch 수행)
+  naverDispatchedAt         DateTime?           @map("naver_dispatched_at") @db.Timestamptz(6)
   completedAt               DateTime?           @map("completed_at") @db.Timestamptz(6)
   createdAt                 DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                 DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)

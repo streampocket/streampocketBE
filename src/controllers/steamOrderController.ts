@@ -1,5 +1,6 @@
 import { Request, Response } from 'express'
 import { z } from 'zod'
+import { FulfillmentStatus } from '@prisma/client'
 import {
   getOrders,
   getOrderCounts,
@@ -16,6 +17,7 @@ import {
   deleteManualOrder,
   updateManualOrderNetProfit,
 } from '../services/steamOrderService'
+import { syncNaverOrderStatus } from '../services/steamFulfillmentService'
 import { buildOrderExcelBuffer } from '../utils/excel'
 
 const fulfillmentStatusEnum = z.enum([
@@ -127,6 +129,35 @@ export async function markInProgressHandler(
   const { id } = req.params
   await markOrderInProgress(id)
   res.json({ message: '진행중으로 전환되었습니다.' })
+}
+
+// 복귀 시 복원 상태 표기용 라벨 — 복원 대상 상태(대기/완료/구매확정)만 사용된다
+const RECOVERED_STATUS_LABELS: Partial<Record<FulfillmentStatus, string>> = {
+  pending: '대기',
+  completed: '완료',
+  purchase_decided: '구매확정',
+}
+
+// 네이버 상태 수동 재조회 — 양방향 동기화 결과를 한국어 메시지로 조립해 반환 (FE는 toast로 그대로 노출)
+export async function syncNaverStatusHandler(
+  req: Request<{ id: string }>,
+  res: Response,
+): Promise<void> {
+  const { id } = req.params
+  const result = await syncNaverOrderStatus(id)
+
+  const claimInfo = result.naverClaimStatus
+    ? `, 클레임: ${result.naverClaimType ?? '-'}/${result.naverClaimStatus}`
+    : ''
+  const recoveredLabel = RECOVERED_STATUS_LABELS[result.fulfillmentStatus] ?? result.fulfillmentStatus
+  const message =
+    result.action === 'returned'
+      ? '네이버 클레임 감지 — 반품 처리되었습니다.'
+      : result.action === 'recovered'
+        ? `클레임 종료 확인 — '${recoveredLabel}' 상태로 복귀되었습니다.`
+        : `변경 없음 (네이버 상태: ${result.naverProductOrderStatus ?? '-'}${claimInfo})`
+
+  res.json({ message, data: result })
 }
 
 export async function extendOrderTimeHandler(

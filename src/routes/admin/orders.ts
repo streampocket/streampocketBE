@@ -4,6 +4,7 @@ import {
   getOrderDetailHandler,
   retryOrderHandler,
   markInProgressHandler,
+  syncNaverStatusHandler,
   extendOrderTimeHandler,
   manualCompleteHandler,
   manualReturnHandler,
@@ -34,6 +35,7 @@ adminOrdersRouter.delete('/:id', asyncHandler(deleteManualOrderHandler))
 adminOrdersRouter.get('/:id', asyncHandler(getOrderDetailHandler))
 adminOrdersRouter.post('/:id/retry', asyncHandler(retryOrderHandler))
 adminOrdersRouter.post('/:id/in-progress', asyncHandler(markInProgressHandler))
+adminOrdersRouter.post('/:id/sync-naver-status', asyncHandler(syncNaverStatusHandler))
 adminOrdersRouter.post('/:id/extend-time', asyncHandler(extendOrderTimeHandler))
 adminOrdersRouter.post('/:id/complete', asyncHandler(manualCompleteHandler))
 adminOrdersRouter.post('/:id/return', asyncHandler(manualReturnHandler))

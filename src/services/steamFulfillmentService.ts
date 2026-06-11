@@ -1,11 +1,13 @@
-import { SteamProduct, Store } from '@prisma/client'
+import { FulfillmentStatus, SteamProduct, Store } from '@prisma/client'
 import { discordNotifier } from '../lib/discord'
 import {
   createOrderItem,
+  findOrderById,
   findOrderByProductOrderId,
   listOrdersPaidBetween,
   updateOrderItem,
 } from '../repositories/steamOrderRepository'
+import { fetchProductOrderDetails } from './platform/naverOrderSource'
 import { findProductByNaverId } from '../repositories/steamProductRepository'
 import { findListingWithGameByNaverProductId } from '../repositories/storeListingRepository'
 import {
@@ -52,6 +54,26 @@ const IN_PROGRESS_CLAIM_STATUSES = [
   'EXCHANGE_REQUESTED',
   'CANCEL_REQUESTED',
 ]
+
+// 클레임 종료 복귀 시 복원할 상태 — 네이버 상태 + DB 발송완료 기록 기준 (자동·수동 복귀 공통).
+// '완료' 판정은 네이버 배송완료(DELIVERED)가 아닌 completedAt 기준 — NA 주문은 발송 직후
+// 네이버가 자동 배송완료되므로 네이버 기준을 쓰면 원래 '대기'였던 주문이 '완료'로 오판된다.
+type RecoveredStatus = 'pending' | 'completed' | 'purchase_decided'
+
+const RECOVERED_STATUS_LABELS: Record<RecoveredStatus, string> = {
+  pending: '대기',
+  completed: '완료',
+  purchase_decided: '구매확정',
+}
+
+export function resolveRecoveredStatus(
+  naverProductOrderStatus: string | null | undefined,
+  completedAt: Date | null,
+): RecoveredStatus {
+  if (naverProductOrderStatus === 'PURCHASE_DECIDED') return 'purchase_decided'
+  if (completedAt) return 'completed'
+  return 'pending'
+}
 
 function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -166,6 +188,7 @@ export async function processOrder(
   }
 
   if (productType === 'BG') {
+    // 발주확인만 수행(네이버: 상품준비중 유지) — 발송처리(dispatch)는 관리자 진행중 전환/완료 시점에 수행
     try {
       await orderSource.confirmOrder(item.productOrderId)
     } catch (error) {
@@ -177,21 +200,6 @@ export async function processOrder(
       await notify(
         'error',
         `❌ 발주 확인 실패\n주문: ${item.productOrderId}\n오류: ${message}`,
-      )
-      return
-    }
-
-    try {
-      await orderSource.dispatchOrder(item.productOrderId)
-    } catch (error) {
-      const message = toErrorMessage(error)
-      await updateOrderItem(orderItem.id, {
-        fulfillmentStatus: 'failed',
-        errorMessage: `발송 처리 실패: ${message}`,
-      })
-      await notify(
-        'error',
-        `❌ 발송 처리 실패\n주문: ${item.productOrderId}\n오류: ${message}`,
       )
       return
     }
@@ -239,6 +247,7 @@ export async function processOrder(
   }
 
   if (productType === 'AA') {
+    // 발주확인만 수행(네이버: 상품준비중 유지) — 발송처리(dispatch)는 관리자 진행중 전환/완료 시점에 수행
     try {
       await orderSource.confirmOrder(item.productOrderId)
     } catch (error) {
@@ -250,21 +259,6 @@ export async function processOrder(
       await notify(
         'error',
         `❌ 발주 확인 실패\n주문: ${item.productOrderId}\n오류: ${message}`,
-      )
-      return
-    }
-
-    try {
-      await orderSource.dispatchOrder(item.productOrderId)
-    } catch (error) {
-      const message = toErrorMessage(error)
-      await updateOrderItem(orderItem.id, {
-        fulfillmentStatus: 'failed',
-        errorMessage: `발송 처리 실패: ${message}`,
-      })
-      await notify(
-        'error',
-        `❌ 발송 처리 실패\n주문: ${item.productOrderId}\n오류: ${message}`,
       )
       return
     }
@@ -318,6 +312,7 @@ export async function processOrder(
       ? await reserveNextAvailableAccount(product.id)
       : null
   if (!account) {
+    // 발주확인만 수행(네이버: 상품준비중 유지) — 발송처리(dispatch)는 관리자 진행중 전환/완료 시점에 수행
     try {
       await orderSource.confirmOrder(item.productOrderId)
     } catch (error) {
@@ -329,21 +324,6 @@ export async function processOrder(
       await notify(
         'error',
         `❌ 발주 확인 실패\n주문: ${item.productOrderId}\n오류: ${message}`,
-      )
-      return
-    }
-
-    try {
-      await orderSource.dispatchOrder(item.productOrderId)
-    } catch (error) {
-      const message = toErrorMessage(error)
-      await updateOrderItem(orderItem.id, {
-        fulfillmentStatus: 'failed',
-        errorMessage: `발송 처리 실패: ${message}`,
-      })
-      await notify(
-        'error',
-        `❌ 발송 처리 실패\n주문: ${item.productOrderId}\n오류: ${message}`,
       )
       return
     }
@@ -433,6 +413,8 @@ export async function processOrder(
     return
   }
 
+  await updateOrderItem(orderItem.id, { naverDispatchedAt: new Date() })
+
   await notify(
     'order',
     `✅ 주문 처리 완료 (네이버)\n상품: ${item.productName}\n주문번호: ${item.productOrderId}`,
@@ -500,6 +482,9 @@ export async function processReturnedOrders(
 
   for (const item of returnedItems) {
     try {
+      // 취소(CANCEL) 클레임도 returned로 통합 처리 — 매출 제외·작업 중단 목적은 동일. 구분은 errorMessage에 기록.
+      const isCancel = item.claimType === 'CANCEL'
+      const claimLabel = isCancel ? '취소요청' : '반품'
       const existing = await findOrderByProductOrderId(item.productOrderId)
 
       if (!existing) {
@@ -516,12 +501,13 @@ export async function processReturnedOrders(
         await updateOrderItem(created.id, {
           fulfillmentStatus: 'returned',
           returnedAt: new Date(),
+          errorMessage: `${claimLabel} 클레임 감지 (${item.claimType}/${item.claimStatus})`,
         })
         returnedCount += 1
 
         await notify(
           'order',
-          `🔁 사후 포착된 반품 주문 (PAYED 지연으로 신규 알림 미발송)\n주문: ${item.productOrderId}\n상품: ${item.productName}\n수신자: ${item.receiverName ?? '-'}\n클레임 상태: ${item.claimStatus}`,
+          `🔁 사후 포착된 ${claimLabel} 주문 (PAYED 지연으로 신규 알림 미발송)\n주문: ${item.productOrderId}\n상품: ${item.productName}\n수신자: ${item.receiverName ?? '-'}\n클레임 상태: ${item.claimStatus}`,
         )
         continue
       }
@@ -531,12 +517,15 @@ export async function processReturnedOrders(
       await updateOrderItem(existing.id, {
         fulfillmentStatus: 'returned',
         returnedAt: new Date(),
+        errorMessage: `${claimLabel} 클레임 감지 (${item.claimType}/${item.claimStatus})`,
       })
       returnedCount += 1
 
       await notify(
         'order',
-        `📦 반품 감지\n주문: ${item.productOrderId}\n상품: ${existing.productName}\n클레임 상태: ${item.claimStatus}`,
+        isCancel
+          ? `🛑 취소요청 감지 — 작업 중단 필요\n주문: ${item.productOrderId}\n상품: ${existing.productName}\n클레임 상태: ${item.claimStatus}`
+          : `📦 반품 감지\n주문: ${item.productOrderId}\n상품: ${existing.productName}\n클레임 상태: ${item.claimStatus}`,
       )
     } catch (error) {
       const message = toErrorMessage(error)
@@ -660,15 +649,22 @@ export async function runBackupOrderScan(
           ACTIVE_PRODUCT_ORDER_STATUSES.includes(item.naverProductOrderStatus) &&
           !IN_PROGRESS_CLAIM_STATUSES.includes(item.naverClaimStatus ?? '')
         ) {
+          // 복원 상태는 네이버 상태 + 발송완료 기록 기준 — 구매확정/완료였던 주문이 대기에 갇히지 않게 한다.
+          const recoveredStatus = resolveRecoveredStatus(
+            item.naverProductOrderStatus,
+            before.completedAt,
+          )
+          const recoveredLabel = RECOVERED_STATUS_LABELS[recoveredStatus]
           await updateOrderItem(before.id, {
-            fulfillmentStatus: 'pending',
+            fulfillmentStatus: recoveredStatus,
             returnedAt: null,
-            completedAt: null,
-            errorMessage: '반품 클레임 종료 후 자동 복귀',
+            // pending 복원일 때만 발송완료 기록 정리 — completed/purchase_decided 복원은 보존
+            ...(recoveredStatus === 'pending' ? { completedAt: null } : {}),
+            errorMessage: `반품 클레임 종료 후 자동 복귀 (${recoveredLabel})`,
           })
           await notify(
             'order',
-            `↩️ 반품 클레임 종료 → 정상 복귀\n주문: ${item.productOrderId}\n상품: ${item.productName}\n네이버 상태: ${item.naverProductOrderStatus}${item.naverClaimStatus ? ` (claimStatus: ${item.naverClaimStatus})` : ''}`,
+            `↩️ 반품 클레임 종료 → ${recoveredLabel} 상태로 복귀\n주문: ${item.productOrderId}\n상품: ${item.productName}\n네이버 상태: ${item.naverProductOrderStatus}${item.naverClaimStatus ? ` (claimStatus: ${item.naverClaimStatus})` : ''}`,
           )
           recoveredCount += 1
           continue
@@ -795,6 +791,116 @@ export async function runDailyOrderReconciliation(
     missingProductOrderIds: missing.map((item) => item.productOrderId),
     staleReturnedCount: staleReturned.length,
     staleReturnedProductOrderIds: staleReturned.map((item) => item.productOrderId),
+  }
+}
+
+// 클레임이 확정 종료된 네이버 주문 최종 상태 — 수동 재조회 ①방향(returned 전환) 판정에 사용
+const FINAL_CLAIMED_PRODUCT_ORDER_STATUSES = ['CANCELED', 'RETURNED']
+
+export type NaverStatusSyncResult = {
+  changed: boolean
+  action: 'returned' | 'recovered' | 'none'
+  naverProductOrderStatus: string | null
+  naverClaimType: string | null
+  naverClaimStatus: string | null
+  fulfillmentStatus: FulfillmentStatus
+}
+
+// 수동 재조회 — 주문 1건의 네이버 실제 상태를 조회해 DB와 양방향 동기화 (관리자 모달 버튼).
+// 자동 감지(폴링 5분·보조 스캔 15분/6시간 창·일일 대조)의 시간 공백을 관리자가 즉시 메울 수 있다.
+// 판정 기준은 폴링/보조 스캔과 동일 상수를 사용해 자동 감지와 결론이 어긋나지 않게 한다.
+export async function syncNaverOrderStatus(orderId: string): Promise<NaverStatusSyncResult> {
+  const order = await findOrderById(orderId)
+  if (!order) {
+    throw Object.assign(new Error('주문을 찾을 수 없습니다.'), { statusCode: 404 })
+  }
+
+  if (order.source !== 'naver') {
+    throw Object.assign(new Error('네이버 주문만 재조회할 수 있습니다.'), { statusCode: 400 })
+  }
+
+  const store = order.store ?? DEFAULT_STORE
+  const details = await fetchProductOrderDetails([order.productOrderId], store)
+  const detail = details[0]
+  if (!detail) {
+    throw Object.assign(new Error('네이버에서 주문을 조회할 수 없습니다.'), { statusCode: 404 })
+  }
+
+  const naverStatus = detail.productOrder.productOrderStatus ?? null
+  const claimType = detail.productOrder.claimType ?? null
+  const claimStatus = detail.productOrder.claimStatus ?? null
+  const notify = discordNotifier(store)
+
+  // 진행 중 클레임 — 폴링과 동일하게 반품/취소만 returned 전환 대상 (교환 등은 변경 없음으로 정보만 반환)
+  const claimInProgress =
+    (claimType === 'RETURN' || claimType === 'CANCEL') &&
+    IN_PROGRESS_CLAIM_STATUSES.includes(claimStatus ?? '')
+  const claimFinalized =
+    naverStatus !== null && FINAL_CLAIMED_PRODUCT_ORDER_STATUSES.includes(naverStatus)
+
+  // ① 클레임 감지 — DB는 정상인데 네이버에 클레임 진행 중이거나 이미 취소/반품 확정
+  if (order.fulfillmentStatus !== 'returned' && (claimInProgress || claimFinalized)) {
+    const isCancel = claimType === 'CANCEL' || naverStatus === 'CANCELED'
+    const claimLabel = isCancel ? '취소요청' : '반품'
+    await updateOrderItem(order.id, {
+      fulfillmentStatus: 'returned',
+      returnedAt: new Date(),
+      errorMessage: `${claimLabel} 클레임 감지 (수동 재조회, ${claimType ?? naverStatus}/${claimStatus ?? '-'})`,
+    })
+    await notify(
+      'order',
+      isCancel
+        ? `🛑 취소요청 감지 (수동 재조회) — 작업 중단 필요\n주문: ${order.productOrderId}\n상품: ${order.productName}\n클레임 상태: ${claimStatus ?? naverStatus ?? '-'}`
+        : `📦 반품 감지 (수동 재조회)\n주문: ${order.productOrderId}\n상품: ${order.productName}\n클레임 상태: ${claimStatus ?? naverStatus ?? '-'}`,
+    )
+    return {
+      changed: true,
+      action: 'returned',
+      naverProductOrderStatus: naverStatus,
+      naverClaimType: claimType,
+      naverClaimStatus: claimStatus,
+      fulfillmentStatus: 'returned',
+    }
+  }
+
+  // ② 정상 복귀 — DB는 returned인데 네이버는 정상 + 진행 중 클레임 없음 (보조 스캔 복귀와 동일 판정)
+  if (
+    order.fulfillmentStatus === 'returned' &&
+    naverStatus !== null &&
+    ACTIVE_PRODUCT_ORDER_STATUSES.includes(naverStatus) &&
+    !IN_PROGRESS_CLAIM_STATUSES.includes(claimStatus ?? '')
+  ) {
+    // 복원 상태는 네이버 상태 + 발송완료 기록 기준 (보조 스캔 자동 복귀와 동일 규칙)
+    const recoveredStatus = resolveRecoveredStatus(naverStatus, order.completedAt)
+    const recoveredLabel = RECOVERED_STATUS_LABELS[recoveredStatus]
+    await updateOrderItem(order.id, {
+      fulfillmentStatus: recoveredStatus,
+      returnedAt: null,
+      ...(recoveredStatus === 'pending' ? { completedAt: null } : {}),
+      errorMessage: `클레임 종료 — 수동 재조회로 ${recoveredLabel} 복귀`,
+    })
+    await notify(
+      'order',
+      `↩️ 클레임 종료 → ${recoveredLabel} 상태로 복귀 (수동 재조회)\n주문: ${order.productOrderId}\n상품: ${order.productName}\n네이버 상태: ${naverStatus}${claimStatus ? ` (claimStatus: ${claimStatus})` : ''}`,
+    )
+    return {
+      changed: true,
+      action: 'recovered',
+      naverProductOrderStatus: naverStatus,
+      naverClaimType: claimType,
+      naverClaimStatus: claimStatus,
+      fulfillmentStatus: recoveredStatus,
+    }
+  }
+
+  // ③ 변경 없음 — 네이버 현재 상태만 반환
+  return {
+    changed: false,
+    action: 'none',
+    naverProductOrderStatus: naverStatus,
+    naverClaimType: claimType,
+    naverClaimStatus: claimStatus,
+    fulfillmentStatus: order.fulfillmentStatus,
   }
 }
 

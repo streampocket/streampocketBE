@@ -52,6 +52,7 @@ type UpdateOrderItemInput = {
   memo?: string | null
   orderStatusAlimtalkSentAt?: Date
   estimatedCompletedAt?: Date | null
+  naverDispatchedAt?: Date
   completedAt?: Date | null
 }
 

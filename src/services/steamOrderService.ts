@@ -24,6 +24,8 @@ import { getSystemSettings } from './systemSettingsService'
 import { sendDiscordAlert } from '../lib/discord'
 import { detectProductType } from '../utils/productType'
 import { parseReviewGameCount } from '../utils/reviewGameParser'
+import { createNaverOrderSource } from './platform/naverOrderSource'
+import { DEFAULT_STORE } from '../constants/stores'
 
 // 진행중 주문 시간 연장 단위(분)
 const EXTEND_MINUTES = 10
@@ -343,8 +345,54 @@ export async function updateManualOrderNetProfit(id: string, netProfit: number):
   })
 }
 
+// 네이버 발송처리(dispatch) 지연 수행 — 미발송 네이버 주문만 대상.
+// AA/BG·NA재고없음 주문은 인입 시 발주확인(상품준비중)까지만 진행되므로,
+// 진행중 전환/완료 처리 시점에 여기서 발송처리(배송중)를 수행한다.
+// 실패 시 throw → 호출처의 상태 전환이 중단되고 관리자 화면에 에러로 노출된다(재클릭 시 재시도).
+type DispatchableOrder = {
+  id: string
+  productOrderId: string
+  productName: string
+  source: OrderSource
+  store: Store | null
+  naverDispatchedAt: Date | null
+}
+
+async function dispatchNaverOrderIfNeeded(order: DispatchableOrder): Promise<void> {
+  if (order.source !== 'naver') return
+  if (order.naverDispatchedAt) return
+
+  const orderSource = createNaverOrderSource(order.store ?? DEFAULT_STORE)
+
+  try {
+    await orderSource.dispatchOrder(order.productOrderId)
+  } catch (firstError) {
+    // 폴백 1회: 발주확인 단계에서 실패했던 주문은 발주확인이 안 된 상태일 수 있다.
+    // confirm을 시도(이미 발주확인된 주문이면 fail 반환 — 무시)한 뒤 dispatch를 한 번 더 시도한다.
+    try {
+      await orderSource.confirmOrder(order.productOrderId).catch(() => undefined)
+      await orderSource.dispatchOrder(order.productOrderId)
+    } catch {
+      const message = firstError instanceof Error ? firstError.message : String(firstError)
+      sendDiscordAlert(
+        'error',
+        `❌ 네이버 발송처리 실패 — 상태 전환 중단\n주문: ${order.productOrderId}\n상품: ${order.productName}\n오류: ${message}`,
+        { store: order.store },
+      ).catch((err) => console.error('[DISPATCH] Discord 알림 실패', err))
+
+      throw Object.assign(
+        new Error(`네이버 발송처리 실패: ${message}`),
+        { statusCode: 502 },
+      )
+    }
+  }
+
+  await updateOrderItem(order.id, { naverDispatchedAt: new Date() })
+}
+
 // 대기 → 진행중 수동 전환 (구매자 진행상황 페이지 2단계)
 // 전역 기본 소요시간을 읽어 예상 완료시각을 함께 저장한다.
+// 미발송 네이버 주문은 이 시점에 발송처리(dispatch)를 수행한다 — 실패 시 전환되지 않는다.
 export async function markOrderInProgress(id: string): Promise<void> {
   const order = await findOrderById(id)
   if (!order) {
@@ -359,6 +407,8 @@ export async function markOrderInProgress(id: string): Promise<void> {
       { statusCode: 400 },
     )
   }
+
+  await dispatchNaverOrderIfNeeded(order)
 
   const { defaultDurationMinutes } = await getSystemSettings()
   const estimatedCompletedAt = new Date(Date.now() + defaultDurationMinutes * 60_000)
@@ -461,6 +511,10 @@ export async function manualCompleteOrder(id: string): Promise<void> {
       { statusCode: 400 },
     )
   }
+
+  // 진행중을 거치지 않고 바로 완료되는 경우 대비 — 미발송 네이버 주문은 발송처리를 먼저 수행한다.
+  // 실패 시 완료 처리하지 않는다 (네이버가 상품준비중에 갇히는 것 방지).
+  await dispatchNaverOrderIfNeeded(order)
 
   // 수동 주문은 '구매확정', 네이버 주문은 '완료'를 종료 상태로 사용한다.
   // 이미 구매확정(네이버 구매자 확정) 주문은 뱃지를 그대로 두고 발송완료 시각만 기록한다.

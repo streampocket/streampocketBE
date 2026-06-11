@@ -170,6 +170,33 @@ paths:
         '404':
           description: 주문 없음
 
+  /steam/admin/orders/{id}/sync-naver-status:
+    post:
+      summary: 네이버 상태 수동 재조회 (양방향 클레임 동기화)
+      description: >-
+        해당 주문 1건의 네이버 실제 상태를 조회해 DB와 양방향 동기화한다.
+        ① DB가 정상인데 네이버에 반품/취소 클레임이 진행 중이거나 취소·반품 확정 상태면 `returned`로 전환,
+        ② DB가 `returned`인데 네이버는 정상이고 진행 중 클레임이 없으면 원래 상태로 복귀
+        (네이버 구매확정이면 `purchase_decided`, 발송완료 기록 보유 시 `completed`, 그 외 `pending`),
+        ③ 그 외에는 변경 없이 네이버 현재 상태만 반환한다.
+        판정 기준은 자동 폴링/보조 스캔과 동일하다. 네이버 주문(`source=naver`)만 가능.
+      tags: [SteamOrders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 동기화 결과 (message + data.action = returned/recovered/none)
+        '400':
+          description: 네이버 주문이 아님
+        '404':
+          description: 주문 없음 또는 네이버에서 조회 불가
+
   /steam/admin/orders/{id}/extend-time:
     post:
       summary: 진행중 주문 예상 완료시각 10분 연장

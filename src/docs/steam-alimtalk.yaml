@@ -1,16 +1,25 @@
 paths:
   /steam/admin/alimtalk:
     get:
-      summary: 알림톡 설정 조회
+      summary: 알림톡 설정 조회 (스토어별)
       tags: [SteamAlimtalk]
       security:
         - bearerAuth: []
+      parameters:
+        - in: query
+          name: store
+          required: false
+          schema:
+            type: string
+            enum: [streampocket, pokemon_steam]
+            default: streampocket
+          description: 조회 대상 스토어 (미지정 시 streampocket)
       responses:
         '200':
-          description: 알림톡 설정과 알리고 연동 상태
+          description: 해당 스토어의 알림톡 설정과 알리고 연동 상태
 
     patch:
-      summary: 알림톡 설정 수정
+      summary: 알림톡 설정 수정 (스토어별 자동발송 토글)
       tags: [SteamAlimtalk]
       security:
         - bearerAuth: []
@@ -20,8 +29,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: [enabled]
+              required: [store, enabled]
               properties:
+                store:
+                  type: string
+                  enum: [streampocket, pokemon_steam]
                 enabled:
                   type: boolean
       responses:
@@ -30,10 +42,19 @@ paths:
 
   /steam/admin/alimtalk/test:
     post:
-      summary: 알림톡 연동 테스트 전송
+      summary: 알림톡 연동 테스트 전송 (스토어별)
       tags: [SteamAlimtalk]
       security:
         - bearerAuth: []
+      parameters:
+        - in: query
+          name: store
+          required: false
+          schema:
+            type: string
+            enum: [streampocket, pokemon_steam]
+            default: streampocket
+          description: 테스트 발송 대상 스토어 (미지정 시 streampocket)
       responses:
         '200':
-          description: 현재 발신번호로 테스트 알림톡 전송 완료
+          description: 해당 스토어 발신번호로 테스트 알림톡 전송 완료

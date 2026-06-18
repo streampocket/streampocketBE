@@ -30,7 +30,7 @@ export async function sendReviewGame(orderItemId: string): Promise<SendReviewGam
     throw Object.assign(new Error('수신자 전화번호가 없습니다.'), { statusCode: 400 })
   }
 
-  const enabled = await isAlimtalkEnabled()
+  const enabled = await isAlimtalkEnabled(order.store)
   if (!enabled) {
     throw Object.assign(new Error('알림톡이 비활성화되어 있습니다.'), { statusCode: 400 })
   }

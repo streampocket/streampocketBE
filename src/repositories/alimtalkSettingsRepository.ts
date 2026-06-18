@@ -1,24 +1,18 @@
-import { AlimtalkSettings } from '@prisma/client'
+import { AlimtalkSettings, Store } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 
-export async function getAlimtalkSettings(): Promise<AlimtalkSettings | null> {
-  return prisma.alimtalkSettings.findFirst()
+export async function getAlimtalkSettings(store: Store): Promise<AlimtalkSettings | null> {
+  return prisma.alimtalkSettings.findUnique({ where: { store } })
 }
 
 export async function upsertAlimtalkSettings(
+  store: Store,
   enabled: boolean,
   messageTemplate: string,
 ): Promise<AlimtalkSettings> {
-  const existing = await prisma.alimtalkSettings.findFirst()
-
-  if (existing) {
-    return prisma.alimtalkSettings.update({
-      where: { id: existing.id },
-      data: { enabled, messageTemplate },
-    })
-  }
-
-  return prisma.alimtalkSettings.create({
-    data: { enabled, messageTemplate },
+  return prisma.alimtalkSettings.upsert({
+    where: { store },
+    update: { enabled, messageTemplate },
+    create: { store, enabled, messageTemplate },
   })
 }

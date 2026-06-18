@@ -282,10 +282,12 @@ model DeliveryLog {
 
 model AlimtalkSettings {
   id              String   @id @default(uuid()) @db.Uuid
+  store           Store    @default(streampocket)
   enabled         Boolean  @default(true)
   messageTemplate String   @map("message_template")
   updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
+  @@unique([store])
   @@map("alimtalk_settings")
 }
 

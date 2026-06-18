@@ -63,6 +63,7 @@ type AligoTemplateButtonView = {
 }
 
 export type AlimtalkSettingsView = {
+  store: Store
   enabled: boolean
   runtime: {
     apiKeyConfigured: boolean
@@ -477,12 +478,15 @@ function getProviderMessageId(json: AligoSendResponse): string | null {
   return null
 }
 
-export async function getAlimtalkSettings(): Promise<AlimtalkSettingsView> {
-  const settings = await getAlimtalkSettingsRecord()
-  const config = getEnvConfig()
+export async function getAlimtalkSettings(
+  store: Store = DEFAULT_STORE,
+): Promise<AlimtalkSettingsView> {
+  const settings = await getAlimtalkSettingsRecord(store)
+  const config = getEnvConfig(store)
   const provider = await fetchTemplateInfo(config, config.templateCodeNA)
 
   return {
+    store,
     enabled: settings?.enabled ?? true,
     runtime: {
       apiKeyConfigured: Boolean(config.apiKey),
@@ -508,15 +512,21 @@ export async function getAlimtalkSettings(): Promise<AlimtalkSettingsView> {
 }
 
 export async function updateAlimtalkSettings(input: {
+  store: Store
   enabled: boolean
 }): Promise<AlimtalkSettingsView> {
-  const existing = await getAlimtalkSettingsRecord()
-  await upsertAlimtalkSettings(input.enabled, existing?.messageTemplate ?? ALIMTALK_MESSAGE_TEMPLATE)
-  return getAlimtalkSettings()
+  const existing = await getAlimtalkSettingsRecord(input.store)
+  await upsertAlimtalkSettings(
+    input.store,
+    input.enabled,
+    existing?.messageTemplate ?? ALIMTALK_MESSAGE_TEMPLATE,
+  )
+  return getAlimtalkSettings(input.store)
 }
 
-export async function isAlimtalkEnabled(): Promise<boolean> {
-  const settings = await getAlimtalkSettingsRecord()
+// store별 자동발송 토글 조회. null(수동주문)은 기본 스토어 설정을 따름.
+export async function isAlimtalkEnabled(store: Store | null = DEFAULT_STORE): Promise<boolean> {
+  const settings = await getAlimtalkSettingsRecord(store ?? DEFAULT_STORE)
   return settings?.enabled ?? true
 }
 
@@ -605,8 +615,10 @@ export async function sendOrderAlimtalk(
   }
 }
 
-export async function sendAlimtalkTest(): Promise<AlimtalkTestResult> {
-  const config = getEnvConfig()
+export async function sendAlimtalkTest(
+  store: Store = DEFAULT_STORE,
+): Promise<AlimtalkTestResult> {
+  const config = getEnvConfig(store)
   if (!isConfigured(config)) {
     throw new Error('알리고 환경변수가 모두 설정되지 않았습니다.')
   }
@@ -623,13 +635,16 @@ export async function sendAlimtalkTest(): Promise<AlimtalkTestResult> {
     이메일플렛폼: 'https://example.com/mail',
   })
 
-  const json = await sendAlimtalkMessage({
-    templateCode: config.templateCodeNA,
-    recipientPhoneNumber: config.sender,
-    recipientName: '스트림포켓 관리자',
-    message,
-    buttonJson,
-  })
+  const json = await sendAlimtalkMessage(
+    {
+      templateCode: config.templateCodeNA,
+      recipientPhoneNumber: config.sender,
+      recipientName: '관리자',
+      message,
+      buttonJson,
+    },
+    store,
+  )
 
   return {
     recipient: config.sender,

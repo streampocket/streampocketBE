@@ -205,7 +205,7 @@ export async function processOrder(
     }
 
     try {
-      const alimtalkEnabled = await isAlimtalkEnabled()
+      const alimtalkEnabled = await isAlimtalkEnabled(store)
       if (!alimtalkEnabled) {
         await updateOrderItem(orderItem.id, {
           fulfillmentStatus: 'manual_review',
@@ -264,7 +264,7 @@ export async function processOrder(
     }
 
     try {
-      const alimtalkEnabled = await isAlimtalkEnabled()
+      const alimtalkEnabled = await isAlimtalkEnabled(store)
       if (!alimtalkEnabled) {
         await updateOrderItem(orderItem.id, {
           fulfillmentStatus: 'manual_review',
@@ -329,7 +329,7 @@ export async function processOrder(
     }
 
     try {
-      const alimtalkEnabled = await isAlimtalkEnabled()
+      const alimtalkEnabled = await isAlimtalkEnabled(store)
       if (!alimtalkEnabled) {
         await updateOrderItem(orderItem.id, {
           fulfillmentStatus: 'manual_review',
@@ -421,7 +421,7 @@ export async function processOrder(
   )
 
   try {
-    const alimtalkEnabled = await isAlimtalkEnabled()
+    const alimtalkEnabled = await isAlimtalkEnabled(store)
     if (!alimtalkEnabled) {
       await updateOrderItem(orderItem.id, {
         fulfillmentStatus: 'manual_review',

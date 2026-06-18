@@ -160,7 +160,7 @@ export async function retryOrder(id: string): Promise<void> {
     throw Object.assign(new Error('상품 타입(NA/AA) 미감지'), { statusCode: 400 })
   }
 
-  if (!(await isAlimtalkEnabled())) {
+  if (!(await isAlimtalkEnabled(order.store))) {
     throw Object.assign(new Error('알림톡 발송이 비활성화되어 있습니다.'), { statusCode: 400 })
   }
 

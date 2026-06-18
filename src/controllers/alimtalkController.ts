@@ -6,15 +6,24 @@ import {
   updateAlimtalkSettings,
 } from '../services/alimtalkService'
 
+const storeEnum = z.enum(['streampocket', 'pokemon_steam'])
+
+// store 쿼리 파라미터 — 미지정 시 기본 스토어(streampocket)
+const storeQuerySchema = z.object({
+  store: storeEnum.default('streampocket'),
+})
+
 const updateAlimtalkSettingsSchema = z.object({
+  store: storeEnum,
   enabled: z.boolean(),
 })
 
 export async function getAlimtalkSettingsHandler(
-  _req: Request,
+  req: Request,
   res: Response,
 ): Promise<void> {
-  const settings = await getAlimtalkSettings()
+  const { store } = storeQuerySchema.parse(req.query)
+  const settings = await getAlimtalkSettings(store)
   res.json({ data: settings })
 }
 
@@ -27,7 +36,8 @@ export async function updateAlimtalkSettingsHandler(
   res.json({ data: settings })
 }
 
-export async function sendAlimtalkTestHandler(_req: Request, res: Response): Promise<void> {
-  const result = await sendAlimtalkTest()
+export async function sendAlimtalkTestHandler(req: Request, res: Response): Promise<void> {
+  const { store } = storeQuerySchema.parse(req.query)
+  const result = await sendAlimtalkTest(store)
   res.json({ data: result })
 }

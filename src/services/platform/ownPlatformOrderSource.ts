@@ -21,6 +21,11 @@ export const ownPlatformOrderSource: IOrderSource = {
     return []
   },
 
+  async fetchOrderDetailsByIds(_productOrderIds: string[]): Promise<IncomingOrderItem[]> {
+    // TODO: 자체 플랫폼 주문 상세 재조회 (추후 구현)
+    return []
+  },
+
   async fetchPaidOrdersInWindow(_hoursBack: number): Promise<IncomingOrderItem[]> {
     // TODO: 자체 플랫폼 보조 스캔 (추후 구현)
     return []

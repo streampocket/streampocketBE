@@ -13,6 +13,8 @@ import {
 const NAVER_PRODUCT_PAGE_SIZE = 100
 const NAVER_PRODUCT_MAX_PAGES = 50
 const PAID_ORDERS_MAX_PAGES = 20
+// 네이버 상품주문 상세(/query) 1회 조회 ID 상한 대비 보수적 청크 크기
+const ORDER_DETAILS_QUERY_CHUNK = 300
 
 const lastChangedStatusSchema = z.object({
   orderId: z.string().min(1),
@@ -322,6 +324,7 @@ function detailToIncomingOrderItem(detail: NaverQueryProductOrderItem): Incoming
     platform: 'NAVER',
     naverProductOrderStatus: detail.productOrder.productOrderStatus,
     naverClaimStatus: detail.productOrder.claimStatus ?? null,
+    naverClaimType: detail.productOrder.claimType ?? null,
   }
 }
 
@@ -402,6 +405,21 @@ export function createNaverOrderSource(store: Store = DEFAULT_STORE): IOrderSour
         }
         return item
       })
+    },
+
+    // returned 후보 복구 판정용 — 검색 엔드포인트가 claim 필드를 신뢰성 있게 안 채우므로
+    // 권위 있는 상세(/query) 엔드포인트로 재조회한다. 네이버 query ID 상한 대비 청크 분할.
+    async fetchOrderDetailsByIds(productOrderIds: string[]): Promise<IncomingOrderItem[]> {
+      if (productOrderIds.length === 0) return []
+      const results: IncomingOrderItem[] = []
+      for (let i = 0; i < productOrderIds.length; i += ORDER_DETAILS_QUERY_CHUNK) {
+        const chunk = productOrderIds.slice(i, i + ORDER_DETAILS_QUERY_CHUNK)
+        const details = await fetchProductOrderDetails(chunk, store)
+        for (const detail of details) {
+          results.push(detailToIncomingOrderItem(detail))
+        }
+      }
+      return results
     },
 
     async fetchPaidOrdersInWindow(hoursBack: number): Promise<IncomingOrderItem[]> {

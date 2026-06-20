@@ -17,6 +17,20 @@ jobs:
       - name: 코드 체크아웃
         uses: actions/checkout@v4
 
+      - name: Node.js 설정
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 의존성 설치
+        run: npm ci
+
+      - name: Prisma 클라이언트 생성
+        run: npx prisma generate
+
+      - name: 테스트 실행
+        run: npm test
+
       - name: AWS 자격증명 설정
         uses: aws-actions/configure-aws-credentials@v4
         with:

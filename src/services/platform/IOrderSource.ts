@@ -11,6 +11,7 @@ export type IncomingOrderItem = {
   platform: 'NAVER' | 'OWN'
   naverProductOrderStatus?: string
   naverClaimStatus?: string | null
+  naverClaimType?: string | null
 }
 
 export type ReturnedOrderInfo = {
@@ -36,6 +37,7 @@ export type IOrderSource = {
   fetchNewOrders(): Promise<IncomingOrderItem[]>
   fetchReturnedOrders(): Promise<ReturnedOrderInfo[]>
   fetchPurchaseDecidedOrders(): Promise<PurchaseDecidedInfo[]>
+  fetchOrderDetailsByIds(productOrderIds: string[]): Promise<IncomingOrderItem[]>
   fetchPaidOrdersInWindow(hoursBack: number): Promise<IncomingOrderItem[]>
   fetchPaidOrdersForDay(dateKST: string): Promise<IncomingOrderItem[]>
   confirmOrder(productOrderId: string): Promise<void>

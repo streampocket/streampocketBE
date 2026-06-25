@@ -16,8 +16,7 @@ import {
   type AlimtalkSendResult,
 } from '../alimtalkService'
 import { findDeliveryLogsByPartyApplicationId } from '../../repositories/deliveryLogRepository'
-
-const FEE_RATE = 0.1
+import { PARTY_APPLICATION_FEE } from '../../constants/fees'
 
 export async function applyToParty(productId: string, userId: string) {
   const product = await findOwnProductById(productId)
@@ -39,7 +38,7 @@ export async function applyToParty(productId: string, userId: string) {
   }
 
   const currentPrice = calculateCurrentPrice(product)
-  const fee = Math.round(currentPrice * FEE_RATE)
+  const fee = PARTY_APPLICATION_FEE
   const totalAmount = currentPrice + fee
 
   const result = await prisma.$transaction(async (tx) => {

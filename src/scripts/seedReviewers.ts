@@ -1,5 +1,6 @@
 import { PrismaClient, type Prisma } from '@prisma/client'
 import bcrypt from 'bcryptjs'
+import { PARTY_APPLICATION_FEE } from '../constants/fees'
 
 const prisma = new PrismaClient()
 
@@ -46,7 +47,6 @@ const SEED_PRODUCTS: SeedProduct[] = [
   { categoryName: '넷숏', productName: '넷숏 한 달 모임', durationDays: 30, price: 19000, imagePath: '/images/ott/netshot.png' },
 ]
 
-const FEE_RATE = 0.1
 const SLOTS_PER_PRODUCT = 3
 const STARTED_AT_OFFSET_DAYS = 7
 
@@ -167,7 +167,7 @@ async function main(): Promise<void> {
       const productId = productIds[pIdx]!
       const seed = SEED_PRODUCTS[pIdx]!
       const price = seed.price
-      const fee = Math.round(price * FEE_RATE)
+      const fee = PARTY_APPLICATION_FEE
       const totalAmount = price + fee
       const productStartedAt = startedAt
       const productExpiresAt = new Date(

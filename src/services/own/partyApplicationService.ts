@@ -110,6 +110,7 @@ export async function applyToParty(productId: string, userId: string) {
   await notifyApplicationCreated({
     productName: product.name,
     categoryName: product.category.name,
+    durationDays: product.durationDays,
     user,
     price: currentPrice,
     fee,
@@ -132,6 +133,7 @@ export async function applyToParty(productId: string, userId: string) {
 type NotifyInput = {
   productName: string
   categoryName: string
+  durationDays: number
   user: { name: string | null; phone: string | null } | null
   price: number
   fee: number
@@ -162,7 +164,7 @@ async function notifyApplicationCreated(input: NotifyInput): Promise<void> {
 
   const message = [
     '[신규 파티 참여 신청]',
-    `파티: ${input.productName} (${input.categoryName})`,
+    `파티: ${input.productName} (${input.categoryName}) · ${input.durationDays}일`,
     `신청자: ${input.user?.name ?? '(알 수 없음)'} / ${input.user?.phone ?? '-'}`,
     `금액: ${input.price.toLocaleString()}원 + 수수료 ${input.fee.toLocaleString()}원 = ${input.totalAmount.toLocaleString()}원`,
     `신청일시: ${now} (KST)`,

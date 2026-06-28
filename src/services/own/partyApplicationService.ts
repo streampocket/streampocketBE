@@ -266,8 +266,31 @@ export async function adminApproveApplication(applicationId: string) {
       throw Object.assign(new Error('승인 처리 중 슬롯이 가득 찼습니다. 다시 시도해주세요.'), { statusCode: 409 })
     }
 
-    return { application: confirmed, autoRejected: false }
+    // 슬롯 증가 직후 정원 충족 여부 재확인 (트랜잭션 내 재조회로 동시 승인에도 정확).
+    // confirmed 인원(filledSlots)이 정원을 가득 채우면 모집완료(closed)로 자동 전환.
+    const refreshed = await tx.ownProduct.findUnique({
+      where: { id: application.product.id },
+      select: { filledSlots: true, totalSlots: true, status: true, name: true, durationDays: true },
+    })
+    let partyClosed = false
+    if (refreshed && refreshed.status === 'recruiting' && refreshed.filledSlots >= refreshed.totalSlots) {
+      await tx.ownProduct.update({
+        where: { id: application.product.id },
+        data: { status: 'closed' },
+      })
+      partyClosed = true
+    }
+
+    return { application: confirmed, autoRejected: false, partyClosed, product: refreshed }
   })
+
+  if (result.partyClosed && result.product) {
+    const { name, totalSlots, durationDays } = result.product
+    sendDiscordAlert(
+      'partyApply',
+      `**파티 모집완료:** "${name}" (${durationDays}일 / 정원 ${totalSlots}명) 파티가 정원을 모두 채워 모집완료 처리되었습니다.`,
+    ).catch(() => {})
+  }
 
   return { data: result.application, autoRejected: result.autoRejected }
 }

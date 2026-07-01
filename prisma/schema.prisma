@@ -402,6 +402,11 @@ enum OwnProductType {
   shared
 }
 
+enum PartyDurationMode {
+  countdown
+  fixed
+}
+
 enum PartyApplicationStatus {
   pending
   confirmed
@@ -435,6 +440,7 @@ model OwnProduct {
   accountPassword String?          @map("account_password") @db.Text
   status          OwnProductStatus @default(recruiting)
   partyType       OwnProductType   @default(shared) @map("party_type")
+  durationMode    PartyDurationMode @default(countdown) @map("duration_mode")
   startedAt       DateTime?        @map("started_at") @db.Timestamptz(6)
   deletedAt       DateTime?        @map("deleted_at") @db.Timestamptz(6)
   leaderName      String           @map("leader_name") @db.VarChar(100)

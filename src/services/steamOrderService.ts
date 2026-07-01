@@ -8,6 +8,8 @@ import {
   groupOrderCountsByStatus,
   createManualOrderItem,
   generateManualProductOrderId,
+  createPartyOrderItem,
+  generatePartyProductOrderId,
   deleteOrderItemById,
   findOrdersForAutoExtend,
   incrementAutoExtendCount,
@@ -121,6 +123,35 @@ export async function createManualOrder(input: CreateManualOrderInput) {
   await sendDiscordAlert(
     'order',
     `🔔 신규 주문 등록 [수동]\n상품: ${order.productName}\n수신자: ${order.receiverName ?? '-'}\n순수익: ${input.netProfit.toLocaleString('ko-KR')}원\n주문: ${order.productOrderId}`,
+    { store: order.store },
+  ).catch(() => {})
+
+  return order
+}
+
+// 파티 승인 자동 주문 생성 입력 — 상품명은 "{파티명} ({N}일)" 형식으로 조합
+type CreatePartyOrderInput = {
+  partyName: string
+  durationDays: number
+  receiverName: string
+}
+
+// 파티 승인 자동 주문 생성 — 상품주문번호 자동생성(PARTY_), 상태=완료·순수익=0원(수정 가능), Discord [파티주문] 알림
+export async function createPartyOrder(input: CreatePartyOrderInput) {
+  const productOrderId = await generatePartyProductOrderId()
+  const order = await createPartyOrderItem({
+    productOrderId,
+    naverOrderId: productOrderId,
+    productName: `${input.partyName} (${input.durationDays}일)`,
+    receiverName: input.receiverName,
+    netProfit: 0,
+    fulfillmentStatus: 'completed',
+    paidAt: new Date(),
+  })
+
+  await sendDiscordAlert(
+    'order',
+    `🎉 신규 주문 등록 [파티주문]\n상품: ${order.productName}\n수신자: ${order.receiverName ?? '-'}\n순수익: 0원\n주문: ${order.productOrderId}`,
     { store: order.store },
   ).catch(() => {})
 
@@ -312,8 +343,8 @@ export async function updateFriendLinks(
     throw Object.assign(new Error('주문을 찾을 수 없습니다.'), { statusCode: 404 })
   }
 
-  // 수동 주문은 운영자가 자유 입력한 상품명을 쓰므로 AA 패턴 검사를 면제한다.
-  if (order.source !== 'manual' && detectProductType(order.productName) !== 'AA') {
+  // 수동·파티 주문은 운영자가 자유 입력/조합한 상품명을 쓰므로 AA 패턴 검사를 면제한다.
+  if (!['manual', 'party'].includes(order.source) && detectProductType(order.productName) !== 'AA') {
     throw Object.assign(new Error('AA(선물형) 주문만 사용 가능합니다.'), { statusCode: 400 })
   }
 
@@ -326,7 +357,7 @@ export async function updateFriendLinks(
   })
 }
 
-// 수동 주문 순수익 수정 — 수수료가 없으므로 생성과 동일하게 세 금액 필드에 같은 값을
+// 수동·파티 주문 순수익 수정 — 수수료가 없으므로 생성과 동일하게 세 금액 필드에 같은 값을
 // 갱신해 목록(금액)·상세(순수익)·집계(일일 리포트·대시보드)를 일치시킨다.
 export async function updateManualOrderNetProfit(id: string, netProfit: number): Promise<void> {
   const order = await findOrderById(id)
@@ -334,8 +365,10 @@ export async function updateManualOrderNetProfit(id: string, netProfit: number):
     throw Object.assign(new Error('주문을 찾을 수 없습니다.'), { statusCode: 404 })
   }
 
-  if (order.source !== 'manual') {
-    throw Object.assign(new Error('수동 주문만 순수익을 수정할 수 있습니다.'), { statusCode: 400 })
+  if (!['manual', 'party'].includes(order.source)) {
+    throw Object.assign(new Error('수동·파티 주문만 순수익을 수정할 수 있습니다.'), {
+      statusCode: 400,
+    })
   }
 
   await updateOrderItem(id, {
@@ -593,15 +626,15 @@ export async function getOrderTracking(productOrderId: string): Promise<OrderTra
   }
 }
 
-// 수동 주문 삭제 — source='manual' 한정, 지출 연결 시 차단, DeliveryLog는 Cascade로 함께 제거
+// 수동·파티 주문 삭제 — source가 manual/party인 경우 한정, 지출 연결 시 차단, DeliveryLog는 Cascade로 함께 제거
 export async function deleteManualOrder(id: string): Promise<void> {
   const order = await findOrderById(id)
   if (!order) {
     throw Object.assign(new Error('주문을 찾을 수 없습니다.'), { statusCode: 404 })
   }
 
-  if (order.source !== 'manual') {
-    throw Object.assign(new Error('수동 주문만 삭제할 수 있습니다.'), { statusCode: 400 })
+  if (!['manual', 'party'].includes(order.source)) {
+    throw Object.assign(new Error('수동·파티 주문만 삭제할 수 있습니다.'), { statusCode: 400 })
   }
 
   const linkedExpense = await findExpenseBySteamOrderItemId(id)
@@ -632,10 +665,10 @@ export async function manualReturnOrder(id: string): Promise<void> {
     returnedAt: new Date(),
   })
 
-  const sourceTag = order.source === 'manual' ? ' [수동]' : ''
+  const sourceTag = order.source === 'party' ? ' [파티주문]' : order.source === 'manual' ? ' [수동]' : ''
   await sendDiscordAlert(
     'order',
-    `📦 수동 반품 처리${sourceTag}\n주문: ${order.productOrderId}\n상품: ${order.productName}`,
+    `📦 반품 처리${sourceTag}\n주문: ${order.productOrderId}\n상품: ${order.productName}`,
     { store: order.store },
   )
 }

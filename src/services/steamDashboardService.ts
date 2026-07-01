@@ -60,6 +60,7 @@ type RevenueSummary = {
   }
   totalCosts: number
   netProfit: number
+  partyOrderProfit: number
   pendingSettlement: number
   alimtalkCount: number
 }
@@ -69,8 +70,14 @@ export async function getRevenueSummary(
   endDate: Date,
   store?: Store,
 ): Promise<RevenueSummary> {
-  const [naverTotals, manualOrderTotals, alimtalkCount, expenseSums, manualRevenueTotal] =
-    await Promise.all([
+  const [
+    naverTotals,
+    manualOrderTotals,
+    partyOrderTotals,
+    alimtalkCount,
+    expenseSums,
+    manualRevenueTotal,
+  ] = await Promise.all([
       // 네이버 가능매출 — 결제일(paid_at) 기준, 반품 제외. 구매확정 여부와 무관하게 결제된 전부.
       // pending = 그중 아직 구매확정 안 된 건의 결제금액(구매확정 대기 금액).
       // 일일리포트 sumPaymentAmountPaidOn과 동일 공식(SUM(payment_amount), returned_at IS NULL)
@@ -98,6 +105,16 @@ export async function getRevenueSummary(
           AND paid_at <= ${endDate}
           ${storeSql(store)}
       `,
+      // 파티 주문 순수익 합산 — 수동과 동일 공식이나 별도 집계(대시보드에서 파티 순수익 분리 표시)
+      prisma.$queryRaw<{ profit: bigint }[]>`
+        SELECT COALESCE(SUM(settlement_amount), 0)::bigint AS profit
+        FROM steam_order_items
+        WHERE source = 'party'
+          AND fulfillment_status <> 'returned'
+          AND paid_at >= ${startDate}
+          AND paid_at <= ${endDate}
+          ${storeSql(store)}
+      `,
       prisma.deliveryLog.count({
         where: {
           status: 'sent',
@@ -112,14 +129,15 @@ export async function getRevenueSummary(
   const naverRevenue = Number(naverTotals[0]?.revenue ?? 0n)
   const pendingSettlement = Number(naverTotals[0]?.pending ?? 0n)
   const manualOrderProfit = Number(manualOrderTotals[0]?.profit ?? 0n)
+  const partyOrderProfit = Number(partyOrderTotals[0]?.profit ?? 0n)
 
   // 네이버 수수료/정산금은 6.63% 고정으로 재계산 (실제 정산금은 구매확정 후에야 채워지므로)
   const naverCommission = Math.round(naverRevenue * NAVER_FEE_RATE)
   const naverSettlement = naverRevenue - naverCommission
 
-  // 수동 주문/수동 매출은 수수료 없이 입력 순수익을 판매금=정산금=순수익으로 가산
-  const totalRevenue = naverRevenue + manualRevenueTotal + manualOrderProfit
-  const totalSettlement = naverSettlement + manualRevenueTotal + manualOrderProfit
+  // 수동 주문/파티 주문/수동 매출은 수수료 없이 입력 순수익을 판매금=정산금=순수익으로 가산
+  const totalRevenue = naverRevenue + manualRevenueTotal + manualOrderProfit + partyOrderProfit
+  const totalSettlement = naverSettlement + manualRevenueTotal + manualOrderProfit + partyOrderProfit
 
   const manualCosts =
     expenseSums.gamePurchase + expenseSums.countryChange + expenseSums.reviewGame + expenseSums.other
@@ -135,6 +153,7 @@ export async function getRevenueSummary(
     },
     totalCosts,
     netProfit,
+    partyOrderProfit,
     pendingSettlement,
     alimtalkCount,
   }

@@ -91,6 +91,7 @@ type ListFilters = {
   categoryId?: string
   status?: 'recruiting' | 'closed' | 'expired'
   search?: string
+  sort?: 'price_asc' | 'price_desc'
   page?: number
   pageSize?: number
   limit?: number
@@ -120,13 +121,24 @@ function sortByHasMembersThenOldest<T extends { filledSlots: number; createdAt: 
 
 export async function getOwnProducts(filters: ListFilters) {
   const result = await findAllOwnProducts(filters)
-  let items = sortByHasMembersThenOldest(result.items)
+  // 가격 정렬은 currentPrice(동적 계산값) 기준이므로, 먼저 enrich 후 정렬한다.
+  let items = result.items.map((item) => enrichWithPricing(stripCredentials(item)))
+
+  if (filters.sort === 'price_asc' || filters.sort === 'price_desc') {
+    const dir = filters.sort === 'price_asc' ? 1 : -1
+    items = [...items].sort((a, b) => {
+      if (a.currentPrice !== b.currentPrice) return (a.currentPrice - b.currentPrice) * dir
+      return a.createdAt.getTime() - b.createdAt.getTime() // 동가 시 오래된순 tiebreaker
+    })
+  } else {
+    items = sortByHasMembersThenOldest(items)
+  }
 
   if (filters.limit) {
     items = items.slice(0, filters.limit)
   }
 
-  const data = items.map((item) => enrichWithPricing(stripCredentials(item)))
+  const data = items
 
   if (filters.page && filters.pageSize) {
     return {

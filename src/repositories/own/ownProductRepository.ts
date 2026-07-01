@@ -8,6 +8,7 @@ type CreateOwnProductInput = {
   price: number
   dailyDiscount?: number
   totalSlots: number
+  partyType?: 'personal' | 'shared'
   imagePath?: string | null
   notes?: string | null
   accountId?: string | null
@@ -22,6 +23,7 @@ type UpdateOwnProductInput = {
   price?: number
   dailyDiscount?: number
   totalSlots?: number
+  partyType?: 'personal' | 'shared'
   imagePath?: string | null
   notes?: string | null
   accountId?: string | null
@@ -123,7 +125,7 @@ export function findRecruitingStartedProducts() {
       startedAt: { not: null },
       deletedAt: null,
     },
-    select: { id: true, name: true, startedAt: true, durationDays: true },
+    select: { id: true, name: true, startedAt: true, durationDays: true, partyType: true },
   })
 }
 

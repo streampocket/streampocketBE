@@ -47,6 +47,7 @@ export function findApplicationsByUserId(userId: string) {
           filledSlots: true,
           imagePath: true,
           status: true,
+          partyType: true,
           category: { select: { id: true, name: true } },
         },
       },
@@ -62,7 +63,7 @@ export function findExpiredApplications() {
       expiresAt: { lte: new Date() },
     },
     include: {
-      product: { select: { id: true, name: true } },
+      product: { select: { id: true, name: true, partyType: true } },
       user: { select: { id: true, name: true } },
     },
   })
@@ -125,6 +126,7 @@ export async function findApplicationsForAdmin(input: AdminListInput) {
             id: true,
             name: true,
             durationDays: true,
+            partyType: true,
             category: { select: { id: true, name: true } },
           },
         },
@@ -151,6 +153,7 @@ export function findApplicationDetailForAdmin(applicationId: string) {
           durationDays: true,
           totalSlots: true,
           filledSlots: true,
+          partyType: true,
           category: { select: { id: true, name: true } },
         },
       },

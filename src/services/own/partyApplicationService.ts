@@ -222,7 +222,7 @@ export async function adminApproveApplication(applicationId: string) {
   const result = await prisma.$transaction(async (tx) => {
     const application = await tx.partyApplication.findUnique({
       where: { id: applicationId },
-      include: { product: { select: { id: true, durationDays: true, totalSlots: true, filledSlots: true } } },
+      include: { product: { select: { id: true, durationDays: true, totalSlots: true, filledSlots: true, durationMode: true } } },
     })
     if (!application) {
       throw Object.assign(new Error('신청 내역을 찾을 수 없습니다.'), { statusCode: 404 })
@@ -252,11 +252,15 @@ export async function adminApproveApplication(applicationId: string) {
       },
     })
 
-    // 첫 confirmed 승인 시점에만 파티 자체의 시작 시각을 세팅(startedAt이 null인 경우에만 update → 멱등).
-    await tx.ownProduct.updateMany({
-      where: { id: application.product.id, startedAt: null },
-      data: { startedAt },
-    })
+    // 기간 차감형(countdown)만 파티 공유 시작 시각을 세팅.
+    // 유지형(fixed)은 startedAt을 세팅하지 않아 카운트다운·가격하락 없이 각 참여자가 개별 기간(PartyApplication.expiresAt)을 그대로 보장받는다.
+    if (application.product.durationMode === 'countdown') {
+      // 첫 confirmed 승인 시점에만 파티 자체의 시작 시각을 세팅(startedAt이 null인 경우에만 update → 멱등).
+      await tx.ownProduct.updateMany({
+        where: { id: application.product.id, startedAt: null },
+        data: { startedAt },
+      })
+    }
 
     // 승인 시점에 슬롯 +1. 동시 승인 race를 막기 위해 filledSlots < totalSlots 가드를 updateMany 조건으로 사용.
     const slotUpdate = await tx.ownProduct.updateMany({

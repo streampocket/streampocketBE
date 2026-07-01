@@ -9,6 +9,7 @@ type CreateOwnProductInput = {
   dailyDiscount?: number
   totalSlots: number
   partyType?: 'personal' | 'shared'
+  durationMode?: 'countdown' | 'fixed'
   imagePath?: string | null
   notes?: string | null
   accountId?: string | null
@@ -24,6 +25,7 @@ type UpdateOwnProductInput = {
   dailyDiscount?: number
   totalSlots?: number
   partyType?: 'personal' | 'shared'
+  durationMode?: 'countdown' | 'fixed'
   imagePath?: string | null
   notes?: string | null
   accountId?: string | null

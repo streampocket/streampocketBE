@@ -18,6 +18,7 @@ import {
 import { findDeliveryLogsByPartyApplicationId } from '../../repositories/deliveryLogRepository'
 import { PARTY_APPLICATION_FEE } from '../../constants/fees'
 import { PARTY_TYPE_LABEL } from '../../constants/party'
+import { createPartyOrder } from '../steamOrderService'
 
 export async function applyToParty(productId: string, userId: string) {
   const product = await findOwnProductById(productId)
@@ -222,7 +223,19 @@ export async function adminApproveApplication(applicationId: string) {
   const result = await prisma.$transaction(async (tx) => {
     const application = await tx.partyApplication.findUnique({
       where: { id: applicationId },
-      include: { product: { select: { id: true, durationDays: true, totalSlots: true, filledSlots: true, durationMode: true } } },
+      include: {
+        product: {
+          select: {
+            id: true,
+            name: true,
+            durationDays: true,
+            totalSlots: true,
+            filledSlots: true,
+            durationMode: true,
+          },
+        },
+        user: { select: { name: true } },
+      },
     })
     if (!application) {
       throw Object.assign(new Error('신청 내역을 찾을 수 없습니다.'), { statusCode: 404 })
@@ -290,7 +303,18 @@ export async function adminApproveApplication(applicationId: string) {
       partyClosed = true
     }
 
-    return { application: confirmed, autoRejected: false, partyClosed, product: refreshed }
+    return {
+      application: confirmed,
+      autoRejected: false,
+      partyClosed,
+      product: refreshed,
+      // 승인 성공 시 주문 자동 생성에 필요한 값(트랜잭션 밖에서 사용)
+      orderInfo: {
+        partyName: application.product.name,
+        durationDays: application.product.durationDays,
+        receiverName: application.user.name,
+      },
+    }
   })
 
   if (result.partyClosed && result.product) {
@@ -299,6 +323,16 @@ export async function adminApproveApplication(applicationId: string) {
       'partyApply',
       `**파티 모집완료:** [${PARTY_TYPE_LABEL[partyType]}] "${name}" (${durationDays}일 / 정원 ${totalSlots}명) 파티가 정원을 모두 채워 모집완료 처리되었습니다.`,
     ).catch(() => {})
+  }
+
+  // 승인 성공(자동거절 아님) 시 주문관리에 파티 주문 자동 생성.
+  // 트랜잭션 밖에서 수행 — 주문 생성 실패가 승인 자체를 롤백하지 않도록 하고, 실패 시 로그만 남긴다(주문은 수동 보정 가능).
+  if (!result.autoRejected && result.orderInfo) {
+    try {
+      await createPartyOrder(result.orderInfo)
+    } catch (error) {
+      console.error('[party-approval] 파티 주문 자동 생성 실패', { applicationId, error })
+    }
   }
 
   return { data: result.application, autoRejected: result.autoRejected }

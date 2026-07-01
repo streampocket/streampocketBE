@@ -30,7 +30,7 @@ const fulfillmentStatusEnum = z.enum([
   'returned',
 ])
 
-const orderSourceEnum = z.enum(['naver', 'manual'])
+const orderSourceEnum = z.enum(['naver', 'manual', 'party'])
 const storeEnum = z.enum(['streampocket', 'pokemon_steam'])
 
 const listQuerySchema = z.object({

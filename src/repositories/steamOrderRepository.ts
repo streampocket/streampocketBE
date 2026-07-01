@@ -275,21 +275,53 @@ export async function createManualOrderItem(
   })
 }
 
+// 파티 승인 자동 주문 생성 — 수동주문과 동일하게 순수익을 3개 금액 필드에 동일 저장(수수료 없음), source='party'
+export async function createPartyOrderItem(
+  data: CreateManualOrderItemInput,
+): Promise<SteamOrderItem> {
+  return prisma.steamOrderItem.create({
+    data: {
+      productOrderId: data.productOrderId,
+      naverOrderId: data.naverOrderId,
+      productName: data.productName,
+      receiverName: data.receiverName,
+      unitPrice: data.netProfit,
+      paymentAmount: data.netProfit,
+      settlementAmount: data.netProfit,
+      fulfillmentStatus: data.fulfillmentStatus,
+      paidAt: data.paidAt,
+      source: 'party',
+      // 파티 주문도 스토어 무귀속 — 수동주문과 동일하게 "전체" 매출에만 포함.
+      store: null,
+    },
+  })
+}
+
 // 수동 주문용 상품주문번호 자동생성 — 네이버(숫자 문자열)와 충돌 방지 위해 MAN_ 접두어 사용
 // 형식: MAN_<YYYYMMDDHHmmss>_<3자리 랜덤>. 고유성은 unique 제약 + 재시도로 보장
 export async function generateManualProductOrderId(): Promise<string> {
+  return generateProductOrderIdWithPrefix('MAN')
+}
+
+// 파티 승인 자동 주문용 상품주문번호 — 수동(MAN_)·네이버와 구분되도록 PARTY_ 접두어 사용
+// 형식: PARTY_<YYYYMMDDHHmmss>_<3자리 랜덤>. 고유성은 unique 제약 + 재시도로 보장
+export async function generatePartyProductOrderId(): Promise<string> {
+  return generateProductOrderIdWithPrefix('PARTY')
+}
+
+async function generateProductOrderIdWithPrefix(prefix: string): Promise<string> {
   for (let attempt = 0; attempt < 10; attempt++) {
     // KST 기준 표기(ID 가독성용) — 고유성은 랜덤 접미어가 담당
     const kst = new Date(Date.now() + 9 * 60 * 60 * 1000)
     const ts = kst.toISOString().replace(/[-:T.]/g, '').slice(0, 14)
     const rand = String(Math.floor(Math.random() * 1000)).padStart(3, '0')
-    const candidate = `MAN_${ts}_${rand}`
+    const candidate = `${prefix}_${ts}_${rand}`
     const existing = await prisma.steamOrderItem.findUnique({
       where: { productOrderId: candidate },
     })
     if (!existing) return candidate
   }
-  throw Object.assign(new Error('수동 주문번호 생성에 실패했습니다. 다시 시도해 주세요.'), {
+  throw Object.assign(new Error('주문번호 생성에 실패했습니다. 다시 시도해 주세요.'), {
     statusCode: 500,
   })
 }
@@ -361,6 +393,22 @@ export async function listManualOrdersPaidOn(
   return prisma.steamOrderItem.findMany({
     where: {
       source: 'manual',
+      paidAt: { gte: start, lte: end },
+      returnedAt: null,
+    },
+    select: { productName: true, settlementAmount: true },
+    orderBy: { paidAt: 'asc' },
+  })
+}
+
+// 일일 종합 리포트용 — 당일 결제된 파티 주문(반품 제외)을 결제순으로 반환 (수동주문과 별도 섹션 표시)
+export async function listPartyOrdersPaidOn(
+  start: Date,
+  end: Date,
+): Promise<{ productName: string; settlementAmount: number | null }[]> {
+  return prisma.steamOrderItem.findMany({
+    where: {
+      source: 'party',
       paidAt: { gte: start, lte: end },
       returnedAt: null,
     },

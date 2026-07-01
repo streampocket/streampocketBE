@@ -21,6 +21,7 @@ import {
 } from '../../repositories/own/partyApplicationRepository'
 import { encrypt, decrypt } from '../../utils/crypto'
 import { sendDiscordAlert } from '../../lib/discord'
+import { PARTY_TYPE_LABEL } from '../../constants/party'
 import {
   calculateCurrentPrice,
   calculatePartyExpiresAt,
@@ -33,6 +34,7 @@ type CreateInput = {
   price: number
   dailyDiscount?: number
   totalSlots: number
+  partyType?: 'personal' | 'shared'
   imagePath?: string | null
   notes?: string | null
   accountId?: string | null
@@ -46,6 +48,7 @@ type UpdateInput = {
   price?: number
   dailyDiscount?: number
   totalSlots?: number
+  partyType?: 'personal' | 'shared'
   imagePath?: string | null
   notes?: string | null
   accountId?: string | null
@@ -234,7 +237,7 @@ export async function expireOldParties() {
     expiredAppCount = ids.length
 
     const details = expiredApps
-      .map((a) => `- ${a.product.name}: ${a.user.name}`)
+      .map((a) => `- [${PARTY_TYPE_LABEL[a.product.partyType]}] ${a.product.name}: ${a.user.name}`)
       .join('\n')
 
     sendDiscordAlert(
@@ -257,7 +260,7 @@ export async function expireOldParties() {
 
     sendDiscordAlert(
       'partyApply',
-      `**파티 자동 마감:** ${closedPartyCount}개 파티가 남은 기간 1일 이하로 마감되었습니다.\n${nearExpiration.map((p) => `- ${p.name}`).join('\n')}`,
+      `**파티 자동 마감:** ${closedPartyCount}개 파티가 남은 기간 1일 이하로 마감되었습니다.\n${nearExpiration.map((p) => `- [${PARTY_TYPE_LABEL[p.partyType]}] ${p.name}`).join('\n')}`,
     ).catch(() => {})
   }
 

@@ -1,4 +1,4 @@
-import type { PartyApplicationStatus } from '@prisma/client'
+import type { OwnProductType, PartyApplicationStatus } from '@prisma/client'
 import { prisma } from '../../lib/prisma'
 import { findOwnProductById } from '../../repositories/own/ownProductRepository'
 import {
@@ -17,6 +17,7 @@ import {
 } from '../alimtalkService'
 import { findDeliveryLogsByPartyApplicationId } from '../../repositories/deliveryLogRepository'
 import { PARTY_APPLICATION_FEE } from '../../constants/fees'
+import { PARTY_TYPE_LABEL } from '../../constants/party'
 
 export async function applyToParty(productId: string, userId: string) {
   const product = await findOwnProductById(productId)
@@ -110,6 +111,7 @@ export async function applyToParty(productId: string, userId: string) {
   await notifyApplicationCreated({
     productName: product.name,
     categoryName: product.category.name,
+    partyType: product.partyType,
     durationDays: product.durationDays,
     user,
     price: currentPrice,
@@ -133,6 +135,7 @@ export async function applyToParty(productId: string, userId: string) {
 type NotifyInput = {
   productName: string
   categoryName: string
+  partyType: OwnProductType
   durationDays: number
   user: { name: string | null; phone: string | null } | null
   price: number
@@ -164,7 +167,7 @@ async function notifyApplicationCreated(input: NotifyInput): Promise<void> {
 
   const message = [
     '[신규 파티 참여 신청]',
-    `파티: ${input.productName} (${input.categoryName}) · ${input.durationDays}일`,
+    `파티: [${PARTY_TYPE_LABEL[input.partyType]}] ${input.productName} (${input.categoryName}) · ${input.durationDays}일`,
     `신청자: ${input.user?.name ?? '(알 수 없음)'} / ${input.user?.phone ?? '-'}`,
     `금액: ${input.price.toLocaleString()}원 + 수수료 ${input.fee.toLocaleString()}원 = ${input.totalAmount.toLocaleString()}원`,
     `신청일시: ${now} (KST)`,
@@ -272,7 +275,7 @@ export async function adminApproveApplication(applicationId: string) {
     // confirmed 인원(filledSlots)이 정원을 가득 채우면 모집완료(closed)로 자동 전환.
     const refreshed = await tx.ownProduct.findUnique({
       where: { id: application.product.id },
-      select: { filledSlots: true, totalSlots: true, status: true, name: true, durationDays: true },
+      select: { filledSlots: true, totalSlots: true, status: true, name: true, durationDays: true, partyType: true },
     })
     let partyClosed = false
     if (refreshed && refreshed.status === 'recruiting' && refreshed.filledSlots >= refreshed.totalSlots) {
@@ -287,10 +290,10 @@ export async function adminApproveApplication(applicationId: string) {
   })
 
   if (result.partyClosed && result.product) {
-    const { name, totalSlots, durationDays } = result.product
+    const { name, totalSlots, durationDays, partyType } = result.product
     sendDiscordAlert(
       'partyApply',
-      `**파티 모집완료:** "${name}" (${durationDays}일 / 정원 ${totalSlots}명) 파티가 정원을 모두 채워 모집완료 처리되었습니다.`,
+      `**파티 모집완료:** [${PARTY_TYPE_LABEL[partyType]}] "${name}" (${durationDays}일 / 정원 ${totalSlots}명) 파티가 정원을 모두 채워 모집완료 처리되었습니다.`,
     ).catch(() => {})
   }
 

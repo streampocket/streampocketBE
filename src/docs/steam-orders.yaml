@@ -245,6 +245,31 @@ paths:
         '404':
           description: 주문 없음
 
+  /steam/admin/orders/{id}/purchase-decide:
+    post:
+      summary: 파티 주문 구매확정 처리
+      description: >-
+        파티 주문(`source=party`) 전용. 생성 직후 `completed` 상태인 파티 주문을
+        순수익 입력 완료 후 `purchase_decided`(구매확정)로 전환하고 `completedAt`을 기록한다.
+        순수익(`settlementAmount`)이 0원 이하면 400으로 거부한다.
+        외부 연동(네이버 발송/알림톡) 없이 상태 변경만 수행한다.
+      tags: [SteamOrders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 구매확정 처리됨
+        '400':
+          description: 파티 주문이 아님, completed 상태가 아님, 또는 순수익 미입력(0원 이하)
+        '404':
+          description: 주문 없음
+
   /steam/admin/orders/{id}/return:
     post:
       summary: 수동 반품 처리

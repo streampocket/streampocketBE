@@ -593,6 +593,36 @@ export async function manualCompleteOrder(id: string): Promise<void> {
   }
 }
 
+// 파티 주문 구매확정 — completed(생성 직후) 상태에서 순수익 입력 완료 후 구매확정으로 전환.
+// 파티 주문은 외부 연동(네이버 발송/알림톡)이 없어 상태 변경만 수행한다.
+export async function confirmPartyOrderPurchase(id: string): Promise<void> {
+  const order = await findOrderById(id)
+  if (!order) {
+    throw Object.assign(new Error('주문을 찾을 수 없습니다.'), { statusCode: 404 })
+  }
+
+  if (order.source !== 'party') {
+    throw Object.assign(new Error('파티 주문만 구매확정 처리할 수 있습니다.'), {
+      statusCode: 400,
+    })
+  }
+
+  if (order.fulfillmentStatus !== 'completed') {
+    throw Object.assign(new Error('완료 상태의 파티 주문만 구매확정할 수 있습니다.'), {
+      statusCode: 400,
+    })
+  }
+
+  if ((order.settlementAmount ?? 0) <= 0) {
+    throw Object.assign(new Error('순수익을 먼저 입력해주세요.'), { statusCode: 400 })
+  }
+
+  await updateOrderItem(order.id, {
+    fulfillmentStatus: 'purchase_decided',
+    completedAt: new Date(),
+  })
+}
+
 // 구매자용 공개 진행상황 조회 — 노출 정보 최소화 (연락처·계정·금액 등 제외)
 type OrderTrackingResult = {
   productName: string

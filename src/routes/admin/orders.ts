@@ -7,6 +7,7 @@ import {
   syncNaverStatusHandler,
   extendOrderTimeHandler,
   manualCompleteHandler,
+  confirmPartyOrderPurchaseHandler,
   manualReturnHandler,
   exportOrdersHandler,
   updateFriendLinksHandler,
@@ -38,6 +39,7 @@ adminOrdersRouter.post('/:id/in-progress', asyncHandler(markInProgressHandler))
 adminOrdersRouter.post('/:id/sync-naver-status', asyncHandler(syncNaverStatusHandler))
 adminOrdersRouter.post('/:id/extend-time', asyncHandler(extendOrderTimeHandler))
 adminOrdersRouter.post('/:id/complete', asyncHandler(manualCompleteHandler))
+adminOrdersRouter.post('/:id/purchase-decide', asyncHandler(confirmPartyOrderPurchaseHandler))
 adminOrdersRouter.post('/:id/return', asyncHandler(manualReturnHandler))
 adminOrdersRouter.post('/:id/review-game', asyncHandler(sendReviewGameHandler))
 adminOrdersRouter.patch('/:id/friend-links', asyncHandler(updateFriendLinksHandler))

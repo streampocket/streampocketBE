@@ -9,6 +9,7 @@ import {
   markOrderInProgress,
   extendOrderEstimatedTime,
   manualCompleteOrder,
+  confirmPartyOrderPurchase,
   manualReturnOrder,
   exportOrdersForExcel,
   updateFriendLinks,
@@ -176,6 +177,15 @@ export async function manualCompleteHandler(
   const { id } = req.params
   await manualCompleteOrder(id)
   res.json({ message: '완료 처리되었습니다.' })
+}
+
+export async function confirmPartyOrderPurchaseHandler(
+  req: Request<{ id: string }>,
+  res: Response,
+): Promise<void> {
+  const { id } = req.params
+  await confirmPartyOrderPurchase(id)
+  res.json({ message: '구매확정 처리되었습니다.' })
 }
 
 export async function manualReturnHandler(

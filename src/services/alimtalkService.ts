@@ -721,6 +721,9 @@ type SendPartyApplicationAlimtalkInput = {
   recipientPhoneNumber: string
   recipientName: string
   productName: string
+  price: number
+  fee: number
+  totalAmount: number
 }
 
 export async function sendPartyApplicationAlimtalk(
@@ -744,9 +747,13 @@ export async function sendPartyApplicationAlimtalk(
 
   const buttonJson = buildButtonPayload(template)
   const templateContent = template.templateContent ?? ''
+  // 템플릿(UJ_2053)이 '총액 #{총액}원'처럼 원 단위를 포함하므로 값에는 콤마 숫자만 넣는다
   const vars: Record<string, string> = {
     성함: input.recipientName,
     상품명: input.productName,
+    금액: input.price.toLocaleString('ko-KR'),
+    수수료: input.fee.toLocaleString('ko-KR'),
+    총액: input.totalAmount.toLocaleString('ko-KR'),
   }
   const message = applyTemplate(templateContent, normalizeTemplateVars(vars))
 

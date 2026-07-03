@@ -104,6 +104,9 @@ export async function applyToParty(productId: string, userId: string) {
       recipientPhoneNumber: user.phone,
       recipientName: user.name,
       productName: product.name,
+      price: currentPrice,
+      fee,
+      totalAmount,
     })
   } else {
     alimtalkResult = { ok: false, reason: '수신 정보 없음' }

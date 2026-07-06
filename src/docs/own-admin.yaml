@@ -73,6 +73,92 @@ paths:
         '200':
           description: 삭제 성공
 
+  # ───────────────────────── 파티 규칙 템플릿 관리 ─────────────────────────
+  /own/admin/rule-templates:
+    get:
+      summary: 파티 규칙 템플릿 목록 조회
+      tags: [OwnAdminRuleTemplates]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 규칙 템플릿 목록 (createdAt 오름차순)
+    post:
+      summary: 파티 규칙 템플릿 생성
+      tags: [OwnAdminRuleTemplates]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, content]
+              properties:
+                name:
+                  type: string
+                  maxLength: 100
+                content:
+                  type: string
+                  maxLength: 5000
+      responses:
+        '201':
+          description: 생성 성공
+        '409':
+          description: 이미 존재하는 템플릿 이름
+
+  /own/admin/rule-templates/{id}:
+    patch:
+      summary: 파티 규칙 템플릿 수정
+      tags: [OwnAdminRuleTemplates]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  maxLength: 100
+                content:
+                  type: string
+                  maxLength: 5000
+      responses:
+        '200':
+          description: 수정 성공
+        '404':
+          description: 템플릿을 찾을 수 없음
+        '409':
+          description: 이미 존재하는 템플릿 이름
+    delete:
+      summary: 파티 규칙 템플릿 삭제
+      tags: [OwnAdminRuleTemplates]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: 삭제 성공
+        '404':
+          description: 템플릿을 찾을 수 없음
+
   # ───────────────────────── 파티 관리 ─────────────────────────
   /own/admin/products:
     get:

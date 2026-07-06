@@ -33,6 +33,7 @@ import { adminOwnProductsRouter } from './routes/admin/ownProducts'
 import { adminOwnApplicationsRouter } from './routes/admin/ownApplications'
 import { adminOwnUsersRouter } from './routes/admin/ownUsers'
 import { adminOwnReviewsRouter } from './routes/admin/ownReviews'
+import { adminOwnRuleTemplatesRouter } from './routes/admin/ownRuleTemplates'
 import { communityPostsRouter } from './routes/community/posts'
 import { adminCommunityPostsRouter } from './routes/community/admin'
 
@@ -99,6 +100,7 @@ app.use('/own/admin/products', adminOwnProductsRouter)
 app.use('/own/admin/applications', adminOwnApplicationsRouter)
 app.use('/own/admin/users', adminOwnUsersRouter)
 app.use('/own/admin/reviews', adminOwnReviewsRouter)
+app.use('/own/admin/rule-templates', adminOwnRuleTemplatesRouter)
 
 // ───────────────────────── Community ─────────────────────────
 app.use('/community', communityPostsRouter)

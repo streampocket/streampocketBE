@@ -4,11 +4,9 @@ import { findOwnProductById } from '../../repositories/own/ownProductRepository'
 import {
   findActiveApplication,
   findApplicationsByUserId,
-  findApplicationWithProduct,
   findApplicationsForAdmin,
   findApplicationDetailForAdmin,
 } from '../../repositories/own/partyApplicationRepository'
-import { decrypt } from '../../utils/crypto'
 import { isPartyJoinable, calculateCurrentPrice } from '../../utils/partyPricing'
 import { sendDiscordAlert } from '../../lib/discord'
 import {
@@ -365,33 +363,6 @@ export async function adminRejectApplication(applicationId: string) {
 export async function getMyApplications(userId: string) {
   const applications = await findApplicationsByUserId(userId)
   return { data: applications }
-}
-
-export async function getApplicationCredentials(applicationId: string, userId: string) {
-  const application = await findApplicationWithProduct(applicationId)
-  if (!application) {
-    throw Object.assign(new Error('신청 내역을 찾을 수 없습니다.'), { statusCode: 404 })
-  }
-
-  if (application.userId !== userId) {
-    throw Object.assign(new Error('본인의 신청만 조회할 수 있습니다.'), { statusCode: 403 })
-  }
-
-  if (application.status === 'expired') {
-    throw Object.assign(new Error('이용 기간이 만료되어 계정 정보를 조회할 수 없습니다.'), { statusCode: 403 })
-  }
-
-  if (application.status !== 'confirmed') {
-    throw Object.assign(new Error('확정된 신청만 계정 정보를 조회할 수 있습니다.'), { statusCode: 403 })
-  }
-
-  return {
-    data: {
-      productName: application.product.name,
-      accountId: application.product.accountId ? decrypt(application.product.accountId) : null,
-      accountPassword: application.product.accountPassword ? decrypt(application.product.accountPassword) : null,
-    },
-  }
 }
 
 export async function checkApplication(productId: string, userId: string) {

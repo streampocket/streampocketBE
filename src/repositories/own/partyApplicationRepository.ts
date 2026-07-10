@@ -76,23 +76,6 @@ export function bulkExpireApplications(ids: string[]) {
   })
 }
 
-export function findApplicationWithProduct(applicationId: string) {
-  return prisma.partyApplication.findUnique({
-    where: { id: applicationId },
-    include: {
-      product: {
-        select: {
-          id: true,
-          name: true,
-          status: true,
-          accountId: true,
-          accountPassword: true,
-        },
-      },
-    },
-  })
-}
-
 // ─────────────── 관리자용 ───────────────
 
 type AdminListInput = {

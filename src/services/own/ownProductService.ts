@@ -8,7 +8,6 @@ import {
   findOwnProductById,
   updateOwnProduct,
   softDeleteOwnProductById,
-  findOwnProductCredentialsById,
   findOwnProductWithApplications,
   findFullyExpiredProducts,
   bulkExpireProducts,
@@ -19,7 +18,6 @@ import {
   findExpiredApplications,
   bulkExpireApplications,
 } from '../../repositories/own/partyApplicationRepository'
-import { encrypt, decrypt } from '../../utils/crypto'
 import { sendDiscordAlert } from '../../lib/discord'
 import { PARTY_TYPE_LABEL } from '../../constants/party'
 import {
@@ -38,8 +36,6 @@ type CreateInput = {
   durationMode?: 'countdown' | 'fixed'
   imagePath?: string | null
   notes?: string | null
-  accountId?: string | null
-  accountPassword?: string | null
   leaderName: string
 }
 
@@ -53,17 +49,11 @@ type UpdateInput = {
   durationMode?: 'countdown' | 'fixed'
   imagePath?: string | null
   notes?: string | null
-  accountId?: string | null
-  accountPassword?: string | null
   leaderName?: string
 }
 
-function encryptField(value: string | null | undefined): string | null | undefined {
-  if (value === undefined) return undefined
-  if (value === null || value === '') return null
-  return encrypt(value)
-}
-
+// 파티 공유계정 기능은 제거됐지만 DB 컬럼(accountId/accountPassword)은 데이터 보존을 위해 남아 있다.
+// 조회 결과에 실려오는 legacy 암호문이 API 응답으로 노출되지 않도록 계속 걸러낸다.
 function stripCredentials<T extends { accountId?: string | null; accountPassword?: string | null }>(
   product: T,
 ): Omit<T, 'accountId' | 'accountPassword'> & { hasCredentials: boolean } {
@@ -107,8 +97,6 @@ export async function createOwnProductItem(input: CreateInput) {
   const product = await createOwnProduct({
     ...input,
     categoryId,
-    accountId: encryptField(input.accountId) ?? null,
-    accountPassword: encryptField(input.accountPassword) ?? null,
   })
   return enrichWithPricing(stripCredentials(product))
 }
@@ -182,12 +170,6 @@ export async function adminUpdateOwnProduct(id: string, data: UpdateInput) {
   if (data.name) {
     updateData.categoryId = await resolveCategoryByName(data.name)
   }
-  if (data.accountId !== undefined) {
-    updateData.accountId = encryptField(data.accountId) ?? null
-  }
-  if (data.accountPassword !== undefined) {
-    updateData.accountPassword = encryptField(data.accountPassword) ?? null
-  }
   const updated = await updateOwnProduct(id, updateData)
   return enrichWithPricing(stripCredentials(updated))
 }
@@ -206,17 +188,6 @@ export async function adminGetOwnProductDetailWithApplications(id: string) {
     throw Object.assign(new Error('파티를 찾을 수 없습니다.'), { statusCode: 404 })
   }
   return enrichWithPricing(stripCredentials(product))
-}
-
-export async function adminGetOwnProductCredentials(id: string) {
-  const record = await findOwnProductCredentialsById(id)
-  if (!record) {
-    throw Object.assign(new Error('파티를 찾을 수 없습니다.'), { statusCode: 404 })
-  }
-  return {
-    accountId: record.accountId ? decrypt(record.accountId) : null,
-    accountPassword: record.accountPassword ? decrypt(record.accountPassword) : null,
-  }
 }
 
 export async function adminUpdatePartyStatus(id: string, status: 'recruiting' | 'closed' | 'expired') {

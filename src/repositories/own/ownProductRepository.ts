@@ -12,8 +12,6 @@ type CreateOwnProductInput = {
   durationMode?: 'countdown' | 'fixed'
   imagePath?: string | null
   notes?: string | null
-  accountId?: string | null
-  accountPassword?: string | null
   leaderName: string
 }
 
@@ -28,8 +26,6 @@ type UpdateOwnProductInput = {
   durationMode?: 'countdown' | 'fixed'
   imagePath?: string | null
   notes?: string | null
-  accountId?: string | null
-  accountPassword?: string | null
   leaderName?: string
   status?: 'recruiting' | 'closed' | 'expired'
 }
@@ -110,13 +106,6 @@ export function softDeleteOwnProductById(id: string) {
   return prisma.ownProduct.update({
     where: { id },
     data: { deletedAt: new Date() },
-  })
-}
-
-export function findOwnProductCredentialsById(id: string) {
-  return prisma.ownProduct.findUnique({
-    where: { id },
-    select: { accountId: true, accountPassword: true },
   })
 }
 

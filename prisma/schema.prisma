@@ -448,7 +448,9 @@ model OwnProduct {
   filledSlots     Int              @default(0) @map("filled_slots")
   imagePath       String?          @map("image_path") @db.VarChar(500)
   notes           String?          @db.Text
+  /// deprecated: 파티 공유계정 기능 제거(2026-07). 기존 데이터 보존을 위해 컬럼 유지 — 삭제 금지
   accountId       String?          @map("account_id") @db.Text
+  /// deprecated: 파티 공유계정 기능 제거(2026-07). 기존 데이터 보존을 위해 컬럼 유지 — 삭제 금지
   accountPassword String?          @map("account_password") @db.Text
   status          OwnProductStatus @default(recruiting)
   partyType       OwnProductType   @default(shared) @map("party_type")

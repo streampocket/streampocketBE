@@ -4,7 +4,6 @@ import {
   applyToParty,
   checkApplication,
   getMyApplications,
-  getApplicationCredentials,
   adminGetApplications,
   adminGetApplicationDetail,
   adminApproveApplication,
@@ -39,13 +38,6 @@ export async function checkApplicationHandler(req: Request, res: Response): Prom
 export async function getMyApplicationsHandler(req: Request, res: Response): Promise<void> {
   const userId = req.user!.id
   const result = await getMyApplications(userId)
-  res.json(result)
-}
-
-export async function getApplicationCredentialsHandler(req: Request, res: Response): Promise<void> {
-  const { id } = idParamSchema.parse(req.params)
-  const userId = req.user!.id
-  const result = await getApplicationCredentials(id, userId)
   res.json(result)
 }
 

@@ -7,7 +7,6 @@ import {
   adminUpdateOwnProduct,
   adminDeleteOwnProduct,
   adminGetOwnProductDetailWithApplications,
-  adminGetOwnProductCredentials,
   adminUpdatePartyStatus,
 } from '../../services/own/ownProductService'
 
@@ -23,8 +22,6 @@ const adminCreateOwnProductSchema = z.object({
   durationMode: z.enum(['countdown', 'fixed']).default('countdown'),
   imagePath: z.string().max(500).optional().nullable(),
   notes: z.string().optional().nullable(),
-  accountId: z.string().max(255).optional().nullable(),
-  accountPassword: z.string().max(255).optional().nullable(),
   leaderName: z.string().min(1).max(100),
 })
 
@@ -38,8 +35,6 @@ const adminUpdateOwnProductSchema = z.object({
   durationMode: z.enum(['countdown', 'fixed']).optional(),
   imagePath: z.string().max(500).optional().nullable(),
   notes: z.string().optional().nullable(),
-  accountId: z.string().max(255).optional().nullable(),
-  accountPassword: z.string().max(255).optional().nullable(),
   leaderName: z.string().min(1).max(100).optional(),
 })
 
@@ -98,12 +93,6 @@ export async function adminGetOwnProductDetailHandler(req: Request, res: Respons
   const { id } = idParamSchema.parse(req.params)
   const product = await adminGetOwnProductDetailWithApplications(id)
   res.json({ data: product })
-}
-
-export async function adminGetOwnProductCredentialsHandler(req: Request, res: Response): Promise<void> {
-  const { id } = idParamSchema.parse(req.params)
-  const credentials = await adminGetOwnProductCredentials(id)
-  res.json({ data: credentials })
 }
 
 export async function adminUpdatePartyStatusHandler(req: Request, res: Response): Promise<void> {

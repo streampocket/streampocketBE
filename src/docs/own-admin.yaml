@@ -198,12 +198,6 @@ paths:
                 notes:
                   type: string
                   nullable: true
-                accountId:
-                  type: string
-                  nullable: true
-                accountPassword:
-                  type: string
-                  nullable: true
                 leaderName:
                   type: string
                   description: 파티장 표시 이름 (관리자가 직접 입력)
@@ -259,23 +253,6 @@ paths:
       responses:
         '200':
           description: 삭제 성공
-
-  /own/admin/products/{id}/credentials:
-    get:
-      summary: 파티 OTT 계정 정보 조회
-      tags: [OwnAdminProducts]
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: 복호화된 계정 정보
 
   /own/admin/products/{id}/status:
     patch:

@@ -43,15 +43,28 @@ paths:
           application/json:
             schema:
               type: object
-              required: [name, gcoinAmount, salePrice]
+              required: [name, salePrice]
               properties:
                 name: { type: string, maxLength: 255, description: 상품 제목 }
-                gcoinAmount: { type: integer, minimum: 1, description: 지코인 수량 }
+                category:
+                  type: string
+                  enum: [gcoin, item]
+                  default: gcoin
+                  description: 카테고리 (gcoin=지코인, item=아이템)
+                gcoinAmount:
+                  type: integer
+                  minimum: 1
+                  nullable: true
+                  description: 지코인 수량 — gcoin 카테고리는 필수, item 카테고리는 null 저장
                 salePrice: { type: integer, minimum: 0, description: 판매가 }
                 listPrice:
                   type: integer
                   nullable: true
-                  description: 정가 (선택 — 입력 시 판매가보다 커야 하며 할인 표시에 사용)
+                  description: 원화 정가 (선택 — 입력 시 판매가보다 커야 하며 할인 표시에 사용)
+                listPriceUsd:
+                  type: number
+                  nullable: true
+                  description: 달러 정가 (gcoin 카테고리 전용, item은 null 강제) — 조회 시 최신 환율로 원화 환산되어 listPrice로 응답. 환산액이 판매가보다 커야 함
                 description: { type: string, nullable: true, description: 상세 설명(마크다운) }
                 imageUrl: { type: string, nullable: true, maxLength: 500 }
                 sortOrder:
@@ -66,7 +79,7 @@ paths:
         '201':
           description: 생성됨
         '400':
-          description: 정가가 판매가 이하
+          description: 정가가 판매가 이하 / 지코인 상품에 수량 누락
         '401':
           description: 인증 실패
     get:
@@ -77,6 +90,9 @@ paths:
         - in: query
           name: status
           schema: { type: string, enum: [on_sale, hidden, sold_out] }
+        - in: query
+          name: category
+          schema: { type: string, enum: [gcoin, item] }
         - in: query
           name: search
           schema: { type: string }
@@ -90,6 +106,25 @@ paths:
       responses:
         '200':
           description: '{ data, total, page, pageSize, totalPages }'
+
+  /gcoin/admin/exchange-rate:
+    get:
+      tags: [GCOIN 상품 (관리자)]
+      summary: 현재 USD→KRW 환율 조회 (폼 환산 미리보기용)
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: '{ data: { rate, fetchedAt } | null } — 아직 갱신된 적 없으면 null'
+
+  /gcoin/admin/exchange-rate/refresh:
+    post:
+      tags: [GCOIN 상품 (관리자)]
+      summary: 환율 즉시 갱신 (open.er-api.com 호출, 수동 트리거)
+      description: 크론이 매일 09/15/21시 KST에 자동 갱신하지만, 초기 세팅이나 장애 복구 시 수동 실행할 수 있다.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: '{ data: { rate, fetchedAt } }'
 
   /gcoin/admin/products/uploads/presigned-url:
     post:
@@ -140,7 +175,7 @@ paths:
               description: 등록 바디와 동일 필드, 전부 선택
       responses:
         '200': { description: 수정됨 }
-        '400': { description: 정가가 판매가 이하 }
+        '400': { description: 정가가 판매가 이하 / 지코인 상품에 수량 누락 }
         '404': { description: 상품 없음 }
     delete:
       tags: [GCOIN 상품 (관리자)]
@@ -162,9 +197,14 @@ components:
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
-        gcoinAmount: { type: integer }
+        category: { type: string, enum: [gcoin, item] }
+        gcoinAmount: { type: integer, nullable: true }
         salePrice: { type: integer }
-        listPrice: { type: integer, nullable: true }
+        listPrice:
+          type: integer
+          nullable: true
+          description: 원화 정가 — 달러 정가(listPriceUsd)가 있으면 환율 환산값(100원 단위 반올림), 환산액이 판매가 이하이거나 환율 미확보면 null
+        listPriceUsd: { type: number, nullable: true, description: 달러 정가 원본 }
         description: { type: string, nullable: true }
         imageUrl: { type: string, nullable: true }
         sortOrder: { type: integer }

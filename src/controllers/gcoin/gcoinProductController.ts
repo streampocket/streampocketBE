@@ -14,12 +14,15 @@ import {
 // ───────────────────────── Zod 스키마 ─────────────────────────
 
 const statusEnum = z.enum(['on_sale', 'hidden', 'sold_out'])
+const categoryEnum = z.enum(['gcoin', 'item'])
 
 const adminCreateGcoinProductSchema = z.object({
   name: z.string().min(1).max(255),
-  gcoinAmount: z.number().int().positive(),
+  category: categoryEnum.default('gcoin'),
+  gcoinAmount: z.number().int().positive().optional().nullable(),
   salePrice: z.number().int().min(0),
   listPrice: z.number().int().min(0).optional().nullable(),
+  listPriceUsd: z.number().positive().max(1_000_000).optional().nullable(),
   description: z.string().optional().nullable(),
   imageUrl: z.string().max(500).optional().nullable(),
   sortOrder: z.number().int().min(0).optional(),
@@ -28,9 +31,11 @@ const adminCreateGcoinProductSchema = z.object({
 
 const adminUpdateGcoinProductSchema = z.object({
   name: z.string().min(1).max(255).optional(),
-  gcoinAmount: z.number().int().positive().optional(),
+  category: categoryEnum.optional(),
+  gcoinAmount: z.number().int().positive().optional().nullable(),
   salePrice: z.number().int().min(0).optional(),
   listPrice: z.number().int().min(0).optional().nullable(),
+  listPriceUsd: z.number().positive().max(1_000_000).optional().nullable(),
   description: z.string().optional().nullable(),
   imageUrl: z.string().max(500).optional().nullable(),
   sortOrder: z.number().int().min(0).optional(),
@@ -39,6 +44,7 @@ const adminUpdateGcoinProductSchema = z.object({
 
 const adminListQuerySchema = z.object({
   status: statusEnum.optional(),
+  category: categoryEnum.optional(),
   search: z.string().optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),

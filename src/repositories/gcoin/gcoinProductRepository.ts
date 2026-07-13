@@ -2,12 +2,15 @@ import { prisma } from '../../lib/prisma'
 import type { Prisma } from '@prisma/client'
 
 type GcoinProductStatus = 'on_sale' | 'hidden' | 'sold_out'
+type GcoinProductCategory = 'gcoin' | 'item'
 
 type CreateGcoinProductInput = {
   name: string
-  gcoinAmount: number
+  category: GcoinProductCategory
+  gcoinAmount?: number | null
   salePrice: number
   listPrice?: number | null
+  listPriceUsd?: number | null
   description?: string | null
   imageUrl?: string | null
   sortOrder: number
@@ -16,9 +19,11 @@ type CreateGcoinProductInput = {
 
 type UpdateGcoinProductInput = {
   name?: string
-  gcoinAmount?: number
+  category?: GcoinProductCategory
+  gcoinAmount?: number | null
   salePrice?: number
   listPrice?: number | null
+  listPriceUsd?: number | null
   description?: string | null
   imageUrl?: string | null
   sortOrder?: number
@@ -27,6 +32,7 @@ type UpdateGcoinProductInput = {
 
 type GcoinProductFilters = {
   status?: GcoinProductStatus
+  category?: GcoinProductCategory
   search?: string
   page?: number
   pageSize?: number
@@ -45,6 +51,7 @@ export async function findAllGcoinProducts(filters: GcoinProductFilters) {
   const where: Prisma.GcoinProductWhereInput = {
     deletedAt: null,
     ...(filters.status ? { status: filters.status } : {}),
+    ...(filters.category ? { category: filters.category } : {}),
     ...(filters.search
       ? { name: { contains: filters.search, mode: 'insensitive' as const } }
       : {}),

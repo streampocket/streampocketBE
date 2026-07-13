@@ -36,6 +36,8 @@ import { adminOwnReviewsRouter } from './routes/admin/ownReviews'
 import { adminOwnRuleTemplatesRouter } from './routes/admin/ownRuleTemplates'
 import { communityPostsRouter } from './routes/community/posts'
 import { adminCommunityPostsRouter } from './routes/community/admin'
+import { gcoinProductsRouter } from './routes/gcoin/products'
+import { adminGcoinProductsRouter } from './routes/admin/gcoinProducts'
 
 const app = express()
 
@@ -105,6 +107,10 @@ app.use('/own/admin/rule-templates', adminOwnRuleTemplatesRouter)
 // ───────────────────────── Community ─────────────────────────
 app.use('/community', communityPostsRouter)
 app.use('/admin/community', adminCommunityPostsRouter)
+
+// ───────────────────────── GCOIN (PUBG 지코인) ─────────────────────────
+app.use('/gcoin/products', gcoinProductsRouter)
+app.use('/gcoin/admin/products', adminGcoinProductsRouter)
 
 // ───────────────────────── Health ─────────────────────────
 app.get('/health', (_req, res) => {

@@ -556,3 +556,30 @@ model CommunityPost {
   @@index([deletedAt, isPinned, createdAt])
   @@map("community_posts")
 }
+
+// ───────────────────────── GCOIN (PUBG 지코인) ─────────────────────────
+
+enum GcoinProductStatus {
+  on_sale // 판매중
+  hidden // 숨김
+  sold_out // 품절
+}
+
+model GcoinProduct {
+  id            String             @id @default(uuid()) @db.Uuid
+  name          String             @db.VarChar(255)
+  gcoinAmount   Int                @map("gcoin_amount")
+  salePrice     Int                @map("sale_price")
+  listPrice     Int?               @map("list_price")
+  description   String?            @db.Text
+  imageUrl      String?            @map("image_url") @db.VarChar(500)
+  sortOrder     Int                @default(0) @map("sort_order")
+  purchaseCount Int                @default(0) @map("purchase_count")
+  status        GcoinProductStatus @default(hidden)
+  deletedAt     DateTime?          @map("deleted_at") @db.Timestamptz(6)
+  createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([status, sortOrder])
+  @@map("gcoin_products")
+}

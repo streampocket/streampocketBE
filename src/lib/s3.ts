@@ -117,6 +117,40 @@ export async function generateCommunityImagePresignedUrl(params: {
   }
 }
 
+export async function generateGcoinProductImagePresignedUrl(params: {
+  contentType: string
+  contentLength: number
+}): Promise<PresignedUploadResult> {
+  if (!ALLOWED_CONTENT_TYPES.has(params.contentType)) {
+    throw Object.assign(new Error('허용되지 않은 이미지 형식입니다. (jpg, png, webp만 가능)'), {
+      statusCode: 400,
+    })
+  }
+  if (params.contentLength <= 0 || params.contentLength > MAX_BYTES) {
+    throw Object.assign(new Error('이미지 용량은 5MB 이하만 업로드할 수 있습니다.'), {
+      statusCode: 400,
+    })
+  }
+
+  const { bucket, publicBase } = ensureConfigured()
+  const ext = EXT_BY_CONTENT_TYPE[params.contentType]
+  const key = `gcoin/products/${randomUUID()}.${ext}`
+
+  const command = new PutObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    ContentType: params.contentType,
+    ContentLength: params.contentLength,
+  })
+  const uploadUrl = await getSignedUrl(getClient(), command, { expiresIn: 60 })
+
+  return {
+    uploadUrl,
+    objectUrl: `${publicBase}/${key}`,
+    key,
+  }
+}
+
 export function isCommunityImageUrl(objectUrl: string): boolean {
   const { publicBase } = ensureConfigured()
   return objectUrl.startsWith(`${publicBase}/community/`)

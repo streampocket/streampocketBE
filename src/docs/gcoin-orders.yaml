@@ -1,0 +1,166 @@
+paths:
+  /gcoin/auth/send:
+    post:
+      tags: [GCOIN 구매자 인증]
+      summary: 휴대폰 인증번호 발송 (알림톡, 포켓몬스팀 계정)
+      description: 5분당 1회 발송 제한, 코드 5분 유효, 일일 10회 한도. 개인정보 수집·이용 동의 필수.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, privacyAgreed]
+              properties:
+                phone: { type: string, pattern: '^010\d{8}$' }
+                privacyAgreed: { type: boolean, description: 개인정보 수집·이용 동의 (false면 400) }
+      responses:
+        '200':
+          description: '{ data: { expiresIn: 300, cooldown: 300 } }'
+        '400':
+          description: 동의 누락 / 형식 오류
+        '429':
+          description: 재발송 쿨다운(5분) / 일일 한도 초과
+
+  /gcoin/auth/verify:
+    post:
+      tags: [GCOIN 구매자 인증]
+      summary: 인증번호 확인 → 구매자 토큰 발급 (1시간)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, code]
+              properties:
+                phone: { type: string }
+                code: { type: string, minLength: 6, maxLength: 6 }
+      responses:
+        '200':
+          description: '{ data: { token, expiresIn: 3600, phone } } — JWT payload { phone, type: gcoin_buyer }'
+        '400':
+          description: 만료 / 시도 초과(5회) / 불일치 / 요청 없음
+
+  /gcoin/orders:
+    post:
+      tags: [GCOIN 주문 (구매자)]
+      summary: 주문 신청 (단건, 수량 1)
+      description: 휴대폰 인증 토큰 필요. 신청 접수 후 카카오톡 상담으로 결제 진행. Discord 배그 채널 알림 발송.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId]
+              properties:
+                productId: { type: string, format: uuid }
+      responses:
+        '201':
+          description: '{ data: GcoinOrder } — orderNo(PUBG_...) 포함, 가격은 신청 시점 스냅샷'
+        '400':
+          description: 품절 상품
+        '404':
+          description: 상품 없음/숨김
+        '409':
+          description: 같은 상품에 대기 중 신청 존재
+        '401':
+          description: 휴대폰 인증 필요/만료
+
+  /gcoin/orders/me:
+    get:
+      tags: [GCOIN 주문 (구매자)]
+      summary: 내 주문 목록 (인증된 전화번호 기준, 최신순)
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: '{ data: GcoinOrder[] }'
+        '401':
+          description: 휴대폰 인증 필요/만료
+
+  /gcoin/admin/orders:
+    get:
+      tags: [GCOIN 주문 (관리자)]
+      summary: 주문 신청 목록 (상태 필터·검색·페이지네이션 + 상태별 카운트)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, enum: [pending, approved, rejected] }
+        - in: query
+          name: search
+          schema: { type: string }
+          description: 주문번호/상품명/전화번호 부분 일치
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, default: 20, maximum: 100 }
+      responses:
+        '200':
+          description: '{ data, total, page, pageSize, totalPages, counts: { pending, approved, rejected } }'
+
+  /gcoin/admin/orders/{id}/approve:
+    post:
+      tags: [GCOIN 주문 (관리자)]
+      summary: 주문 승인 — 통합 주문관리 편입
+      description: >-
+        status=approved 전환 + 상품 purchaseCount 증가(트랜잭션) 후 SteamOrderItem(source=gcoin,
+        순수익 0, completed)을 생성해 통합 주문관리에 편입한다. 편입 실패 시에도 승인은 유지(에러 채널 알림, 수동 보정).
+        순수익은 이후 /steam/admin/orders/{id}/net-profit로 입력.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: 승인됨 }
+        '400': { description: 대기 상태가 아님 }
+        '404': { description: 주문 없음 }
+
+  /gcoin/admin/orders/{id}/reject:
+    post:
+      tags: [GCOIN 주문 (관리자)]
+      summary: 주문 거절 (pending만 가능)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, maxLength: 500, nullable: true }
+      responses:
+        '200': { description: 거절됨 }
+        '400': { description: 대기 상태가 아님 }
+        '404': { description: 주문 없음 }
+
+components:
+  schemas:
+    GcoinOrder:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        orderNo: { type: string, description: 'PUBG_YYYYMMDDHHmmss_랜덤3' }
+        productId: { type: string, format: uuid }
+        productName: { type: string, description: 신청 시점 스냅샷 }
+        gcoinAmount: { type: integer, nullable: true }
+        salePrice: { type: integer, description: 신청 시점 가격 스냅샷 }
+        quantity: { type: integer, description: 현재 1 고정 }
+        buyerPhone: { type: string }
+        status: { type: string, enum: [pending, approved, rejected] }
+        rejectReason: { type: string, nullable: true }
+        steamOrderItemId: { type: string, format: uuid, nullable: true }
+        approvedAt: { type: string, format: date-time, nullable: true }
+        rejectedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }

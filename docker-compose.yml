@@ -24,6 +24,10 @@ services:
     ports:
       - "4000:4000"
     env_file: .env
+    environment:
+      # .env가 운영 복사본(NODE_ENV=production)이어도 로컬 컨테이너는 항상 개발 모드
+      # (인증번호 알림톡 실발송 방지 — dev 모드는 콘솔 출력. 실발송 테스트 시에만 잠시 production으로)
+      NODE_ENV: development
     volumes:
       - ./src:/app/src       # 소스 변경 시 핫리로드
       - ./prisma:/app/prisma

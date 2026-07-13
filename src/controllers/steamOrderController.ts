@@ -31,7 +31,7 @@ const fulfillmentStatusEnum = z.enum([
   'returned',
 ])
 
-const orderSourceEnum = z.enum(['naver', 'manual', 'party'])
+const orderSourceEnum = z.enum(['naver', 'manual', 'party', 'gcoin'])
 const storeEnum = z.enum(['streampocket', 'pokemon_steam'])
 
 const listQuerySchema = z.object({
@@ -255,14 +255,17 @@ export async function deleteManualOrderHandler(
 }
 
 const updateNetProfitParamsSchema = z.object({ id: z.string().uuid() })
-const updateNetProfitBodySchema = z.object({ netProfit: z.number().int().min(0) })
+const updateNetProfitBodySchema = z.object({
+  netProfit: z.number().int().min(0),
+  receiverName: z.string().max(100).optional(),
+})
 
 export async function updateManualOrderNetProfitHandler(
   req: Request<{ id: string }>,
   res: Response,
 ): Promise<void> {
   const { id } = updateNetProfitParamsSchema.parse(req.params)
-  const { netProfit } = updateNetProfitBodySchema.parse(req.body)
-  await updateManualOrderNetProfit(id, netProfit)
+  const { netProfit, receiverName } = updateNetProfitBodySchema.parse(req.body)
+  await updateManualOrderNetProfit(id, netProfit, receiverName)
   res.json({ message: '순수익이 수정되었습니다.' })
 }

@@ -61,6 +61,7 @@ type RevenueSummary = {
   totalCosts: number
   netProfit: number
   partyOrderProfit: number
+  gcoinOrderProfit: number
   pendingSettlement: number
   alimtalkCount: number
 }
@@ -74,6 +75,7 @@ export async function getRevenueSummary(
     naverTotals,
     manualOrderTotals,
     partyOrderTotals,
+    gcoinOrderTotals,
     alimtalkCount,
     expenseSums,
     manualRevenueTotal,
@@ -115,6 +117,16 @@ export async function getRevenueSummary(
           AND paid_at <= ${endDate}
           ${storeSql(store)}
       `,
+      // 배그(GCOIN) 주문 순수익 합산 — 파티와 동일 공식, 별도 집계(배그 순수익 분리 표시)
+      prisma.$queryRaw<{ profit: bigint }[]>`
+        SELECT COALESCE(SUM(settlement_amount), 0)::bigint AS profit
+        FROM steam_order_items
+        WHERE source = 'gcoin'
+          AND fulfillment_status <> 'returned'
+          AND paid_at >= ${startDate}
+          AND paid_at <= ${endDate}
+          ${storeSql(store)}
+      `,
       prisma.deliveryLog.count({
         where: {
           status: 'sent',
@@ -130,14 +142,17 @@ export async function getRevenueSummary(
   const pendingSettlement = Number(naverTotals[0]?.pending ?? 0n)
   const manualOrderProfit = Number(manualOrderTotals[0]?.profit ?? 0n)
   const partyOrderProfit = Number(partyOrderTotals[0]?.profit ?? 0n)
+  const gcoinOrderProfit = Number(gcoinOrderTotals[0]?.profit ?? 0n)
 
   // 네이버 수수료/정산금은 6.63% 고정으로 재계산 (실제 정산금은 구매확정 후에야 채워지므로)
   const naverCommission = Math.round(naverRevenue * NAVER_FEE_RATE)
   const naverSettlement = naverRevenue - naverCommission
 
-  // 수동 주문/파티 주문/수동 매출은 수수료 없이 입력 순수익을 판매금=정산금=순수익으로 가산
-  const totalRevenue = naverRevenue + manualRevenueTotal + manualOrderProfit + partyOrderProfit
-  const totalSettlement = naverSettlement + manualRevenueTotal + manualOrderProfit + partyOrderProfit
+  // 수동 주문/파티 주문/배그 주문/수동 매출은 수수료 없이 입력 순수익을 판매금=정산금=순수익으로 가산
+  const totalRevenue =
+    naverRevenue + manualRevenueTotal + manualOrderProfit + partyOrderProfit + gcoinOrderProfit
+  const totalSettlement =
+    naverSettlement + manualRevenueTotal + manualOrderProfit + partyOrderProfit + gcoinOrderProfit
 
   const manualCosts =
     expenseSums.gamePurchase + expenseSums.countryChange + expenseSums.reviewGame + expenseSums.other
@@ -154,6 +169,7 @@ export async function getRevenueSummary(
     totalCosts,
     netProfit,
     partyOrderProfit,
+    gcoinOrderProfit,
     pendingSettlement,
     alimtalkCount,
   }

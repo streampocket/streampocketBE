@@ -8,7 +8,11 @@ import {
   sumPaymentAmountPaidOn,
 } from '../repositories/dailySalesRepository'
 import { findExpensesByDateRange } from '../repositories/expenseRepository'
-import { listManualOrdersPaidOn, listPartyOrdersPaidOn } from '../repositories/steamOrderRepository'
+import {
+  listGcoinOrdersPaidOn,
+  listManualOrdersPaidOn,
+  listPartyOrdersPaidOn,
+} from '../repositories/steamOrderRepository'
 
 const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   game_purchase: '게임 구매비',
@@ -48,6 +52,7 @@ export async function sendDailySalesReport(): Promise<void> {
     expenses,
     manualOrders,
     partyOrders,
+    gcoinOrders,
   ] = await Promise.all([
     countOrdersPaidOn(startOfDay, endOfDay),
     countOrdersDecidedOn(startOfDay, endOfDay),
@@ -56,6 +61,7 @@ export async function sendDailySalesReport(): Promise<void> {
     findExpensesByDateRange(startOfDay, endOfDay),
     listManualOrdersPaidOn(startOfDay, endOfDay),
     listPartyOrdersPaidOn(startOfDay, endOfDay),
+    listGcoinOrdersPaidOn(startOfDay, endOfDay),
   ])
 
   const naverFee = Math.round(naverRevenue * NAVER_FEE_RATE)
@@ -64,6 +70,7 @@ export async function sendDailySalesReport(): Promise<void> {
 
   const manualTotal = manualOrders.reduce((sum, o) => sum + (o.settlementAmount ?? 0), 0)
   const partyTotal = partyOrders.reduce((sum, o) => sum + (o.settlementAmount ?? 0), 0)
+  const gcoinTotal = gcoinOrders.reduce((sum, o) => sum + (o.settlementAmount ?? 0), 0)
 
   const songTotal = expenses
     .filter((e) => e.payer === 'song_donggeon')
@@ -100,6 +107,15 @@ export async function sendDailySalesReport(): Promise<void> {
     lines.push(`  소계: ${fmt(partyTotal)}원`)
   }
 
+  if (gcoinOrders.length > 0) {
+    lines.push('')
+    lines.push(`🪙 **배그 주문** (${gcoinOrders.length}건)`)
+    for (const order of gcoinOrders) {
+      lines.push(`  · ${order.productName} | ${fmt(order.settlementAmount ?? 0)}원`)
+    }
+    lines.push(`  소계: ${fmt(gcoinTotal)}원`)
+  }
+
   if (expenses.length > 0) {
     lines.push('')
     lines.push(`💸 **비용** (${expenses.length}건)`)
@@ -128,10 +144,10 @@ export async function sendDailySalesReport(): Promise<void> {
     `✨ **순수익:** ${fmt(naverRevenue)} − ${fmt(naverFee)} − ${fmt(expenseTotal)} = ${fmt(netProfit)}원`,
   )
 
-  if (expenses.length > 0 || manualTotal > 0 || partyTotal > 0) {
+  if (expenses.length > 0 || manualTotal > 0 || partyTotal > 0 || gcoinTotal > 0) {
     // 송금 기준액(부호 있음). 양수면 송동건이 더 부담 → 임정빈이 송금.
-    // 수동매출·파티매출은 송동건이 수령하므로 송동건 부담에서 차감한다.
-    const baseIncludingManual = songTotal - imTotal - manualTotal - partyTotal
+    // 수동매출·파티매출·배그매출은 송동건이 수령하므로 송동건 부담에서 차감한다.
+    const baseIncludingManual = songTotal - imTotal - manualTotal - partyTotal - gcoinTotal
     const baseExcludingManual = songTotal - imTotal
 
     const settlementLine = (base: number): string => {
@@ -144,8 +160,8 @@ export async function sendDailySalesReport(): Promise<void> {
 
     lines.push('')
     lines.push(`💸 **분담 정산**`)
-    lines.push(`  수동+파티 매출 반영: ${settlementLine(baseIncludingManual)}`)
-    lines.push(`  수동+파티 매출 미반영: ${settlementLine(baseExcludingManual)}`)
+    lines.push(`  수동+파티+배그 매출 반영: ${settlementLine(baseIncludingManual)}`)
+    lines.push(`  수동+파티+배그 매출 미반영: ${settlementLine(baseExcludingManual)}`)
   }
 
   await sendDiscordAlert('expense', lines.join('\n'))

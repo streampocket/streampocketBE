@@ -340,11 +340,12 @@ paths:
 
   /steam/admin/orders/{id}/net-profit:
     patch:
-      summary: 수동 주문 순수익 수정
+      summary: 수동·파티·배그 주문 순수익 수정 (+수신자명)
       description: >-
-        수동 주문(source=manual)의 순수익을 수정한다. 수수료가 없으므로 생성과 동일하게
+        수동(manual)·파티(party)·배그(gcoin) 주문의 순수익을 수정한다. 수수료가 없으므로 생성과 동일하게
         `unitPrice`, `paymentAmount`, `settlementAmount` 세 금액 필드를 모두 동일 값으로 갱신해
         목록(금액)·상세(순수익)·집계(일일 리포트·대시보드)를 일치시킨다. 네이버 주문은 수정할 수 없다.
+        receiverName을 함께 보내면 수신자명도 수정된다 (배그 주문 후입력 용도).
       tags: [SteamOrders]
       security:
         - bearerAuth: []
@@ -367,6 +368,10 @@ paths:
                   type: integer
                   minimum: 0
                   description: 새 순수익(원). 0 이상의 정수.
+                receiverName:
+                  type: string
+                  maxLength: 100
+                  description: 수신자명 (선택 — 보내면 함께 수정)
       responses:
         '200':
           description: 수정 완료

@@ -49,6 +49,7 @@ enum OrderSource {
   naver
   manual
   party
+  gcoin // 배그 지코인 (pubgcode.kr 신청 승인 건)
 }
 
 enum DeliveryChannel {
@@ -587,8 +588,55 @@ model GcoinProduct {
   createdAt     DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
 
+  orders GcoinOrder[]
+
   @@index([status, sortOrder])
   @@map("gcoin_products")
+}
+
+// 구매자 휴대폰 인증 (비회원 로그인) — OTTALL phone_verifications와 분리 (로직 상이, 격리)
+model GcoinPhoneVerification {
+  id              String   @id @default(uuid()) @db.Uuid
+  phone           String   @db.VarChar(20)
+  code            String   @db.VarChar(6)
+  expiresAt       DateTime @map("expires_at") @db.Timestamptz(6)
+  verified        Boolean  @default(false)
+  attempts        Int      @default(0)
+  privacyAgreedAt DateTime @map("privacy_agreed_at") @db.Timestamptz(6) // 개인정보 수집·이용 동의 증적
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([phone, createdAt])
+  @@map("gcoin_phone_verifications")
+}
+
+enum GcoinOrderStatus {
+  pending // 확인 중 (신청 접수)
+  approved // 승인 (결제 확인 후 통합 주문관리 편입)
+  rejected // 거절
+}
+
+model GcoinOrder {
+  id               String           @id @default(uuid()) @db.Uuid
+  orderNo          String           @unique @map("order_no") @db.VarChar(40) // PUBG_YYYYMMDDHHmmss_랜덤3
+  productId        String           @map("product_id") @db.Uuid
+  productName      String           @map("product_name") @db.VarChar(255) // 주문 시점 스냅샷
+  gcoinAmount      Int?             @map("gcoin_amount") // 스냅샷 (아이템은 null)
+  salePrice        Int              @map("sale_price") // 주문 시점 가격 스냅샷
+  quantity         Int              @default(1) // 현재 1 고정 (장바구니 확장 대비)
+  buyerPhone       String           @map("buyer_phone") @db.VarChar(20)
+  status           GcoinOrderStatus @default(pending)
+  rejectReason     String?          @map("reject_reason") @db.VarChar(500)
+  steamOrderItemId String?          @unique @map("steam_order_item_id") @db.Uuid // 승인 시 편입된 통합주문
+  approvedAt       DateTime?        @map("approved_at") @db.Timestamptz(6)
+  rejectedAt       DateTime?        @map("rejected_at") @db.Timestamptz(6)
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  product GcoinProduct @relation(fields: [productId], references: [id])
+
+  @@index([status, createdAt])
+  @@index([buyerPhone, createdAt])
+  @@map("gcoin_orders")
 }
 
 // 환율 — 통화쌍별 1행, 크론(09/15/21시 KST)이 upsert로 갱신

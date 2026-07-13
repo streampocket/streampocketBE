@@ -7,5 +7,8 @@ declare module 'express' {
       id: string
       email: string
     }
+    gcoinBuyer?: {
+      phone: string
+    }
   }
 }

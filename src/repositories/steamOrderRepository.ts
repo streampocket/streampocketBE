@@ -309,6 +309,35 @@ export async function generatePartyProductOrderId(): Promise<string> {
   return generateProductOrderIdWithPrefix('PARTY')
 }
 
+// 배그(GCOIN) 주문 승인 편입 — 파티와 동일하게 순수익 0으로 시작해 3개 금액 필드 동일 저장, source='gcoin'
+type CreateGcoinOrderItemInput = {
+  productOrderId: string
+  productName: string
+  receiverPhoneNumber: string
+  paidAt: Date
+}
+
+export async function createGcoinOrderItem(
+  data: CreateGcoinOrderItemInput,
+): Promise<SteamOrderItem> {
+  return prisma.steamOrderItem.create({
+    data: {
+      productOrderId: data.productOrderId,
+      naverOrderId: data.productOrderId,
+      productName: data.productName,
+      receiverPhoneNumber: data.receiverPhoneNumber,
+      unitPrice: 0,
+      paymentAmount: 0,
+      settlementAmount: 0,
+      fulfillmentStatus: 'completed',
+      paidAt: data.paidAt,
+      source: 'gcoin',
+      // 배그 주문도 스토어 무귀속 — 수동·파티와 동일하게 "전체" 매출에만 포함.
+      store: null,
+    },
+  })
+}
+
 async function generateProductOrderIdWithPrefix(prefix: string): Promise<string> {
   for (let attempt = 0; attempt < 10; attempt++) {
     // KST 기준 표기(ID 가독성용) — 고유성은 랜덤 접미어가 담당
@@ -409,6 +438,22 @@ export async function listPartyOrdersPaidOn(
   return prisma.steamOrderItem.findMany({
     where: {
       source: 'party',
+      paidAt: { gte: start, lte: end },
+      returnedAt: null,
+    },
+    select: { productName: true, settlementAmount: true },
+    orderBy: { paidAt: 'asc' },
+  })
+}
+
+// 일일 종합 리포트용 — 당일 승인(편입)된 배그(GCOIN) 주문 (파티와 동일 패턴, 별도 섹션 표시)
+export async function listGcoinOrdersPaidOn(
+  start: Date,
+  end: Date,
+): Promise<{ productName: string; settlementAmount: number | null }[]> {
+  return prisma.steamOrderItem.findMany({
+    where: {
+      source: 'gcoin',
       paidAt: { gte: start, lte: end },
       returnedAt: null,
     },

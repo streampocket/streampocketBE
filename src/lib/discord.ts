@@ -10,6 +10,7 @@ export type DiscordChannel =
   | 'partyApply'
   | 'alimtalk'
   | 'auto_extend'
+  | 'gcoin'
 
 const CHANNEL_META: Record<DiscordChannel, { title: string; color: number }> = {
   order: { title: '주문 알림', color: 0x57f287 },
@@ -20,6 +21,7 @@ const CHANNEL_META: Record<DiscordChannel, { title: string; color: number }> = {
   partyApply: { title: '파티원 참여 알림', color: 0x2ecc71 },
   alimtalk: { title: '알림톡 발송', color: 0xfee500 },
   auto_extend: { title: '자동 연장 알림', color: 0x9b59b6 },
+  gcoin: { title: '배그 주문 알림', color: 0xffde40 },
 }
 
 function getWebhookUrl(channel: DiscordChannel): string | undefined {
@@ -29,6 +31,10 @@ function getWebhookUrl(channel: DiscordChannel): string | undefined {
   // 자동 연장 알림 — 전용 웹훅 미설정 시 메인 웹훅으로 fallback
   if (channel === 'auto_extend') {
     return process.env['DISCORD_AUTO_EXTEND_WEBHOOK_URL'] ?? process.env['DISCORD_WEBHOOK_URL']
+  }
+  // 배그(GCOIN) 주문 알림 — 전용 웹훅 미설정 시 메인 웹훅으로 fallback
+  if (channel === 'gcoin') {
+    return process.env['DISCORD_GCOIN_WEBHOOK_URL'] ?? process.env['DISCORD_WEBHOOK_URL']
   }
   return process.env['DISCORD_WEBHOOK_URL']
 }

@@ -37,7 +37,10 @@ import { adminOwnRuleTemplatesRouter } from './routes/admin/ownRuleTemplates'
 import { communityPostsRouter } from './routes/community/posts'
 import { adminCommunityPostsRouter } from './routes/community/admin'
 import { gcoinProductsRouter } from './routes/gcoin/products'
+import { gcoinAuthRouter } from './routes/gcoin/auth'
+import { gcoinOrdersRouter } from './routes/gcoin/orders'
 import { adminGcoinProductsRouter } from './routes/admin/gcoinProducts'
+import { adminGcoinOrdersRouter } from './routes/admin/gcoinOrders'
 import { adminGcoinExchangeRateRouter } from './routes/admin/gcoinExchangeRate'
 
 const app = express()
@@ -111,7 +114,10 @@ app.use('/admin/community', adminCommunityPostsRouter)
 
 // ───────────────────────── GCOIN (PUBG 지코인) ─────────────────────────
 app.use('/gcoin/products', gcoinProductsRouter)
+app.use('/gcoin/auth', gcoinAuthRouter)
+app.use('/gcoin/orders', gcoinOrdersRouter)
 app.use('/gcoin/admin/products', adminGcoinProductsRouter)
+app.use('/gcoin/admin/orders', adminGcoinOrdersRouter)
 app.use('/gcoin/admin/exchange-rate', adminGcoinExchangeRateRouter)
 
 // ───────────────────────── Health ─────────────────────────

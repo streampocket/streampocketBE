@@ -357,16 +357,21 @@ export async function updateFriendLinks(
   })
 }
 
-// 수동·파티 주문 순수익 수정 — 수수료가 없으므로 생성과 동일하게 세 금액 필드에 같은 값을
+// 수동·파티·배그 주문 순수익 수정 — 수수료가 없으므로 생성과 동일하게 세 금액 필드에 같은 값을
 // 갱신해 목록(금액)·상세(순수익)·집계(일일 리포트·대시보드)를 일치시킨다.
-export async function updateManualOrderNetProfit(id: string, netProfit: number): Promise<void> {
+// receiverName은 배그 주문(전화번호만 수집) 후입력 용도로 함께 수정 가능.
+export async function updateManualOrderNetProfit(
+  id: string,
+  netProfit: number,
+  receiverName?: string,
+): Promise<void> {
   const order = await findOrderById(id)
   if (!order) {
     throw Object.assign(new Error('주문을 찾을 수 없습니다.'), { statusCode: 404 })
   }
 
-  if (!['manual', 'party'].includes(order.source)) {
-    throw Object.assign(new Error('수동·파티 주문만 순수익을 수정할 수 있습니다.'), {
+  if (!['manual', 'party', 'gcoin'].includes(order.source)) {
+    throw Object.assign(new Error('수동·파티·배그 주문만 순수익을 수정할 수 있습니다.'), {
       statusCode: 400,
     })
   }
@@ -375,6 +380,7 @@ export async function updateManualOrderNetProfit(id: string, netProfit: number):
     unitPrice: netProfit,
     paymentAmount: netProfit,
     settlementAmount: netProfit,
+    ...(receiverName !== undefined ? { receiverName } : {}),
   })
 }
 

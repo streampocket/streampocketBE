@@ -14,6 +14,7 @@ import { generateWeeklySettlement } from './services/settlementService'
 import { expireOldParties } from './services/own/ownProductService'
 import { sendDailySalesReport } from './services/dailySalesReportService'
 import { runAutoExtendCheck } from './services/steamOrderService'
+import { refreshUsdKrwRate } from './services/gcoin/exchangeRateService'
 
 const PORT = Number(process.env.PORT ?? 4000)
 const POLL_INTERVAL_MS = Number(process.env['ORDER_POLL_INTERVAL_SECONDS'] ?? 300) * 1000
@@ -179,4 +180,31 @@ app.listen(PORT, () => {
   }, 60_000)
 
   console.log('주문 예상시각 자동 연장 스케줄러 시작: 1분 간격')
+
+  // USD→KRW 환율 갱신 (매일 09:00 / 15:00 / 21:00 KST + 시작 시 1회)
+  // 실패해도 DB의 마지막 저장값을 계속 쓰므로 로그만 남긴다
+  const FX_REFRESH_HOURS = [9, 15, 21]
+  let lastFxRefreshKey = ''
+
+  refreshUsdKrwRate()
+    .then(({ rate }) => console.log(`[FX_RATE] 시작 시 환율 갱신: USD/KRW=${rate}`))
+    .catch((err) => console.error('[FX_RATE] 시작 시 환율 갱신 실패 (마지막 저장값 사용)', err))
+
+  setInterval(() => {
+    const now = new Date()
+    const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000)
+    const today = kst.toISOString().slice(0, 10)
+    const hour = kst.getUTCHours()
+    const minute = kst.getUTCMinutes()
+    const key = `${today}-${hour}`
+
+    if (FX_REFRESH_HOURS.includes(hour) && minute === 0 && lastFxRefreshKey !== key) {
+      lastFxRefreshKey = key
+      refreshUsdKrwRate()
+        .then(({ rate }) => console.log(`[FX_RATE] 환율 갱신: USD/KRW=${rate}`))
+        .catch((err) => console.error('[FX_RATE] 환율 갱신 실패 (마지막 저장값 사용)', err))
+    }
+  }, 60_000)
+
+  console.log('환율 갱신 스케줄러 시작: 매일 09:00/15:00/21:00 KST')
 })

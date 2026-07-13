@@ -565,21 +565,42 @@ enum GcoinProductStatus {
   sold_out // 품절
 }
 
+enum GcoinProductCategory {
+  gcoin // 지코인
+  item // 아이템
+}
+
 model GcoinProduct {
-  id            String             @id @default(uuid()) @db.Uuid
-  name          String             @db.VarChar(255)
-  gcoinAmount   Int                @map("gcoin_amount")
-  salePrice     Int                @map("sale_price")
-  listPrice     Int?               @map("list_price")
-  description   String?            @db.Text
-  imageUrl      String?            @map("image_url") @db.VarChar(500)
-  sortOrder     Int                @default(0) @map("sort_order")
-  purchaseCount Int                @default(0) @map("purchase_count")
-  status        GcoinProductStatus @default(hidden)
-  deletedAt     DateTime?          @map("deleted_at") @db.Timestamptz(6)
-  createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id            String               @id @default(uuid()) @db.Uuid
+  name          String               @db.VarChar(255)
+  category      GcoinProductCategory @default(gcoin)
+  gcoinAmount   Int?                 @map("gcoin_amount") // 지코인 상품만 필수, 아이템은 null
+  salePrice     Int                  @map("sale_price")
+  listPrice     Int?                 @map("list_price") // 원화 정가 (수동 입력, 달러 정가가 있으면 응답에서 환산값이 우선)
+  listPriceUsd  Decimal?             @map("list_price_usd") @db.Decimal(10, 2) // 달러 정가 (gcoin 카테고리 전용, 조회 시 환율로 원화 환산)
+  description   String?              @db.Text
+  imageUrl      String?              @map("image_url") @db.VarChar(500)
+  sortOrder     Int                  @default(0) @map("sort_order")
+  purchaseCount Int                  @default(0) @map("purchase_count")
+  status        GcoinProductStatus   @default(hidden)
+  deletedAt     DateTime?            @map("deleted_at") @db.Timestamptz(6)
+  createdAt     DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@index([status, sortOrder])
   @@map("gcoin_products")
+}
+
+// 환율 — 통화쌍별 1행, 크론(09/15/21시 KST)이 upsert로 갱신
+model ExchangeRate {
+  id            String   @id @default(uuid()) @db.Uuid
+  baseCurrency  String   @map("base_currency") @db.VarChar(3) // 예: USD
+  quoteCurrency String   @map("quote_currency") @db.VarChar(3) // 예: KRW
+  rate          Decimal  @db.Decimal(12, 4)
+  fetchedAt     DateTime @map("fetched_at") @db.Timestamptz(6) // 마지막 성공 fetch 시각
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([baseCurrency, quoteCurrency])
+  @@map("exchange_rates")
 }

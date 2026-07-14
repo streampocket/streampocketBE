@@ -53,8 +53,12 @@ const FINAL_CLAIMED_PRODUCT_ORDER_STATUSES = ['CANCELED', 'RETURNED']
 // 활성 클레임 판정에 쓰는 클레임 타입 — 이 타입이 살아있으면 복구를 막는다.
 const CLAIM_TYPES_BLOCKING_RECOVERY = ['CANCEL', 'RETURN']
 
-// 거부/철회로 종결된 claimStatus(claimType이 유지되더라도 해소로 간주). 실값 확인 시 보조 추가 — 비어도 동작.
-const RESOLVED_CLAIM_STATUSES: string[] = []
+// 거부/철회로 종결된 claimStatus(claimType이 유지되더라도 해소로 간주).
+// CANCEL_REJECT — 운영 실측 확인(2026-07-14, 주문 2026071416241241): 구매자가 취소요청을 철회하면
+// 네이버는 productOrderStatus를 정상으로 되돌리되 claimType=CANCEL/claimStatus=CANCEL_REJECT를
+// 응답에 남겨둔다. 이 값을 종결로 인정하지 않으면 returned 복구가 영구 차단된다.
+// RETURN_REJECT — 반품 철회·거부의 대칭 케이스로 함께 등록.
+const RESOLVED_CLAIM_STATUSES: string[] = ['CANCEL_REJECT', 'RETURN_REJECT']
 
 // 복구 판정 입력 — 네이버 권위 데이터(상세 /query) 스냅샷
 export type ClaimSnapshot = {

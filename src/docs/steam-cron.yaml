@@ -66,6 +66,17 @@ paths:
         '200':
           description: 만료 처리 완료 (expiredCount 반환)
 
+  /steam/cron/purge-withdrawn-users:
+    post:
+      summary: 탈퇴 회원 완전 삭제 (매일 00:00 KST 자동 실행, 수동 트리거용)
+      description: >
+        탈퇴(deletedAt) 후 30일이 지난 회원을 하드 삭제한다.
+        약관동의는 Cascade 삭제, 파티 신청/리뷰/커뮤니티 글은 userId null(익명)로 보존.
+      tags: [SteamCron]
+      responses:
+        '200':
+          description: 완전 삭제 처리 완료 (purged/failed 카운트 반환)
+
   /steam/cron/daily-sales-report:
     post:
       summary: 일일 종합 리포트 Discord 전송 (매일 23:59 KST 자동 실행, 수동 트리거용)

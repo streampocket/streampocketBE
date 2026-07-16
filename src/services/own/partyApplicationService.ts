@@ -17,6 +17,7 @@ import { findDeliveryLogsByPartyApplicationId } from '../../repositories/deliver
 import { PARTY_APPLICATION_FEE } from '../../constants/fees'
 import { PARTY_TYPE_LABEL } from '../../constants/party'
 import { createPartyOrder } from '../steamOrderService'
+import { WITHDRAWN_USER_DISPLAY } from './userWithdrawalService'
 
 export async function applyToParty(productId: string, userId: string) {
   const product = await findOwnProductById(productId)
@@ -192,7 +193,8 @@ export async function adminGetApplications(input: AdminListInput) {
   const { items, total } = await findApplicationsForAdmin(input)
   return {
     data: {
-      items,
+      // 완전 삭제(purge)된 회원의 신청은 익명 표시로 대체 — FE가 user.name/phone을 직접 참조
+      items: items.map((item) => ({ ...item, user: item.user ?? WITHDRAWN_USER_DISPLAY })),
       total,
       page: input.page,
       pageSize: input.pageSize,
@@ -217,7 +219,7 @@ export async function adminGetApplicationDetail(applicationId: string) {
     createdAt: log.createdAt,
   }))
 
-  return { data: { ...application, alimtalkLogs } }
+  return { data: { ...application, user: application.user ?? WITHDRAWN_USER_DISPLAY, alimtalkLogs } }
 }
 
 export async function adminApproveApplication(applicationId: string) {
@@ -313,7 +315,7 @@ export async function adminApproveApplication(applicationId: string) {
       orderInfo: {
         partyName: application.product.name,
         durationDays: application.product.durationDays,
-        receiverName: application.user.name,
+        receiverName: application.user?.name ?? '탈퇴한 회원',
       },
     }
   })

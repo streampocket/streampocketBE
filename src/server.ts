@@ -12,6 +12,7 @@ import { STORES } from './constants/stores'
 import { runZqbgGiftStatusPolling } from './services/zqbgPollingService'
 import { generateWeeklySettlement } from './services/settlementService'
 import { expireOldParties } from './services/own/ownProductService'
+import { purgeWithdrawnUsers } from './services/own/userWithdrawalService'
 import { sendDailySalesReport } from './services/dailySalesReportService'
 import { runAutoExtendCheck } from './services/steamOrderService'
 import { refreshUsdKrwRate } from './services/gcoin/exchangeRateService'
@@ -149,6 +150,27 @@ app.listen(PORT, () => {
   }, 60_000)
 
   console.log('파티원 만료 스케줄러 시작: 매일 00:00')
+
+  // 탈퇴 회원 완전 삭제 스케줄러 (매일 00:00 KST) — 보관 30일 경과 회원 하드 삭제
+  let lastPurgeDate = ''
+
+  setInterval(() => {
+    const now = new Date()
+    const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000)
+    const today = kst.toISOString().slice(0, 10)
+    const hour = kst.getUTCHours()
+    const minute = kst.getUTCMinutes()
+
+    if (hour === 0 && minute === 0 && lastPurgeDate !== today) {
+      lastPurgeDate = today
+      console.log('[USER_PURGE] 탈퇴 회원 완전 삭제 실행')
+      purgeWithdrawnUsers().catch((err) => {
+        console.error('[USER_PURGE] 탈퇴 회원 완전 삭제 실패', err)
+      })
+    }
+  }, 60_000)
+
+  console.log('탈퇴 회원 완전 삭제 스케줄러 시작: 매일 00:00')
 
   // 일일 종합 리포트 스케줄러 (매일 23:59 KST)
   let lastSalesReportDate = ''

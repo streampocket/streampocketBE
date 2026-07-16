@@ -20,6 +20,7 @@ import {
 } from '../../repositories/own/partyApplicationRepository'
 import { sendDiscordAlert } from '../../lib/discord'
 import { PARTY_TYPE_LABEL } from '../../constants/party'
+import { WITHDRAWN_USER_DISPLAY } from './userWithdrawalService'
 import {
   calculateCurrentPrice,
   calculatePartyExpiresAt,
@@ -187,7 +188,15 @@ export async function adminGetOwnProductDetailWithApplications(id: string) {
   if (!product) {
     throw Object.assign(new Error('파티를 찾을 수 없습니다.'), { statusCode: 404 })
   }
-  return enrichWithPricing(stripCredentials(product))
+  // 완전 삭제(purge)된 회원의 신청은 익명 표시로 대체 — FE가 user.name/phone을 직접 참조
+  const withDisplayUsers = {
+    ...product,
+    applications: product.applications.map((app) => ({
+      ...app,
+      user: app.user ?? WITHDRAWN_USER_DISPLAY,
+    })),
+  }
+  return enrichWithPricing(stripCredentials(withDisplayUsers))
 }
 
 export async function adminUpdatePartyStatus(id: string, status: 'recruiting' | 'closed' | 'expired') {
@@ -210,7 +219,7 @@ export async function expireOldParties() {
     expiredAppCount = ids.length
 
     const details = expiredApps
-      .map((a) => `- [${PARTY_TYPE_LABEL[a.product.partyType]}] ${a.product.name}: ${a.user.name}`)
+      .map((a) => `- [${PARTY_TYPE_LABEL[a.product.partyType]}] ${a.product.name}: ${a.user?.name ?? '탈퇴한 회원'}`)
       .join('\n')
 
     sendDiscordAlert(

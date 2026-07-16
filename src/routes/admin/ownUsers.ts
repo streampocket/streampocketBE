@@ -2,6 +2,7 @@ import { Router } from 'express'
 import {
   adminGetUsersHandler,
   adminGetUserDetailHandler,
+  adminWithdrawUserHandler,
 } from '../../controllers/own/adminUserController'
 import { authMiddleware } from '../../middlewares/auth'
 import { asyncHandler } from '../../utils/asyncHandler'
@@ -12,3 +13,4 @@ adminOwnUsersRouter.use(authMiddleware)
 
 adminOwnUsersRouter.get('/', asyncHandler(adminGetUsersHandler))
 adminOwnUsersRouter.get('/:id', asyncHandler(adminGetUserDetailHandler))
+adminOwnUsersRouter.post('/:id/withdraw', asyncHandler(adminWithdrawUserHandler))

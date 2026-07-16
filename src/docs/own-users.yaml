@@ -29,4 +29,38 @@ paths:
                         type: string
                         enum: [local, kakao, google]
         '401':
+          description: 인증 필요 (탈퇴 처리된 계정 포함)
+
+  /own/users/me/withdraw:
+    post:
+      summary: 회원 탈퇴 (셀프)
+      description: >
+        소프트 삭제 후 30일 보관, 이후 크론이 완전 삭제.
+        탈퇴 시 email/phone이 익명화되어 같은 정보로 즉시 재가입 가능.
+        진행 중(confirmed+기간 유효) 또는 승인 대기중(pending) 파티 신청이 있으면 409.
+      tags: [OwnUsers]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  enum: [price, low_usage, no_party, dissatisfied, other]
+                  description: 탈퇴 사유 코드
+                reasonDetail:
+                  type: string
+                  maxLength: 300
+                  description: 기타(other) 선택 시 필수
+      responses:
+        '200':
+          description: 탈퇴 완료
+        '401':
           description: 인증 필요
+        '409':
+          description: 진행 중/대기중 파티가 있어 탈퇴 불가, 또는 이미 탈퇴 처리됨

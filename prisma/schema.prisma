@@ -370,12 +370,22 @@ model User {
   createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
 
+  // ── 회원 탈퇴 (소프트 삭제 → 30일 후 크론이 완전 삭제) ──
+  // 탈퇴 시 email/phone/providerId는 익명화해 유니크 제약을 비우고(즉시 재가입 허용),
+  // 원본 연락처는 original* 컬럼에 보관해 관리자만 조회한다. 30일 후 행 전체 삭제.
+  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz(6)
+  withdrawalReason String?   @map("withdrawal_reason") @db.VarChar(500)
+  withdrawnByAdmin Boolean   @default(false) @map("withdrawn_by_admin")
+  originalEmail    String?   @map("original_email") @db.VarChar(320)
+  originalPhone    String?   @map("original_phone") @db.VarChar(20)
+
   termsAgreements   TermsAgreement[]
   partyApplications PartyApplication[]
   ownReviews        OwnReview[]
   communityPosts    CommunityPost[]
 
   @@unique([provider, providerId])
+  @@index([deletedAt])
   @@map("users")
 }
 
@@ -474,7 +484,8 @@ model OwnProduct {
 model PartyApplication {
   id          String                 @id @default(uuid()) @db.Uuid
   productId   String                 @map("product_id") @db.Uuid
-  userId      String                 @map("user_id") @db.Uuid
+  // 탈퇴 회원 완전 삭제 시 신청 내역은 익명(userId null)으로 보존 — 리뷰(Cascade)·파티 정합성 유지
+  userId      String?                @map("user_id") @db.Uuid
   price       Int
   fee         Int
   totalAmount Int                    @map("total_amount")
@@ -485,7 +496,7 @@ model PartyApplication {
   updatedAt   DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   product      OwnProduct    @relation(fields: [productId], references: [id])
-  user         User          @relation(fields: [userId], references: [id])
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
   review       OwnReview?
   deliveryLogs DeliveryLog[]
 
@@ -499,7 +510,8 @@ model OwnReview {
   id            String   @id @default(uuid()) @db.Uuid
   applicationId String   @unique @map("application_id") @db.Uuid
   productId     String   @map("product_id") @db.Uuid
-  userId        String   @map("user_id") @db.Uuid
+  // 탈퇴 회원 완전 삭제 시 리뷰는 익명(userId null)으로 보존 — 화면에는 "탈퇴한 회원" 표시
+  userId        String?  @map("user_id") @db.Uuid
   content       String   @db.Text
   rating        Int
   imageUrl      String?  @map("image_url") @db.VarChar(500)
@@ -508,7 +520,7 @@ model OwnReview {
 
   application PartyApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   product     OwnProduct       @relation(fields: [productId], references: [id])
-  user        User             @relation(fields: [userId], references: [id])
+  user        User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([productId, createdAt])
   @@index([userId, createdAt])

@@ -15,6 +15,12 @@ import {
   deleteReviewImage,
   generateReviewImagePresignedUrl,
 } from '../../lib/s3'
+import { WITHDRAWN_USER_DISPLAY } from './userWithdrawalService'
+
+// 완전 삭제(purge)된 회원의 리뷰는 익명 표시로 대체 — FE가 user.name을 직접 참조
+function withDisplayUser<T extends { user: object | null }>(review: T) {
+  return { ...review, user: review.user ?? WITHDRAWN_USER_DISPLAY }
+}
 
 type ListInput = {
   productId?: string
@@ -28,7 +34,7 @@ export async function listReviews(input: ListInput) {
   const { items, total } = await findReviewsForPublic(input)
   return {
     data: {
-      items,
+      items: items.map(withDisplayUser),
       total,
       page: input.page,
       pageSize: input.pageSize,
@@ -42,7 +48,7 @@ export async function getReview(id: string) {
   if (!review) {
     throw Object.assign(new Error('리뷰를 찾을 수 없습니다.'), { statusCode: 404 })
   }
-  return { data: review }
+  return { data: withDisplayUser(review) }
 }
 
 export async function getReviewableApplications(userId: string) {
@@ -162,7 +168,7 @@ export async function adminListReviews(input: AdminListInput) {
   const { items, total } = await findReviewsForAdmin(input)
   return {
     data: {
-      items,
+      items: items.map(withDisplayUser),
       total,
       page: input.page,
       pageSize: input.pageSize,

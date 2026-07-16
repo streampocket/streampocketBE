@@ -56,6 +56,26 @@ export function findApplicationsByUserId(userId: string) {
   })
 }
 
+// 회원 탈퇴 차단 대상 신청 조회 — 승인 대기중(pending) 또는 진행 중(confirmed + 기간 유효)
+export function findWithdrawalBlockingApplication(userId: string) {
+  const now = new Date()
+  return prisma.partyApplication.findFirst({
+    where: {
+      userId,
+      OR: [
+        { status: 'pending' },
+        { status: 'confirmed', expiresAt: null },
+        { status: 'confirmed', expiresAt: { gt: now } },
+      ],
+    },
+    select: {
+      status: true,
+      expiresAt: true,
+      product: { select: { name: true } },
+    },
+  })
+}
+
 export function findExpiredApplications() {
   return prisma.partyApplication.findMany({
     where: {

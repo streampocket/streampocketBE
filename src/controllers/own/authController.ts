@@ -106,6 +106,13 @@ export async function refreshHandler(req: Request, res: Response): Promise<void>
 
   try {
     const payload = verifyRefreshToken(token)
+    // 탈퇴(소프트 삭제)·완전 삭제된 계정은 refresh 재발급 차단 — 잔여 refresh cookie(7일)로 갱신되는 것 방지
+    const user = await findUserById(payload.id)
+    if (!user || user.deletedAt) {
+      clearRefreshCookie(res)
+      res.status(401).json({ message: '탈퇴 처리된 계정입니다.' })
+      return
+    }
     const accessToken = signAccessToken({ id: payload.id, email: payload.email })
     res.json({ data: { token: accessToken } })
   } catch {

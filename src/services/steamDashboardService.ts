@@ -1,6 +1,7 @@
 import { Prisma, Store } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { NAVER_FEE_RATE } from '../constants/fees'
+import { findMemoDatesInRange } from '../repositories/dailyMemoRepository'
 import { sumExpensesByCategory } from '../repositories/expenseRepository'
 import { sumManualRevenue } from '../repositories/manualRevenueRepository'
 
@@ -215,66 +216,109 @@ export async function getDashboardStats(period: Period = 'today', store?: Store)
   }
 }
 
-export async function getRevenueChart(days: number, store?: Store) {
-  const startDate = new Date()
-  startDate.setDate(startDate.getDate() - days)
-  startDate.setHours(0, 0, 0, 0)
+export type RevenueCalendarItem = {
+  date: string
+  totalRevenue: number
+  netProfit: number
+  hasMemo: boolean
+}
 
-  const revenueByDay = await prisma.$queryRaw<
-    Array<{ date: Date; total_revenue: bigint }>
-  >`
-    SELECT
-      DATE_TRUNC('day', paid_at) AS date,
-      COALESCE(SUM(payment_amount), 0) AS total_revenue
-    FROM steam_order_items
-    WHERE source = 'naver'
-      AND returned_at IS NULL
-      AND paid_at >= ${startDate}
-      ${storeSql(store)}
-    GROUP BY DATE_TRUNC('day', paid_at)
-    ORDER BY date
-  `
+// 월 캘린더용 일별 매출/순수익 — 계산 공식은 getRevenueSummary와 동일:
+//   totalRevenue = 네이버 매출 + 수동매출 + 수동/파티/배그 주문 순수익
+//   netProfit    = 네이버 정산금(매출×(1−6.63%)) + 수동매출 + 수동/파티/배그 주문 순수익 − 비용
+// 일자 경계는 전부 KST 기준 (paid_at/expenses.date는 timestamptz라 AT TIME ZONE 변환 필수)
+export async function getRevenueCalendar(
+  yearMonth: string,
+  store?: Store,
+): Promise<RevenueCalendarItem[]> {
+  const [yearStr, monthStr] = yearMonth.split('-')
+  const year = Number(yearStr)
+  const month = Number(monthStr)
+  // Date.UTC(year, month, 0) = 다음 달 0일 = 해당 월 말일 (month는 1부터)
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate()
+  const lastDayStr = `${yearMonth}-${String(daysInMonth).padStart(2, '0')}`
 
-  const expenseByDay = await prisma.$queryRaw<
-    Array<{ date: Date; total_expense: bigint }>
-  >`
-    SELECT
-      DATE_TRUNC('day', date) AS date,
-      COALESCE(SUM(amount), 0) AS total_expense
-    FROM expenses
-    WHERE date >= ${startDate}
-      ${storeSql(store)}
-    GROUP BY DATE_TRUNC('day', date)
-  `
+  const startDate = kstMidnight(year, month, 1)
+  const endDate = new Date(`${lastDayStr}T23:59:59.999+09:00`)
 
-  const expenseMap = new Map<string, number>()
-  for (const row of expenseByDay) {
-    const key = new Date(row.date).toISOString().slice(0, 10)
-    expenseMap.set(key, Number(row.total_expense))
+  const [naverByDay, orderProfitByDay, manualRevenueByDay, expenseByDay, memoDates] =
+    await Promise.all([
+      prisma.$queryRaw<Array<{ day: string; total: bigint }>>`
+        SELECT
+          to_char(paid_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD') AS day,
+          COALESCE(SUM(payment_amount), 0)::bigint AS total
+        FROM steam_order_items
+        WHERE source = 'naver'
+          AND returned_at IS NULL
+          AND paid_at >= ${startDate}
+          AND paid_at <= ${endDate}
+          ${storeSql(store)}
+        GROUP BY 1
+      `,
+      // 수동/파티/배그 주문 순수익 — getRevenueSummary와 동일 조건 (반품 제외)
+      prisma.$queryRaw<Array<{ day: string; total: bigint }>>`
+        SELECT
+          to_char(paid_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD') AS day,
+          COALESCE(SUM(settlement_amount), 0)::bigint AS total
+        FROM steam_order_items
+        WHERE source IN ('manual', 'party', 'gcoin')
+          AND fulfillment_status <> 'returned'
+          AND paid_at >= ${startDate}
+          AND paid_at <= ${endDate}
+          ${storeSql(store)}
+        GROUP BY 1
+      `,
+      // manual_revenues.date는 DATE 컬럼이라 타임존 변환 없이 그대로 일자 사용
+      prisma.$queryRaw<Array<{ day: string; total: bigint }>>`
+        SELECT
+          to_char(date, 'YYYY-MM-DD') AS day,
+          COALESCE(SUM(amount), 0)::bigint AS total
+        FROM manual_revenues
+        WHERE date >= ${startDate}
+          AND date <= ${endDate}
+          ${storeSql(store)}
+        GROUP BY 1
+      `,
+      prisma.$queryRaw<Array<{ day: string; total: bigint }>>`
+        SELECT
+          to_char(date AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD') AS day,
+          COALESCE(SUM(amount), 0)::bigint AS total
+        FROM expenses
+        WHERE date >= ${startDate}
+          AND date <= ${endDate}
+          ${storeSql(store)}
+        GROUP BY 1
+      `,
+      findMemoDatesInRange(`${yearMonth}-01`, lastDayStr),
+    ])
+
+  const toMap = (rows: Array<{ day: string; total: bigint }>): Map<string, number> => {
+    const map = new Map<string, number>()
+    for (const row of rows) map.set(row.day, Number(row.total))
+    return map
   }
 
-  const revenueMap = new Map<string, number>()
-  for (const row of revenueByDay) {
-    const key = new Date(row.date).toISOString().slice(0, 10)
-    revenueMap.set(key, Number(row.total_revenue))
-  }
+  const naverMap = toMap(naverByDay)
+  const orderProfitMap = toMap(orderProfitByDay)
+  const manualRevenueMap = toMap(manualRevenueByDay)
+  const expenseMap = toMap(expenseByDay)
+  const memoSet = new Set(memoDates)
 
-  const result: Array<{ date: string; totalRevenue: number; netProfit: number }> = []
-  const current = new Date(startDate)
-  const now = new Date()
-
-  while (current <= now) {
-    const key = current.toISOString().slice(0, 10)
-    const dayRevenue = revenueMap.get(key) ?? 0
+  const result: RevenueCalendarItem[] = []
+  for (let day = 1; day <= daysInMonth; day++) {
+    const key = `${yearMonth}-${String(day).padStart(2, '0')}`
+    const naverRevenue = naverMap.get(key) ?? 0
+    const orderProfit = orderProfitMap.get(key) ?? 0
+    const manualRevenue = manualRevenueMap.get(key) ?? 0
     const expense = expenseMap.get(key) ?? 0
-    // 정산금 = 가능매출 - 6.63% 수수료 → 순이익 = 정산금 - 비용
-    const daySettlement = dayRevenue - Math.round(dayRevenue * NAVER_FEE_RATE)
+    const naverSettlement = naverRevenue - Math.round(naverRevenue * NAVER_FEE_RATE)
+
     result.push({
       date: key,
-      totalRevenue: dayRevenue,
-      netProfit: daySettlement - expense,
+      totalRevenue: naverRevenue + manualRevenue + orderProfit,
+      netProfit: naverSettlement + manualRevenue + orderProfit - expense,
+      hasMemo: memoSet.has(key),
     })
-    current.setDate(current.getDate() + 1)
   }
 
   return result

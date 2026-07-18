@@ -1,7 +1,9 @@
 import { Router } from 'express'
 import {
   getDashboardStatsHandler,
-  getRevenueChartHandler,
+  getRevenueCalendarHandler,
+  getDailyReportHandler,
+  saveDailyMemoHandler,
   getDashboardExtrasHandler,
 } from '../../controllers/steamDashboardController'
 import { authMiddleware } from '../../middlewares/auth'
@@ -12,5 +14,7 @@ export const adminDashboardRouter = Router()
 adminDashboardRouter.use(authMiddleware)
 
 adminDashboardRouter.get('/stats', asyncHandler(getDashboardStatsHandler))
-adminDashboardRouter.get('/revenue-chart', asyncHandler(getRevenueChartHandler))
+adminDashboardRouter.get('/revenue-calendar', asyncHandler(getRevenueCalendarHandler))
+adminDashboardRouter.get('/daily-report', asyncHandler(getDailyReportHandler))
+adminDashboardRouter.put('/daily-memo', asyncHandler(saveDailyMemoHandler))
 adminDashboardRouter.get('/extras', asyncHandler(getDashboardExtrasHandler))

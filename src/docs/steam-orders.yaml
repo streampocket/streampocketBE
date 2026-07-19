@@ -403,3 +403,84 @@ paths:
           description: 수신 전화번호 없음 또는 이미 발송한 주문
         '404':
           description: 주문 없음
+
+  /steam/admin/orders/{id}/party-otp:
+    get:
+      summary: 파티 주문 OTP 정보 조회
+      description: >-
+        파티 주문(source=party)에 연결된 신청의 OTP 상태를 조회한다.
+        연결 없으면 linked=false (기능 도입 전 주문). 시크릿 원문/암호문은 절대 응답에 포함하지 않는다.
+      tags: [SteamOrders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: linked / secretRegistered / secretUpdatedAt / issueCount / maxIssues / logs
+        '400':
+          description: 파티 주문 아님
+        '404':
+          description: 주문 없음
+
+  /steam/admin/orders/{id}/party-otp/secret:
+    post:
+      summary: 파티 OTP 시크릿키 등록/재등록
+      description: >-
+        TOTP 시크릿(Base32)을 AES-256-GCM 암호화하여 저장한다. 재등록해도 발급 횟수는 유지된다.
+      tags: [SteamOrders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [secret]
+              properties:
+                secret:
+                  type: string
+                  description: TOTP 시크릿키 (Base32, 공백 허용)
+      responses:
+        '200':
+          description: 등록 완료
+        '400':
+          description: 파티 주문 아님 또는 Base32 형식 오류
+        '404':
+          description: 주문 없음
+        '409':
+          description: 신청 미연결 주문
+
+  /steam/admin/orders/{id}/party-otp/reset:
+    post:
+      summary: 파티 OTP 발급 횟수 초기화
+      description: 구매자의 발급 횟수를 0으로 초기화한다 (다시 3회 부여). 발급 로그는 보존된다.
+      tags: [SteamOrders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 초기화 완료
+        '400':
+          description: 파티 주문 아님
+        '404':
+          description: 주문 없음
+        '409':
+          description: 신청 미연결 또는 시크릿 미등록

@@ -22,6 +22,11 @@ import {
   submitGuardCodeHandler,
   pollGuardHandler,
 } from '../../controllers/steamFriendLinkController'
+import {
+  adminGetPartyOtpInfoHandler,
+  adminSetPartyOtpSecretHandler,
+  adminResetPartyOtpCountHandler,
+} from '../../controllers/own/partyOtpController'
 import { authMiddleware } from '../../middlewares/auth'
 import { asyncHandler } from '../../utils/asyncHandler'
 
@@ -54,3 +59,6 @@ adminOrdersRouter.post(
   '/:id/order-status-alimtalk',
   asyncHandler(sendOrderStatusAlimtalkHandler),
 )
+adminOrdersRouter.get('/:id/party-otp', asyncHandler(adminGetPartyOtpInfoHandler))
+adminOrdersRouter.post('/:id/party-otp/secret', asyncHandler(adminSetPartyOtpSecretHandler))
+adminOrdersRouter.post('/:id/party-otp/reset', asyncHandler(adminResetPartyOtpCountHandler))

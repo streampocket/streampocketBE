@@ -210,12 +210,16 @@ model SteamOrderItem {
   autoExtendCount           Int                 @default(0) @map("auto_extend_count")
   // 네이버 발송처리(dispatch) 완료 시각 — null이면 미발송(진행중 전환/완료 처리 시점에 dispatch 수행)
   naverDispatchedAt         DateTime?           @map("naver_dispatched_at") @db.Timestamptz(6)
+  // 파티 승인 자동 생성 주문 → 원본 파티 신청 연결 (기능 도입 전 주문은 null).
+  // 재신청→재승인 시 같은 신청에 주문이 여러 개 생길 수 있어 unique 아님
+  partyApplicationId        String?             @map("party_application_id") @db.Uuid
   completedAt               DateTime?           @map("completed_at") @db.Timestamptz(6)
   createdAt                 DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                 DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
   product                   SteamProduct?       @relation(fields: [productId], references: [id], onDelete: SetNull)
   game                      SteamGame?          @relation(fields: [gameId], references: [id], onDelete: SetNull)
   account                   SteamAccount?       @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  partyApplication          PartyApplication?   @relation(fields: [partyApplicationId], references: [id], onDelete: SetNull)
   deliveryLogs              DeliveryLog[]
   registrations             SteamRegistration[]
   expense                   Expense?
@@ -224,6 +228,7 @@ model SteamOrderItem {
   @@index([naverOrderId])
   @@index([source, fulfillmentStatus, createdAt])
   @@index([store, fulfillmentStatus, createdAt])
+  @@index([partyApplicationId])
   @@map("steam_order_items")
 }
 
@@ -506,15 +511,46 @@ model PartyApplication {
   createdAt   DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  product      OwnProduct    @relation(fields: [productId], references: [id])
-  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
-  review       OwnReview?
-  deliveryLogs DeliveryLog[]
+  product       OwnProduct          @relation(fields: [productId], references: [id])
+  user          User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  review        OwnReview?
+  deliveryLogs  DeliveryLog[]
+  orderItems    SteamOrderItem[]
+  otpCredential PartyOtpCredential?
+  otpIssueLogs  PartyOtpIssueLog[]
 
   @@unique([productId, userId])
   @@index([userId, createdAt])
   @@index([status, expiresAt])
   @@map("party_applications")
+}
+
+// 파티 OTP 시크릿 — PartyApplication과 분리된 1:1 테이블.
+// 분리 이유: PartyApplication은 include-all로 유저 응답에 실리는 경로가 많아, 같은 모델에 두면 암호문 유출 위험.
+// secretEnc는 AES-256-GCM 암호문(lib/crypto.ts) — 어떤 API 응답에도 포함 금지. 행 존재 = 시크릿 등록됨
+model PartyOtpCredential {
+  id            String   @id @default(uuid()) @db.Uuid
+  applicationId String   @unique @map("application_id") @db.Uuid
+  secretEnc     String   @map("secret_enc") @db.Text
+  issueCount    Int      @default(0) @map("issue_count")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  application PartyApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@map("party_otp_credentials")
+}
+
+// 파티 OTP 발급 로그 — 발급·재발급 모두 1건씩 기록(모든 발급이 횟수 차감). 관리자 초기화 후에도 이력 보존
+model PartyOtpIssueLog {
+  id            String   @id @default(uuid()) @db.Uuid
+  applicationId String   @map("application_id") @db.Uuid
+  issuedAt      DateTime @default(now()) @map("issued_at") @db.Timestamptz(6)
+
+  application PartyApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId, issuedAt])
+  @@map("party_otp_issue_logs")
 }
 
 model OwnReview {

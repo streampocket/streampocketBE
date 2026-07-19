@@ -7,6 +7,33 @@ paths:
         - bearerAuth: []
       responses:
         '200':
-          description: 신청 목록 (파티 정보 포함)
+          description: 신청 목록 (파티 정보 + otpRegistered/otpIssueCount 포함)
         '401':
           description: 인증 필요
+  /own/applications/{id}/otp:
+    post:
+      summary: 파티 OTP 발급/재발급 (TOTP 6자리)
+      description: |
+        승인 완료(confirmed) + 이용 기간 중 + 시크릿 등록된 신청만 발급 가능.
+        발급·재발급 모두 횟수 1회 차감(합산 최대 3회) + 로그 기록. 코드는 발급당 1개(교체 없음).
+        서버가 클릭 시점 기준 앞으로 30초를 가장 넓게 커버하는 창의 코드를 골라 발급하며, 카운트다운은 항상 30초부터 시작.
+        발급된 코드는 화면에서 10분간 표시 유지(viewExpiresAt). 시크릿은 응답에 포함되지 않는다.
+      tags: [OwnApplications]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: code / expiresIn / issueCount / remaining / viewExpiresAt
+        '401':
+          description: 인증 필요
+        '404':
+          description: 본인 신청 아님 또는 없음
+        '409':
+          description: 미승인 / 기간 아님 / 시크릿 미등록
+        '429':
+          description: 발급 횟수(3회) 소진

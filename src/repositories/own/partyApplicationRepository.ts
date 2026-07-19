@@ -51,6 +51,8 @@ export function findApplicationsByUserId(userId: string) {
           category: { select: { id: true, name: true } },
         },
       },
+      // 시크릿 암호문(secretEnc)은 절대 select 금지 — 유저 응답에 그대로 실리는 경로
+      otpCredential: { select: { issueCount: true } },
     },
     orderBy: { createdAt: 'desc' },
   })

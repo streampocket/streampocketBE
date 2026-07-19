@@ -75,6 +75,9 @@ export async function applyToParty(productId: string, userId: string) {
           expiresAt: null,
         },
       })
+      // 재신청 시 이전 사이클의 OTP 시크릿·소진 횟수가 새 사이클로 이월되지 않도록 삭제.
+      // 발급 로그(PartyOtpIssueLog)는 이력으로 보존한다.
+      await tx.partyOtpCredential.deleteMany({ where: { applicationId: prior.id } })
       return { applicationId: updated.id }
     }
 
@@ -313,6 +316,7 @@ export async function adminApproveApplication(applicationId: string) {
       product: refreshed,
       // 승인 성공 시 주문 자동 생성에 필요한 값(트랜잭션 밖에서 사용)
       orderInfo: {
+        applicationId: application.id,
         partyName: application.product.name,
         durationDays: application.product.durationDays,
         receiverName: application.user?.name ?? '탈퇴한 회원',
@@ -364,7 +368,13 @@ export async function adminRejectApplication(applicationId: string) {
 
 export async function getMyApplications(userId: string) {
   const applications = await findApplicationsByUserId(userId)
-  return { data: applications }
+  return {
+    data: applications.map(({ otpCredential, ...rest }) => ({
+      ...rest,
+      otpRegistered: otpCredential != null,
+      otpIssueCount: otpCredential?.issueCount ?? 0,
+    })),
+  }
 }
 
 export async function checkApplication(productId: string, userId: string) {

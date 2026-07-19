@@ -131,6 +131,7 @@ export async function createManualOrder(input: CreateManualOrderInput) {
 
 // 파티 승인 자동 주문 생성 입력 — 상품명은 "{파티명} ({N}일)" 형식으로 조합
 type CreatePartyOrderInput = {
+  applicationId: string
   partyName: string
   durationDays: number
   receiverName: string
@@ -147,6 +148,7 @@ export async function createPartyOrder(input: CreatePartyOrderInput) {
     netProfit: 0,
     fulfillmentStatus: 'completed',
     paidAt: new Date(),
+    partyApplicationId: input.applicationId,
   })
 
   await sendDiscordAlert(

@@ -37,6 +37,27 @@ paths:
             응답: data, total, page, pageSize, totalPages, counts(total/streampocket/pokemon_steam)
         '401':
           description: 인증 필요
+  /steam/admin/games/options:
+    get:
+      summary: 게임 옵션 목록 (드롭다운용, 비페이징)
+      description: |
+        계정관리 등록/필터 등 드롭다운에서 쓰는 경량 목록.
+        productTypes 쉼표 구분 필터 (예: NA,BG). 미지정 시 전체.
+      tags: [SteamGames]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: productTypes
+          description: 쉼표 구분 상품 타입 필터 (NA,AA,BG 조합)
+          schema:
+            type: string
+            example: NA,BG
+      responses:
+        '200':
+          description: data[] — id, name, productType (이름 오름차순)
+        '401':
+          description: 인증 필요
   /steam/admin/games/sync:
     post:
       summary: 네이버 상품 동기화 (스토어별 또는 전체)

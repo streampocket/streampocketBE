@@ -3,6 +3,7 @@ import { z } from 'zod'
 import {
   getGames,
   getGameStoreCounts,
+  getGameOptions,
   mergeListingToGame,
   mergeGameInto,
   splitListingToNewGame,
@@ -22,6 +23,15 @@ const listGamesQuerySchema = z.object({
 
 const syncQuerySchema = z.object({
   store: storeEnum.optional(),
+})
+
+// ?productTypes=NA,BG (쉼표 구분) — 미지정 시 전체
+const gameOptionsQuerySchema = z.object({
+  productTypes: z
+    .string()
+    .transform((value) => value.split(','))
+    .pipe(z.array(storeProductType).min(1))
+    .optional(),
 })
 
 const mergeSchema = z.object({
@@ -51,6 +61,13 @@ export async function getGamesHandler(req: Request, res: Response): Promise<void
     totalPages: games.totalPages,
     counts,
   })
+}
+
+// 드롭다운용 게임 옵션 목록 (비페이징)
+export async function getGameOptionsHandler(req: Request, res: Response): Promise<void> {
+  const { productTypes } = gameOptionsQuerySchema.parse(req.query)
+  const data = await getGameOptions(productTypes)
+  res.json({ data })
 }
 
 // 스토어별 또는 전체(?store 미지정) 동기화 — 전체는 스토어별 오류 격리.

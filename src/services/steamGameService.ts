@@ -6,6 +6,7 @@ import {
   createGame,
   deleteGame,
   updateGame as updateGameRepo,
+  listGameOptions,
 } from '../repositories/steamGameRepository'
 import {
   findListingById,
@@ -42,6 +43,11 @@ export async function getGames(input: GetGamesInput) {
 
 export async function getGameStoreCounts(search?: string) {
   return countGamesByStore(search)
+}
+
+// 드롭다운용 게임 옵션 목록 — 타입 필터(예: 계정관리는 NA·BG만)
+export async function getGameOptions(productTypes?: SteamProductType[]) {
+  return listGameOptions(productTypes)
 }
 
 // 게임 이름/타입 수정 — 백필 오파싱 타입 교정 등

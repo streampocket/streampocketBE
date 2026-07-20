@@ -711,3 +711,21 @@ model ExchangeRate {
   @@unique([baseCurrency, quoteCurrency])
   @@map("exchange_rates")
 }
+
+// 사이트 일별 고유 방문 — 사이트 × 브라우저(visitorId) × KST 날짜당 1행 (gcoin/ottall 공용)
+// visitorId는 클라이언트 localStorage의 익명 uuid, visitDate는 KST 벽시계 'YYYY-MM-DD' 문자열
+model SiteVisit {
+  id           String   @id @default(uuid()) @db.Uuid
+  site         String   @db.VarChar(10) // 'gcoin' | 'ottall' — 라우트 프리픽스에서 고정 (바디 신뢰 안 함)
+  visitorId    String   @map("visitor_id") @db.Uuid
+  visitDate    String   @map("visit_date") @db.VarChar(10)
+  source       String   @db.VarChar(30) // 유입 분류값 (utils/referrerSource.ts) — 규칙 진화 대비 enum 아님
+  referrerHost String?  @map("referrer_host") @db.VarChar(255)
+  referrer     String?  @db.VarChar(500) // 원본 보존 — '기타' 상세 표시·추후 재분류용
+  landingPath  String?  @map("landing_path") @db.VarChar(500)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([site, visitorId, visitDate]) // 하루 1회 백스톱 (createMany skipDuplicates)
+  @@index([site, visitDate, source]) // 일별 추이·소스별 집계 커버
+  @@map("site_visits")
+}

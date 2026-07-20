@@ -42,6 +42,9 @@ import { gcoinOrdersRouter } from './routes/gcoin/orders'
 import { adminGcoinProductsRouter } from './routes/admin/gcoinProducts'
 import { adminGcoinOrdersRouter } from './routes/admin/gcoinOrders'
 import { adminGcoinExchangeRateRouter } from './routes/admin/gcoinExchangeRate'
+import { gcoinVisitsRouter } from './routes/gcoin/visits'
+import { ownVisitsRouter } from './routes/own/visits'
+import { adminVisitsRouter } from './routes/admin/visits'
 
 const app = express()
 
@@ -107,6 +110,7 @@ app.use('/own/admin/applications', adminOwnApplicationsRouter)
 app.use('/own/admin/users', adminOwnUsersRouter)
 app.use('/own/admin/reviews', adminOwnReviewsRouter)
 app.use('/own/admin/rule-templates', adminOwnRuleTemplatesRouter)
+app.use('/own/visits', ownVisitsRouter)
 
 // ───────────────────────── Community ─────────────────────────
 app.use('/community', communityPostsRouter)
@@ -119,6 +123,10 @@ app.use('/gcoin/orders', gcoinOrdersRouter)
 app.use('/gcoin/admin/products', adminGcoinProductsRouter)
 app.use('/gcoin/admin/orders', adminGcoinOrdersRouter)
 app.use('/gcoin/admin/exchange-rate', adminGcoinExchangeRateRouter)
+app.use('/gcoin/visits', gcoinVisitsRouter)
+
+// ───────────────────────── 방문자 통계 (관리자 공통 — gcoin/ottall) ─────────────────────────
+app.use('/admin/visits', adminVisitsRouter)
 
 // ───────────────────────── Health ─────────────────────────
 app.get('/health', (_req, res) => {

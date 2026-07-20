@@ -1,0 +1,80 @@
+paths:
+  /gcoin/visits:
+    post:
+      summary: GCOIN 사이트 방문 기록 (공개)
+      description: |
+        방문자 브라우저가 하루 1회 호출. (site, visitorId, KST 날짜) 기준 멱등 —
+        중복·봇 UA는 조용히 스킵되며 항상 204를 반환한다. 유입 분류는 서버에서 수행.
+      tags: [SiteVisits]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [visitorId]
+              properties:
+                visitorId:
+                  type: string
+                  format: uuid
+                  description: 클라이언트 localStorage의 익명 uuid
+                referrer:
+                  type: string
+                  maxLength: 500
+                  nullable: true
+                utmSource:
+                  type: string
+                  maxLength: 100
+                  nullable: true
+                landingPath:
+                  type: string
+                  maxLength: 500
+                  nullable: true
+      responses:
+        '204':
+          description: 기록 완료 (중복/봇 스킵 포함)
+        '400':
+          description: 검증 실패
+  /own/visits:
+    post:
+      summary: OTTALL 사이트 방문 기록 (공개)
+      description: /gcoin/visits 와 동일 바디 — site만 라우트로 구분(ottall)
+      tags: [SiteVisits]
+      requestBody:
+        $ref: '#/paths/~1gcoin~1visits/post/requestBody'
+      responses:
+        '204':
+          description: 기록 완료
+        '400':
+          description: 검증 실패
+  /admin/visits:
+    get:
+      summary: 방문자 통계 조회 (관리자)
+      tags: [SiteVisits]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: site
+          schema:
+            type: string
+            enum: [gcoin, ottall]
+            default: ottall
+        - in: query
+          name: from
+          description: 'YYYY-MM-DD (KST, 기본 최근 30일 시작)'
+          schema:
+            type: string
+        - in: query
+          name: to
+          description: 'YYYY-MM-DD (KST, 기본 오늘)'
+          schema:
+            type: string
+      responses:
+        '200':
+          description: |
+            data — site, range{from,to}, totalVisits, todayVisits(항상 KST 오늘),
+            daily[](방문 없는 날짜 0 채움), sources[](source·count),
+            otherHosts[](source=other의 host별 상위 20)
+        '401':
+          description: 인증 필요

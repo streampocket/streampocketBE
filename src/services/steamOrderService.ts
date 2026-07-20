@@ -16,6 +16,7 @@ import {
 } from '../repositories/steamOrderRepository'
 import { findExpenseBySteamOrderItemId } from '../repositories/expenseRepository'
 import { findAccountById, markAccountAsSent } from '../repositories/steamAccountRepository'
+import { findGameById } from '../repositories/steamGameRepository'
 import {
   isAlimtalkEnabled,
   sendOrderAlimtalk,
@@ -570,9 +571,14 @@ export async function manualCompleteOrder(id: string): Promise<void> {
 
   // 대기/진행중 주문 완료 시 게임선물 완료 안내 알림톡 발송 (구매확정 주문은 제외).
   // 발송 실패는 완료 처리를 막지 않는다 — 실패 사유는 DeliveryLog에 기록된다.
+  // NA 주문은 완료 알림톡 미발송 (AA와 동일 동작) — 계정 알림톡으로 이미 안내됨.
+  // 타입 해석은 주문 처리 경로와 동일: 게임 productType 우선, 상품명 판별 폴백.
+  const game = order.gameId ? await findGameById(order.gameId) : null
+  const productType = game?.productType ?? detectProductType(order.productName)
   const phone = order.receiverPhoneNumber
   if (
     phone &&
+    productType !== 'NA' &&
     (order.fulfillmentStatus === 'pending' || order.fulfillmentStatus === 'in_progress')
   ) {
     const recipientLabel = `${order.receiverName ?? '미확인'} (${phone})`

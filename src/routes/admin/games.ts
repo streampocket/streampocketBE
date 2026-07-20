@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import {
   getGamesHandler,
+  getGameOptionsHandler,
   syncGamesHandler,
   mergeListingHandler,
   mergeGameHandler,
@@ -15,6 +16,7 @@ export const adminGamesRouter = Router()
 adminGamesRouter.use(authMiddleware)
 
 adminGamesRouter.get('/', asyncHandler(getGamesHandler))
+adminGamesRouter.get('/options', asyncHandler(getGameOptionsHandler))
 adminGamesRouter.post('/sync', asyncHandler(syncGamesHandler))
 adminGamesRouter.patch('/listings/:id/merge', asyncHandler(mergeListingHandler))
 adminGamesRouter.patch('/listings/:id/split', asyncHandler(splitListingHandler))

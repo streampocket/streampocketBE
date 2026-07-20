@@ -7,7 +7,13 @@ paths:
         - bearerAuth: []
       parameters:
         - in: query
+          name: gameId
+          description: 게임 필터 — 과거 계정(productId만 기록)도 OR 폴백으로 함께 조회
+          schema:
+            type: string
+        - in: query
           name: productId
+          description: 레거시 상품 필터 (과도기 호환)
           schema:
             type: string
         - in: query
@@ -41,10 +47,14 @@ paths:
           application/json:
             schema:
               type: object
-              required: [productId, accounts]
+              required: [accounts]
               properties:
+                gameId:
+                  type: string
+                  description: 게임 id (NA·BG만 등록 가능 — AA는 400)
                 productId:
                   type: string
+                  description: 레거시 상품 id (과도기 호환 — gameId 미지정 시 게임 id로 해석)
                 accounts:
                   type: array
                   items:
@@ -77,8 +87,10 @@ paths:
       responses:
         '201':
           description: 등록 완료 (등록된 계정 수 반환)
+        '400':
+          description: gameId 누락 또는 AA 상품
         '404':
-          description: 상품 없음
+          description: 게임 없음
 
   /steam/admin/accounts/{id}/disable:
     patch:

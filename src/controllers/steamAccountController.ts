@@ -11,7 +11,9 @@ import {
 import { buildAccountExcelBuffer } from '../utils/excel'
 
 const bulkCreateSchema = z.object({
-  productId: z.string().uuid(),
+  gameId: z.string().uuid().optional(),
+  // 과도기 호환: 구버전 FE가 보내는 레거시 상품 id — 스트림포켓 게임 id와 동일 값
+  productId: z.string().uuid().optional(),
   accounts: z
     .array(
       z.object({
@@ -29,6 +31,7 @@ const bulkCreateSchema = z.object({
 })
 
 const listQuerySchema = z.object({
+  gameId: z.string().uuid().optional(),
   productId: z.string().uuid().optional(),
   status: z.enum(['available', 'reserved', 'sent', 'disabled', 'manual']).optional(),
   page: z.coerce.number().int().min(1).default(1),
@@ -48,6 +51,7 @@ export async function getAccountsHandler(req: Request, res: Response): Promise<v
 }
 
 const exportAccountQuerySchema = z.object({
+  gameId: z.string().uuid().optional(),
   productId: z.string().uuid().optional(),
   status: z.enum(['available', 'reserved', 'sent', 'disabled', 'manual']).optional(),
 })
@@ -66,6 +70,7 @@ const updateAccountBodySchema = z.object({
 export async function exportAccountsHandler(req: Request, res: Response): Promise<void> {
   const query = exportAccountQuerySchema.parse(req.query)
   const accounts = await exportAccountsForExcel({
+    gameId: query.gameId,
     productId: query.productId,
     status: query.status,
   })
@@ -93,7 +98,12 @@ export async function exportAccountsHandler(req: Request, res: Response): Promis
 
 export async function bulkCreateAccountsHandler(req: Request, res: Response): Promise<void> {
   const body = bulkCreateSchema.parse(req.body)
-  const result = await bulkCreate(body)
+  // 스트림포켓 게임은 레거시 상품 id를 게임 id로 재사용하므로 productId도 게임 id로 해석 가능
+  const gameId = body.gameId ?? body.productId
+  if (!gameId) {
+    throw Object.assign(new Error('gameId가 필요합니다.'), { statusCode: 400 })
+  }
+  const result = await bulkCreate({ gameId, accounts: body.accounts })
   res.status(201).json({ data: result })
 }
 

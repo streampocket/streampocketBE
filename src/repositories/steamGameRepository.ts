@@ -20,6 +20,23 @@ type ListGamesParams = {
   pageSize: number
 }
 
+export type GameOption = {
+  id: string
+  name: string
+  productType: SteamProductType
+}
+
+// 드롭다운용 경량 목록 — 비페이징 (계정관리 등록/필터 등)
+export async function listGameOptions(
+  productTypes?: SteamProductType[],
+): Promise<GameOption[]> {
+  return prisma.steamGame.findMany({
+    where: productTypes ? { productType: { in: productTypes } } : {},
+    select: { id: true, name: true, productType: true },
+    orderBy: { name: 'asc' },
+  })
+}
+
 // 게임 매칭/스토어 점유 확인용 — 정규화 매칭은 서비스에서 in-memory 로 수행
 export async function findGamesForMatching(): Promise<GameForMatching[]> {
   return prisma.steamGame.findMany({

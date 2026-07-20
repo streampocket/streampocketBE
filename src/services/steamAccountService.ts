@@ -4,15 +4,16 @@ import {
   exportAccounts,
   bulkCreateAccounts,
   disableAccount as disableAccountRepo,
-  countAvailableAccounts,
+  countAvailableAccountsByGame,
   findAccountById,
   updateAccount as updateAccountRepo,
   deleteAccount as deleteAccountRepo,
 } from '../repositories/steamAccountRepository'
 import { findProductById } from '../repositories/steamProductRepository'
-import { findGameIdByProductId } from '../repositories/storeListingRepository'
+import { findGameById } from '../repositories/steamGameRepository'
 
 type ListAccountsInput = {
+  gameId?: string
   productId?: string
   status?: AccountStatus
   page: number
@@ -20,12 +21,13 @@ type ListAccountsInput = {
 }
 
 type ExportAccountsInput = {
+  gameId?: string
   productId?: string
   status?: AccountStatus
 }
 
 type BulkCreateInput = {
-  productId: string
+  gameId: string
   accounts: {
     username: string
     password: string
@@ -58,14 +60,25 @@ export async function exportAccountsForExcel(input: ExportAccountsInput) {
 }
 
 export async function bulkCreate(input: BulkCreateInput) {
-  const product = await findProductById(input.productId)
-  if (!product) {
-    throw Object.assign(new Error('상품을 찾을 수 없습니다.'), { statusCode: 404 })
+  const game = await findGameById(input.gameId)
+  if (!game) {
+    throw Object.assign(new Error('게임을 찾을 수 없습니다.'), { statusCode: 404 })
   }
-  // game_id 동반 기록 — 신규 상품 페이지의 재고(게임 단위)에 잡히도록 리스팅 경유로 해석
-  const gameId = await findGameIdByProductId(input.productId)
-  const count = await bulkCreateAccounts(input.productId, input.accounts, product.name, gameId)
-  const available = await countAvailableAccounts(input.productId)
+  // 계정 재고 등록 대상은 NA·BG만 — AA는 계정 재고를 사용하지 않는다
+  if (game.productType === 'AA') {
+    throw Object.assign(new Error('AA 상품은 계정 재고를 사용하지 않습니다.'), {
+      statusCode: 400,
+    })
+  }
+  // 레거시 브리지: 스트림포켓 게임은 레거시 SteamProduct.id를 게임 id로 재사용하므로
+  // 동일 id의 레거시 상품이 있으면 productId도 함께 기록 (레거시 경로 조회 호환)
+  const legacyProduct = await findProductById(input.gameId)
+  const count = await bulkCreateAccounts(input.accounts, {
+    gameId: input.gameId,
+    productId: legacyProduct?.id ?? null,
+    productNameSnapshot: game.name,
+  })
+  const available = await countAvailableAccountsByGame(input.gameId)
   return { created: count, availableTotal: available }
 }
 

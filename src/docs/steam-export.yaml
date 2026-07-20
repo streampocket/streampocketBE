@@ -48,11 +48,17 @@ paths:
         - bearerAuth: []
       parameters:
         - in: query
+          name: gameId
+          schema:
+            type: string
+            format: uuid
+          description: 게임 ID 필터 — 과거 계정(productId만 기록)도 OR 폴백으로 포함
+        - in: query
           name: productId
           schema:
             type: string
             format: uuid
-          description: 상품 ID 필터
+          description: 레거시 상품 ID 필터 (과도기 호환)
         - in: query
           name: status
           schema:

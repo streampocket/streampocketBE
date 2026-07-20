@@ -2,10 +2,18 @@ import { prisma } from '../lib/prisma'
 import { AccountStatus, SteamAccount } from '@prisma/client'
 
 type ListAccountsInput = {
+  gameId?: string
   productId?: string
   status?: AccountStatus
   page: number
   pageSize: number
+}
+
+// 게임 필터 — 과거 계정(gameId null, productId만 기록) 호환:
+// 스트림포켓 게임은 레거시 SteamProduct.id를 게임 id로 재사용하므로(steamProductService.syncStoreListings 참고)
+// productId === gameId 인 행도 같은 게임의 재고다. OR 폴백으로 누락 없이 조회한다.
+function gameFilter(gameId?: string) {
+  return gameId ? { OR: [{ gameId }, { productId: gameId }] } : {}
 }
 
 export type AccountWithProductName = Omit<SteamAccount, never> & { productName: string | null }
@@ -16,6 +24,7 @@ type ListAccountsResult = {
 }
 
 type ExportAccountsInput = {
+  gameId?: string
   productId?: string
   status?: AccountStatus
 }
@@ -45,7 +54,6 @@ type BulkCreateAccountInput = {
   secondaryEmail?: string
   secondaryEmailPassword?: string
   secondaryEmailSiteUrl?: string
-  productNameSnapshot?: string
 }
 
 type UpdateAccountInput = {
@@ -61,6 +69,7 @@ type UpdateAccountInput = {
 
 export async function listAccounts(input: ListAccountsInput): Promise<ListAccountsResult> {
   const where = {
+    ...gameFilter(input.gameId),
     ...(input.productId ? { productId: input.productId } : {}),
     ...(input.status ? { status: input.status } : {}),
   }
@@ -70,19 +79,23 @@ export async function listAccounts(input: ListAccountsInput): Promise<ListAccoun
       orderBy: { createdAt: 'desc' },
       skip: (input.page - 1) * input.pageSize,
       take: input.pageSize,
-      include: { product: { select: { name: true } } },
+      include: {
+        product: { select: { name: true } },
+        game: { select: { name: true } },
+      },
     }),
     prisma.steamAccount.count({ where }),
   ])
-  const items = rawItems.map(({ product, ...account }) => ({
+  const items = rawItems.map(({ product, game, ...account }) => ({
     ...account,
-    productName: product?.name ?? account.productNameSnapshot ?? null,
+    productName: product?.name ?? game?.name ?? account.productNameSnapshot ?? null,
   }))
   return { items, total }
 }
 
 export async function exportAccounts(input: ExportAccountsInput): Promise<AccountExportItem[]> {
   const where = {
+    ...gameFilter(input.gameId),
     ...(input.productId ? { productId: input.productId } : {}),
     ...(input.status ? { status: input.status } : {}),
   }
@@ -91,6 +104,7 @@ export async function exportAccounts(input: ExportAccountsInput): Promise<Accoun
     orderBy: { createdAt: 'asc' },
     include: {
       product: { select: { name: true } },
+      game: { select: { name: true } },
       orderItems: {
         where: {
           fulfillmentStatus: { in: ['pending', 'in_progress', 'completed', 'purchase_decided'] },
@@ -114,7 +128,7 @@ export async function exportAccounts(input: ExportAccountsInput): Promise<Accoun
     status: r.status,
     createdAt: r.createdAt,
     sentAt: r.orderItems[0]?.updatedAt ?? null,
-    product: { name: r.product?.name ?? r.productNameSnapshot ?? null },
+    product: { name: r.product?.name ?? r.game?.name ?? r.productNameSnapshot ?? null },
   }))
 }
 
@@ -138,12 +152,13 @@ export async function countAvailableAccounts(productId: string): Promise<number>
 }
 
 // 게임 단위 재고 선점 — NA 재고는 게임(steam_games) 단위로 두 스토어가 공유. FIFO(등록순).
+// gameFilter의 OR 폴백으로 과거 계정(gameId null, productId만 기록)도 목록·카운트와 동일하게 소진된다.
 export async function reserveNextAvailableAccountByGame(
   gameId: string,
 ): Promise<SteamAccount | null> {
   return prisma.$transaction(async (tx) => {
     const account = await tx.steamAccount.findFirst({
-      where: { gameId, status: 'available' },
+      where: { ...gameFilter(gameId), status: 'available' },
       orderBy: { createdAt: 'asc' },
     })
     if (!account) return null
@@ -155,20 +170,18 @@ export async function reserveNextAvailableAccountByGame(
 }
 
 export async function countAvailableAccountsByGame(gameId: string): Promise<number> {
-  return prisma.steamAccount.count({ where: { gameId, status: 'available' } })
+  return prisma.steamAccount.count({ where: { ...gameFilter(gameId), status: 'available' } })
 }
 
 export async function bulkCreateAccounts(
-  productId: string,
   accounts: BulkCreateAccountInput[],
-  productName?: string,
-  gameId?: string | null,
+  meta: { gameId: string; productId: string | null; productNameSnapshot: string },
 ): Promise<number> {
   const result = await prisma.steamAccount.createMany({
     data: accounts.map(({ username, password, email, emailPassword, emailSiteUrl, secondaryEmail, secondaryEmailPassword, secondaryEmailSiteUrl }) => ({
-      productId,
-      gameId: gameId ?? null,
-      productNameSnapshot: productName ?? null,
+      productId: meta.productId,
+      gameId: meta.gameId,
+      productNameSnapshot: meta.productNameSnapshot,
       username,
       password,
       email,

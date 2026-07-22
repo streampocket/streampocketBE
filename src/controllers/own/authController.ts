@@ -1,5 +1,4 @@
 import { Request, Response } from 'express'
-import jwt from 'jsonwebtoken'
 import { z } from 'zod'
 import {
   signup,
@@ -10,17 +9,14 @@ import {
   setRefreshCookie,
   clearRefreshCookie,
 } from '../../services/own/userAuthService'
-import { sendCode, verifyCode, isPhoneVerified } from '../../services/own/phoneVerificationService'
+import {
+  resolveSocialLogin,
+  completeSocialSignup,
+} from '../../services/own/socialAuthService'
+import { sendCode, verifyCode } from '../../services/own/phoneVerificationService'
 import { getKakaoAuthUrl, getKakaoUserInfo } from '../../services/own/kakaoOAuthService'
 import { getGoogleAuthUrl, getGoogleUserInfo } from '../../services/own/googleOAuthService'
-import {
-  findUserByProvider,
-  findUserByEmail,
-  findUserById,
-  createUser,
-  updateUserPhone,
-} from '../../repositories/own/userRepository'
-import { createTermsAgreements } from '../../repositories/own/termsAgreementRepository'
+import { findUserById } from '../../repositories/own/userRepository'
 
 const passwordSchema = z
   .string()
@@ -130,12 +126,6 @@ export async function logoutHandler(_req: Request, res: Response): Promise<void>
 
 const feOrigin = (process.env.FE_ORIGIN ?? 'http://localhost:3000').split(',')[0].trim()
 
-type TempJwtPayload = {
-  id: string
-  email: string
-  temp: boolean
-}
-
 async function handleSocialCallback(
   provider: 'kakao' | 'google',
   providerId: string,
@@ -148,40 +138,16 @@ async function handleSocialCallback(
     return
   }
 
-  // 기존 소셜 유저 조회
-  let user = await findUserByProvider(provider, providerId)
+  // 연동 링크 매칭 → 로그인 / 미연동 → 전화인증 단계 (User 선생성 없음 — 유령 계정 방지)
+  const result = await resolveSocialLogin(provider, providerId, email, name)
 
-  if (user && user.phoneVerified) {
-    // 이미 가입 완료된 유저 → 정식 JWT + Refresh Cookie
-    const token = signAccessToken({ id: user.id, email: user.email, name: user.name })
-    const refreshToken = signRefreshToken({ id: user.id, email: user.email })
-    setRefreshCookie(res, refreshToken)
-    res.redirect(`${feOrigin}/auth/social/callback?token=${token}`)
+  if (result.kind === 'login') {
+    setRefreshCookie(res, result.refreshToken)
+    res.redirect(`${feOrigin}/auth/social/callback?token=${result.token}`)
     return
   }
 
-  if (!user) {
-    // 동일 이메일로 가입된 계정 확인
-    const existingByEmail = await findUserByEmail(email)
-    if (existingByEmail) {
-      res.redirect(`${feOrigin}/signin?error=email_exists`)
-      return
-    }
-
-    // 신규 소셜 유저 생성 (phone 임시값, phoneVerified=false)
-    user = await createUser({
-      email,
-      name: name ?? '사용자',
-      phone: `temp_${Date.now()}`,
-      phoneVerified: false,
-      provider,
-      providerId,
-    })
-  }
-
-  // 전화인증 미완료 → 임시 JWT (Refresh Token 발급 안 함)
-  const tempToken = signAccessToken({ id: user.id, email: user.email, temp: true })
-  res.redirect(`${feOrigin}/auth/social/phone?tempToken=${tempToken}`)
+  res.redirect(`${feOrigin}/auth/social/phone?tempToken=${result.tempToken}`)
 }
 
 export async function kakaoRedirectHandler(_req: Request, res: Response): Promise<void> {
@@ -238,44 +204,20 @@ const socialCompleteSchema = z.object({
 export async function socialCompleteHandler(req: Request, res: Response): Promise<void> {
   const body = socialCompleteSchema.parse(req.body)
 
-  const secret = process.env.JWT_USER_SECRET
-  if (!secret) {
-    res.status(500).json({ message: '서버 설정 오류' })
-    return
-  }
-
-  // 단언 사유: jwt.verify는 string | JwtPayload를 반환하나, sign 시 객체로 전달하므로 객체 보장
-  const payload = jwt.verify(body.tempToken, secret) as TempJwtPayload
-  if (!payload.temp) {
-    res.status(400).json({ message: '잘못된 토큰입니다.' })
-    return
-  }
-
-  const phoneOk = await isPhoneVerified(body.verificationId, body.phone)
-  if (!phoneOk) {
-    res.status(400).json({ message: '전화번호 인증이 완료되지 않았습니다.' })
-    return
-  }
-
-  await updateUserPhone({
-    id: payload.id,
+  const result = await completeSocialSignup({
+    tempToken: body.tempToken,
     phone: body.phone,
-    phoneVerified: true,
+    verificationId: body.verificationId,
   })
 
-  await createTermsAgreements(payload.id, ['service', 'privacy'])
-
-  const user = await findUserById(payload.id)
-  const userName = user?.name ?? '사용자'
-
-  const token = signAccessToken({ id: payload.id, email: payload.email, name: userName })
-  const refreshToken = signRefreshToken({ id: payload.id, email: payload.email })
-  setRefreshCookie(res, refreshToken)
+  setRefreshCookie(res, result.refreshToken)
 
   res.json({
     data: {
-      token,
-      user: { id: payload.id, email: payload.email, name: userName },
+      token: result.token,
+      user: { id: result.user.id, email: result.user.email, name: result.user.name },
+      linked: result.linked,
+      existingProvider: result.existingProvider,
     },
   })
 }

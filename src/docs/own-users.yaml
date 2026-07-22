@@ -28,6 +28,13 @@ paths:
                       provider:
                         type: string
                         enum: [local, kakao, google]
+                        description: 최초 가입 방식 (표시용)
+                      loginMethods:
+                        type: array
+                        items:
+                          type: string
+                          enum: [local, kakao, google]
+                        description: 사용 가능한 로그인 수단 목록 (password 보유 시 local + 연동 소셜)
         '401':
           description: 인증 필요 (탈퇴 처리된 계정 포함)
 

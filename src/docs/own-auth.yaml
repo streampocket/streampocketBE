@@ -38,11 +38,37 @@ paths:
                   description: 약관 동의 필수 (true만 허용)
       responses:
         '201':
-          description: 가입 성공 (JWT + Refresh Cookie 발급)
+          description: >
+            가입 성공 (JWT + Refresh Cookie 발급).
+            같은 번호의 소셜 계정이 있으면 그 계정에 이메일/비밀번호를 합치고 merged=true 반환 (계정 통합).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      token:
+                        type: string
+                      user:
+                        type: object
+                        properties:
+                          id: { type: string, format: uuid }
+                          email: { type: string }
+                          name: { type: string }
+                      merged:
+                        type: boolean
+                        description: 기존 소셜 계정과 통합 여부
+                      previousProvider:
+                        type: string
+                        nullable: true
+                        enum: [local, kakao, google, null]
+                        description: 통합된 기존 계정의 최초 가입 방식 (merged=true일 때)
         '400':
           description: 전화번호 인증 미완료
         '409':
-          description: 이메일 또는 전화번호 중복
+          description: 이메일 중복, 또는 이미 이메일로 가입된 전화번호 (password 보유 계정)
 
   /own/auth/login:
     post:
@@ -100,8 +126,6 @@ paths:
                         type: integer
                         description: 인증번호 유효시간 (초)
                         example: 180
-        '409':
-          description: 이미 등록된 전화번호
         '429':
           description: 재발송 쿨다운(60초) 또는 일일 한도(10회) 초과
 
@@ -214,9 +238,37 @@ paths:
                   enum: [true]
       responses:
         '200':
-          description: 가입 완료 (JWT + Refresh Cookie 발급)
+          description: >
+            가입/연결 완료 (JWT + Refresh Cookie 발급).
+            같은 번호의 기존 계정이 있으면 소셜 수단을 그 계정에 자동 연결하고 linked=true 반환 (계정 통합).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      token:
+                        type: string
+                      user:
+                        type: object
+                        properties:
+                          id: { type: string, format: uuid }
+                          email: { type: string }
+                          name: { type: string }
+                      linked:
+                        type: boolean
+                        description: 기존 계정에 연결 여부 (신규 가입이면 false)
+                      existingProvider:
+                        type: string
+                        nullable: true
+                        enum: [local, kakao, google, null]
+                        description: 연결된 기존 계정의 최초 가입 방식 (linked=true일 때)
         '400':
-          description: 잘못된 토큰 또는 전화번호 인증 미완료
+          description: 토큰 만료/구 포맷(소셜 로그인 재시도 필요) 또는 전화번호 인증 미완료
+        '409':
+          description: 소셜 계정 이메일이 이미 다른 계정에서 사용 중 (자동 연결 불가)
 
   /own/auth/refresh:
     post:

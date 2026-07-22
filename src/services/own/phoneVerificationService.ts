@@ -14,7 +14,6 @@ import {
   getActiveTemplateOrThrow,
   applyTemplate,
 } from '../alimtalkService'
-import { findUserByPhone } from '../../repositories/own/userRepository'
 
 const CODE_EXPIRY_MINUTES = 3
 const MAX_ATTEMPTS = 5
@@ -22,11 +21,8 @@ const RESEND_COOLDOWN_SECONDS = 60
 const DAILY_LIMIT = 10
 
 export async function sendCode(phone: string): Promise<{ expiresIn: number }> {
-  // 전화번호 중복 확인
-  const existingUser = await findUserByPhone(phone)
-  if (existingUser) {
-    throw Object.assign(new Error('이미 등록된 전화번호입니다.'), { statusCode: 409 })
-  }
+  // 기존 가입 번호도 인증코드 발송 허용 — 계정 통합(같은 번호 = 같은 회원) 흐름의 정상 경로.
+  // 중복 가입 여부 판단은 signup/socialComplete가 인증 완료 후 수행한다.
 
   // 60초 재발송 쿨다운
   const mostRecent = await findMostRecentByPhone(phone)

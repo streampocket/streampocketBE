@@ -399,10 +399,27 @@ model User {
   partyApplications PartyApplication[]
   ownReviews        OwnReview[]
   communityPosts    CommunityPost[]
+  socialAccounts    UserSocialAccount[]
 
   @@unique([provider, providerId])
   @@index([deletedAt])
   @@map("users")
+}
+
+// 계정에 연결된 소셜 로그인 수단 — 한 User에 여러 provider 연결 가능 (전화번호 기반 계정 통합).
+// 소셜 매칭의 단일 진실 원천. User.provider는 "최초 가입 방식" 표시용, User.providerId는 신규 기록 중단(레거시).
+model UserSocialAccount {
+  id         String       @id @default(uuid()) @db.Uuid
+  userId     String       @map("user_id") @db.Uuid
+  provider   AuthProvider
+  providerId String       @map("provider_id") @db.VarChar(255)
+  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerId])
+  @@index([userId])
+  @@map("user_social_accounts")
 }
 
 model TermsAgreement {

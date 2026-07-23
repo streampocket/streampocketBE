@@ -335,6 +335,7 @@ type UpdateFriendLinksInput = {
   giftCode?: string | null
   gameUrl?: string | null
   memo?: string | null
+  zqbgAutoCheckEnabled?: boolean
 }
 
 export async function updateFriendLinks(
@@ -357,6 +358,7 @@ export async function updateFriendLinks(
     giftCode: input.giftCode,
     gameUrl: input.gameUrl,
     memo: input.memo,
+    zqbgAutoCheckEnabled: input.zqbgAutoCheckEnabled,
   })
 }
 

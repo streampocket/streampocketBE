@@ -203,6 +203,7 @@ const friendLinksBodySchema = z.object({
   giftCode: z.string().trim().max(200).nullable().optional(),
   gameUrl: z.string().trim().max(500).nullable().optional(),
   memo: z.string().max(1000).nullable().optional(),
+  zqbgAutoCheckEnabled: z.boolean().optional(),
 })
 
 export async function updateFriendLinksHandler(

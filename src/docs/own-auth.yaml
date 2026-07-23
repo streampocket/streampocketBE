@@ -66,7 +66,7 @@ paths:
                         enum: [local, kakao, google, null]
                         description: 통합된 기존 계정의 최초 가입 방식 (merged=true일 때)
         '400':
-          description: 전화번호 인증 미완료
+          description: 전화번호 인증 미완료 또는 인증 유효시간(30분) 초과
         '409':
           description: 이메일 중복, 또는 이미 이메일로 가입된 전화번호 (password 보유 계정)
 
@@ -266,7 +266,7 @@ paths:
                         enum: [local, kakao, google, null]
                         description: 연결된 기존 계정의 최초 가입 방식 (linked=true일 때)
         '400':
-          description: 토큰 만료/구 포맷(소셜 로그인 재시도 필요) 또는 전화번호 인증 미완료
+          description: 토큰 만료/구 포맷(소셜 로그인 재시도 필요), 전화번호 인증 미완료 또는 인증 유효시간(30분) 초과
         '409':
           description: 소셜 계정 이메일이 이미 다른 계정에서 사용 중 (자동 연결 불가)
 

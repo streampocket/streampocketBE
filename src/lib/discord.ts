@@ -11,6 +11,7 @@ export type DiscordChannel =
   | 'alimtalk'
   | 'auto_extend'
   | 'gcoin'
+  | 'userError'
 
 const CHANNEL_META: Record<DiscordChannel, { title: string; color: number }> = {
   order: { title: '주문 알림', color: 0x57f287 },
@@ -22,6 +23,7 @@ const CHANNEL_META: Record<DiscordChannel, { title: string; color: number }> = {
   alimtalk: { title: '알림톡 발송', color: 0xfee500 },
   auto_extend: { title: '자동 연장 알림', color: 0x9b59b6 },
   gcoin: { title: '배그 주문 알림', color: 0xffde40 },
+  userError: { title: '유저 사이트 오류', color: 0xed4245 },
 }
 
 function getWebhookUrl(channel: DiscordChannel): string | undefined {
@@ -36,6 +38,8 @@ function getWebhookUrl(channel: DiscordChannel): string | undefined {
   if (channel === 'gcoin') {
     return process.env['DISCORD_GCOIN_WEBHOOK_URL'] ?? process.env['DISCORD_WEBHOOK_URL']
   }
+  // 유저 사이트 오류 — 전용 웹훅만 사용, 메인 폴백 없음 (미설정 시 발송 안 함)
+  if (channel === 'userError') return process.env['DISCORD_USER_ERROR_WEBHOOK_URL']
   return process.env['DISCORD_WEBHOOK_URL']
 }
 

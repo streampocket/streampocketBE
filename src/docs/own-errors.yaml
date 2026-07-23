@@ -1,0 +1,38 @@
+paths:
+  /own/errors:
+    post:
+      summary: OTTALL 유저 사이트 화면 오류 보고 (공개)
+      description: |
+        fe 에러 바운더리(error.tsx)가 화면 크래시 발생 시 호출. 서버가 디스코드 웹훅으로
+        운영자에게 알린다 (DB 저장 없음). 회원 식별은 클라이언트 바디가 아니라 서버가
+        Authorization 헤더의 토큰을 직접 검증해 수행하며, 토큰이 없거나 무효면 "비회원"으로 표시.
+        스팸 방어(IP당 분당 5회, 동일 오류 5분 dedup, 전역 분당 상한)에 걸려도 항상 204를 반환한다.
+      tags: [UserErrors]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message, path]
+              properties:
+                message:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+                  description: 오류 메시지
+                path:
+                  type: string
+                  minLength: 1
+                  maxLength: 300
+                  description: 오류가 발생한 페이지 경로 (/로 시작)
+                digest:
+                  type: string
+                  maxLength: 100
+                  nullable: true
+                  description: Next.js error digest (서버 컴포넌트 오류 식별자)
+      responses:
+        '204':
+          description: 접수 완료 (rate limit 차단 포함 — 결과 비노출)
+        '400':
+          description: 검증 실패 (길이 초과 등)

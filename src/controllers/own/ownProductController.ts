@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { Request, Response } from 'express'
 import {
   createOwnProductItem,
+  duplicateOwnProductItem,
   getOwnProducts,
   getOwnProductDetail,
   adminUpdateOwnProduct,
@@ -80,6 +81,13 @@ export async function getOwnProductDetailHandler(req: Request, res: Response): P
 export async function adminCreateOwnProductHandler(req: Request, res: Response): Promise<void> {
   const body = adminCreateOwnProductSchema.parse(req.body)
   const product = await createOwnProductItem(body)
+  res.status(201).json({ data: product })
+}
+
+// 동일 파티 복제 생성 — 파티 마감 직후 "똑같은 파티 재생성" 확인에서 호출
+export async function adminDuplicateOwnProductHandler(req: Request, res: Response): Promise<void> {
+  const { id } = idParamSchema.parse(req.params)
+  const product = await duplicateOwnProductItem(id)
   res.status(201).json({ data: product })
 }
 

@@ -34,7 +34,7 @@ export type AutoLinkCreds = {
   backupCode?: string
 }
 
-type Links = { inviteLink1: string; inviteLink2: string }
+type Links = { inviteLink1: string; inviteLink2: string; friendCode: string | null }
 
 export type AutoLinkResult =
   | ({ status: 'completed' } & Links)
@@ -97,6 +97,8 @@ async function saveLinks(orderItemId: string, links: Links): Promise<void> {
   await updateOrderItem(orderItemId, {
     friendLink1: links.inviteLink1,
     friendLink2: links.inviteLink2,
+    // 친구 코드를 못 읽은 예외 상황에는 기존 값을 덮어쓰지 않는다
+    ...(links.friendCode ? { friendCode: links.friendCode } : {}),
   })
 }
 

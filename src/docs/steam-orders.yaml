@@ -320,6 +320,11 @@ paths:
                   type: string
                   nullable: true
                   maxLength: 500
+                friendCode:
+                  type: string
+                  nullable: true
+                  maxLength: 20
+                  description: 스팀 친구 코드 (계정번호) — 자동 생성 시 함께 저장, 수동 입력 가능
                 giftCode:
                   type: string
                   nullable: true

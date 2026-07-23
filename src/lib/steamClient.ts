@@ -172,13 +172,14 @@ export function pollSession(login: PendingLogin): {
 }
 
 /**
- * refreshToken으로 steam-user 로그인 후 Quick Invite Link 2개 생성.
+ * refreshToken으로 steam-user 로그인 후 Quick Invite Link 2개 + 친구 코드 획득.
+ * 친구 코드 = steamID.accountid (스팀 계정번호) — 로그인된 세션에서 즉시 읽으므로 추가 호출 없음.
  * 'error' 이벤트는 핸들러가 없으면 프로세스가 죽으므로(EventEmitter 특성)
  * 함수 수명 동안 항상 리스너를 유지하고, 마지막에 logOff로 정리한다.
  */
 export async function createTwoQuickInvitesFromRefreshToken(
   refreshToken: string,
-): Promise<{ inviteLink1: string; inviteLink2: string }> {
+): Promise<{ inviteLink1: string; inviteLink2: string; friendCode: string | null }> {
   const user = new SteamUser(getProxyConfig())
   // 로그인 단계에서 에러가 나면 로그인 Promise를 깨기 위한 핸들
   let rejectLogin: ((err: Error) => void) | null = null
@@ -198,9 +199,11 @@ export async function createTwoQuickInvitesFromRefreshToken(
       user.logOn({ refreshToken })
     })
     rejectLogin = null // 로그인 완료 후엔 createQuickInviteLink 자체 타임아웃에 위임
+    // 친구 코드 — loggedOn 이후 steamID가 채워짐. 만약 비어 있어도 링크 생성은 막지 않는다.
+    const friendCode = user.steamID ? String(user.steamID.accountid) : null
     const first = await user.createQuickInviteLink({ inviteLimit: 1 })
     const second = await user.createQuickInviteLink({ inviteLimit: 1 })
-    return { inviteLink1: first.token.invite_link, inviteLink2: second.token.invite_link }
+    return { inviteLink1: first.token.invite_link, inviteLink2: second.token.invite_link, friendCode }
   } finally {
     user.removeListener('error', onError)
     user.logOff()

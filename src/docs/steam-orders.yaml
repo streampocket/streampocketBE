@@ -293,7 +293,9 @@ paths:
   /steam/admin/orders/{id}/friend-links:
     patch:
       summary: AA 주문 입력 필드 저장
-      description: AA(선물형) 주문의 친구 추가 URL 2개, 선물 코드, 게임 URL, 메모를 저장한다. null 전송 시 해당 필드 삭제.
+      description: |
+        AA(선물형) 주문의 친구 추가 URL 2개, 선물 코드, 게임 URL, 메모, zqbg 자동 조회 여부를 저장한다.
+        null 전송 시 해당 필드 삭제. zqbgAutoCheckEnabled(기본 false)를 켠 주문만 zqbg 발송상태 폴링 대상이 된다.
       tags: [SteamOrders]
       security:
         - bearerAuth: []
@@ -330,6 +332,9 @@ paths:
                   type: string
                   nullable: true
                   maxLength: 1000
+                zqbgAutoCheckEnabled:
+                  type: boolean
+                  description: zqbg 발송상태 자동 조회 사용 여부 (기본 false — 켠 주문만 폴링)
       responses:
         '200':
           description: 저장 완료

@@ -206,6 +206,8 @@ model SteamOrderItem {
   giftCode                  String?             @map("gift_code") @db.VarChar(200)
   gameUrl                   String?             @map("game_url") @db.VarChar(500)
   memo                      String?             @map("memo")
+  // zqbg 발송상태 자동 조회 사용 여부 — 기본 꺼짐, 켠 주문만 폴링 대상
+  zqbgAutoCheckEnabled      Boolean             @default(false) @map("zqbg_auto_check_enabled")
   estimatedCompletedAt      DateTime?           @map("estimated_completed_at") @db.Timestamptz(6)
   autoExtendCount           Int                 @default(0) @map("auto_extend_count")
   // 네이버 발송처리(dispatch) 완료 시각 — null이면 미발송(진행중 전환/완료 처리 시점에 dispatch 수행)

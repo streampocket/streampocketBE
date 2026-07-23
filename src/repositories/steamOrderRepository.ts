@@ -50,6 +50,7 @@ type UpdateOrderItemInput = {
   giftCode?: string | null
   gameUrl?: string | null
   memo?: string | null
+  zqbgAutoCheckEnabled?: boolean
   orderStatusAlimtalkSentAt?: Date
   estimatedCompletedAt?: Date | null
   naverDispatchedAt?: Date
@@ -213,7 +214,7 @@ export async function findOrderByProductOrderId(
   return prisma.steamOrderItem.findUnique({ where: { productOrderId } })
 }
 
-// zqbg 발송상태 폴링 대상: 진행중 + giftCode(zqbg 주문번호) 보유 주문
+// zqbg 발송상태 폴링 대상: 진행중 + giftCode(zqbg 주문번호) 보유 + 자동 조회 켠 주문만
 // source는 Discord 알림 [수동] 태깅용 (where 필터는 하지 않음 — 수동 주문도 자동완료 대상)
 export async function findInProgressGiftOrders(): Promise<
   {
@@ -226,7 +227,7 @@ export async function findInProgressGiftOrders(): Promise<
   }[]
 > {
   return prisma.steamOrderItem.findMany({
-    where: { fulfillmentStatus: 'in_progress', giftCode: { not: null } },
+    where: { fulfillmentStatus: 'in_progress', giftCode: { not: null }, zqbgAutoCheckEnabled: true },
     select: {
       id: true,
       giftCode: true,

@@ -44,6 +44,7 @@ import { adminGcoinOrdersRouter } from './routes/admin/gcoinOrders'
 import { adminGcoinExchangeRateRouter } from './routes/admin/gcoinExchangeRate'
 import { gcoinVisitsRouter } from './routes/gcoin/visits'
 import { ownVisitsRouter } from './routes/own/visits'
+import { ownErrorsRouter } from './routes/own/errors'
 import { adminVisitsRouter } from './routes/admin/visits'
 
 const app = express()
@@ -111,6 +112,7 @@ app.use('/own/admin/users', adminOwnUsersRouter)
 app.use('/own/admin/reviews', adminOwnReviewsRouter)
 app.use('/own/admin/rule-templates', adminOwnRuleTemplatesRouter)
 app.use('/own/visits', ownVisitsRouter)
+app.use('/own/errors', ownErrorsRouter)
 
 // ───────────────────────── Community ─────────────────────────
 app.use('/community', communityPostsRouter)

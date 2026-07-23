@@ -1,11 +1,13 @@
 import { Request, Response, NextFunction } from 'express'
 import { ZodError } from 'zod'
+import { resolveRequestUser } from '../lib/requestUser'
+import { isUserSitePath, notifyUserSiteError } from '../services/userErrorAlertService'
 
 type AppError = Error & { statusCode?: number; code?: string }
 
 export function errorHandler(
   err: AppError,
-  _req: Request,
+  req: Request,
   res: Response,
   _next: NextFunction,
 ): void {
@@ -22,6 +24,20 @@ export function errorHandler(
 
   if (statusCode === 500) {
     console.error('[ERROR]', err)
+
+    // 유저 사이트(OTTALL) 경로의 예상외 오류만 디스코드 알림 — fire-and-forget (응답 지연 없음)
+    const path = req.originalUrl.split('?')[0] ?? ''
+    if (isUserSitePath(path)) {
+      notifyUserSiteError({
+        source: 'be',
+        message: err.message,
+        path,
+        method: req.method,
+        user: resolveRequestUser(req),
+        userAgent: req.get('user-agent') ?? null,
+        stack: err.stack?.split('\n').slice(0, 3).join('\n') ?? null,
+      })
+    }
   }
 
   res.status(statusCode).json({

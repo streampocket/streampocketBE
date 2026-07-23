@@ -19,6 +19,9 @@ const CODE_EXPIRY_MINUTES = 3
 const MAX_ATTEMPTS = 5
 const RESEND_COOLDOWN_SECONDS = 60
 const DAILY_LIMIT = 10
+// 인증 통과 증명(verificationId)의 유효시간 — 코드 발송(createdAt) 기준.
+// 코드 자체가 3분 만료라 인증 완료 후 최소 27분이 보장된다.
+const VERIFICATION_VALID_MINUTES = 30
 
 export async function sendCode(phone: string): Promise<{ expiresIn: number }> {
   // 기존 가입 번호도 인증코드 발송 허용 — 계정 통합(같은 번호 = 같은 회원) 흐름의 정상 경로.
@@ -103,5 +106,8 @@ export async function verifyCode(
 export async function isPhoneVerified(verificationId: string, phone: string): Promise<boolean> {
   const record = await findVerificationById(verificationId)
   if (!record) return false
+  // 탈취된 verificationId의 무기한 재사용 방지 — 계정 통합 후 이 ID는 "계정에 로그인 수단을 연결할 권한"이므로
+  const ageMs = Date.now() - record.createdAt.getTime()
+  if (ageMs > VERIFICATION_VALID_MINUTES * 60 * 1000) return false
   return record.verified && record.phone === phone
 }

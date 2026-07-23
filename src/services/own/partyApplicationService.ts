@@ -256,7 +256,7 @@ export async function adminApproveApplication(applicationId: string) {
         where: { id: applicationId },
         data: { status: 'cancelled' },
       })
-      return { application: cancelled, autoRejected: true }
+      return { application: cancelled, autoRejected: true, partyClosed: false, productId: null }
     }
 
     const startedAt = new Date()
@@ -313,6 +313,7 @@ export async function adminApproveApplication(applicationId: string) {
       application: confirmed,
       autoRejected: false,
       partyClosed,
+      productId: application.product.id,
       product: refreshed,
       // 승인 성공 시 주문 자동 생성에 필요한 값(트랜잭션 밖에서 사용)
       orderInfo: {
@@ -342,7 +343,13 @@ export async function adminApproveApplication(applicationId: string) {
     }
   }
 
-  return { data: result.application, autoRejected: result.autoRejected }
+  return {
+    data: result.application,
+    autoRejected: result.autoRejected,
+    // 이번 승인으로 파티가 모집완료됐는지 — fe가 동일 파티 재생성 여부를 물을 때 사용
+    partyClosed: result.partyClosed ?? false,
+    productId: result.productId ?? null,
+  }
 }
 
 export async function adminRejectApplication(applicationId: string) {

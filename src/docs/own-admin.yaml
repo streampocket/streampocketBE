@@ -205,6 +205,29 @@ paths:
         '201':
           description: 생성 성공
 
+  /own/admin/products/{id}/duplicate:
+    post:
+      summary: 동일 파티 복제 생성 (관리자 전용)
+      description: |
+        원본 파티의 설정 필드(이름·기간·가격·일일할인·정원·파티종류·기간모드·이미지·규칙·파티장)를
+        전부 복사해 새 파티를 생성한다. 모집 상태는 초기화(모집중, 인원 0, 시작일 없음).
+        파티가 정원을 채워 모집완료된 직후 "똑같은 파티 재생성" 확인에서 호출된다.
+      tags: [OwnAdminProducts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '201':
+          description: 복제 생성 성공 — data에 새 파티
+        '404':
+          description: 원본 파티 없음(삭제 포함)
+
   /own/admin/products/{id}:
     get:
       summary: 파티 상세 조회

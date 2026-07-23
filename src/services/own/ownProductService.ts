@@ -199,6 +199,32 @@ export async function adminGetOwnProductDetailWithApplications(id: string) {
   return enrichWithPricing(stripCredentials(withDisplayUsers))
 }
 
+// 동일 파티 복제 생성 — 설정 필드 전부 복사, 모집 상태(filledSlots/status/startedAt)는
+// create 시 전달하지 않아 스키마 @default(0/recruiting/null)로 초기화된다.
+// 카테고리는 이름 재해석(resolveCategoryByName) 대신 원본 categoryId를 그대로 복사한다
+// — 카테고리명과 파티명이 다른 경우 이름 해석이 엉뚱한 새 카테고리를 만들 수 있기 때문.
+// 파티 마감(모집완료) 직후 "똑같은 파티 재생성" 확인에서 호출된다.
+export async function duplicateOwnProductItem(id: string) {
+  const original = await findOwnProductById(id)
+  if (!original || original.deletedAt) {
+    throw Object.assign(new Error('파티를 찾을 수 없습니다.'), { statusCode: 404 })
+  }
+  const product = await createOwnProduct({
+    name: original.name,
+    categoryId: original.categoryId,
+    durationDays: original.durationDays,
+    price: original.price,
+    dailyDiscount: original.dailyDiscount,
+    totalSlots: original.totalSlots,
+    partyType: original.partyType,
+    durationMode: original.durationMode,
+    imagePath: original.imagePath,
+    notes: original.notes,
+    leaderName: original.leaderName,
+  })
+  return enrichWithPricing(stripCredentials(product))
+}
+
 export async function adminUpdatePartyStatus(id: string, status: 'recruiting' | 'closed' | 'expired') {
   const product = await findOwnProductById(id)
   if (!product) {

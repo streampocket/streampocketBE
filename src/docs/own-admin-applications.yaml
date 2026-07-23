@@ -63,7 +63,11 @@ paths:
             format: uuid
       responses:
         '200':
-          description: 승인 완료. status=confirmed, startedAt/expiresAt 셋팅
+          description: |
+            승인 완료. status=confirmed, startedAt/expiresAt 셋팅.
+            응답: data(신청), autoRejected(정원 초과 자동거절 여부),
+            partyClosed(이번 승인으로 파티가 모집완료됐는지 — true면 fe가 동일 파티 재생성 여부를 확인),
+            productId(파티 id — 재생성 API 호출용, autoRejected 시 null)
         '404':
           description: 신청 없음
         '409':

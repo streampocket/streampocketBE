@@ -20,8 +20,15 @@ declare module 'steam-user' {
     time_created: Date
   }
 
+  // loggedOn 이후 채워지는 SteamID 객체 (steamid 라이브러리) — 사용하는 필드만 선언
+  type SteamID = {
+    accountid: number
+    getSteamID64(): string
+  }
+
   class SteamUser {
     constructor(options?: SteamUserOptions)
+    steamID: SteamID | null
     logOn(details: LogOnDetails): void
     logOff(): void
     createQuickInviteLink(options?: {

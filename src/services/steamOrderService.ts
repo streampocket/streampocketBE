@@ -332,6 +332,7 @@ export async function sendOrderStatusNotification(id: string): Promise<void> {
 type UpdateFriendLinksInput = {
   friendLink1?: string | null
   friendLink2?: string | null
+  friendCode?: string | null
   giftCode?: string | null
   gameUrl?: string | null
   memo?: string | null
@@ -355,6 +356,7 @@ export async function updateFriendLinks(
   await updateOrderItem(id, {
     friendLink1: input.friendLink1,
     friendLink2: input.friendLink2,
+    friendCode: input.friendCode,
     giftCode: input.giftCode,
     gameUrl: input.gameUrl,
     memo: input.memo,

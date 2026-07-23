@@ -200,6 +200,7 @@ export async function manualReturnHandler(
 const friendLinksBodySchema = z.object({
   friendLink1: z.string().trim().max(500).nullable().optional(),
   friendLink2: z.string().trim().max(500).nullable().optional(),
+  friendCode: z.string().trim().max(20).nullable().optional(),
   giftCode: z.string().trim().max(200).nullable().optional(),
   gameUrl: z.string().trim().max(500).nullable().optional(),
   memo: z.string().max(1000).nullable().optional(),

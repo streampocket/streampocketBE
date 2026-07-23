@@ -203,6 +203,8 @@ model SteamOrderItem {
   orderStatusAlimtalkSentAt DateTime?           @map("order_status_alimtalk_sent_at") @db.Timestamptz(6)
   friendLink1               String?             @map("friend_link1") @db.VarChar(500)
   friendLink2               String?             @map("friend_link2") @db.VarChar(500)
+  // 스팀 친구 코드 (계정번호 accountid) — 친구링크 자동 생성 시 함께 저장, 수동 입력도 허용
+  friendCode                String?             @map("friend_code") @db.VarChar(20)
   giftCode                  String?             @map("gift_code") @db.VarChar(200)
   gameUrl                   String?             @map("game_url") @db.VarChar(500)
   memo                      String?             @map("memo")

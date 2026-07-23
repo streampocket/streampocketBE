@@ -47,6 +47,7 @@ type UpdateOrderItemInput = {
   paymentAmount?: number
   friendLink1?: string | null
   friendLink2?: string | null
+  friendCode?: string | null
   giftCode?: string | null
   gameUrl?: string | null
   memo?: string | null

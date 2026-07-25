@@ -88,8 +88,39 @@ paths:
             format: uuid
       responses:
         '200':
-          description: 거절 완료. status=cancelled, 슬롯 원복
+          description: 거절 완료. status=cancelled (대기 상태는 슬롯 미점유라 인원 변동 없음)
         '404':
           description: 신청 없음
         '409':
           description: 대기 중인 신청이 아님
+
+  /own/admin/applications/{id}/cancel:
+    post:
+      summary: 확정 파티원 제거 (관리자)
+      description: |
+        확정(confirmed)된 파티원을 파티에서 제거한다. 파티 신청을 cancelled로 전이하고
+        모집 인원을 1 줄이며, 정원을 채워 모집완료됐던 파티는 모집중으로 되돌린다
+        (단 남은 기간 1일 이하이거나 관리자가 수동 마감한 파티는 상태 유지).
+        연결된 파티 주문(미반품 건 전부)도 자동 반품 처리된다.
+        주문 반품이 실패해도 파티원 제거는 확정되며 orderReturnFailed로 알린다.
+        재실행해도 인원이 중복 감소하지 않는다(멱등).
+      tags: [AdminApplications]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: |
+            제거 완료. data — productId, productName, userName,
+            filledSlots/totalSlots(제거 후 인원), partyReopened(모집중 복귀 여부),
+            orderReturned(반품된 주문 수), orderReturnFailed(반품 실패 수)
+        '404':
+          description: 신청 없음
+        '409':
+          description: 확정 상태가 아님 (이미 취소·만료·대기 중인 신청)

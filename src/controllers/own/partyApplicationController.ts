@@ -8,6 +8,7 @@ import {
   adminGetApplicationDetail,
   adminApproveApplication,
   adminRejectApplication,
+  adminCancelApplication,
 } from '../../services/own/partyApplicationService'
 
 const idParamSchema = z.object({
@@ -64,5 +65,12 @@ export async function adminApproveApplicationHandler(req: Request, res: Response
 export async function adminRejectApplicationHandler(req: Request, res: Response): Promise<void> {
   const { id } = idParamSchema.parse(req.params)
   const result = await adminRejectApplication(id)
+  res.json(result)
+}
+
+// 확정 파티원 제거 (파티관리) — 파티원 제외 + 연결 주문 자동 반품
+export async function adminCancelApplicationHandler(req: Request, res: Response): Promise<void> {
+  const { id } = idParamSchema.parse(req.params)
+  const result = await adminCancelApplication(id)
   res.json(result)
 }

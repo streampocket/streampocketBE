@@ -16,7 +16,9 @@ import {
 import { findDeliveryLogsByPartyApplicationId } from '../../repositories/deliveryLogRepository'
 import { PARTY_APPLICATION_FEE } from '../../constants/fees'
 import { PARTY_TYPE_LABEL } from '../../constants/party'
-import { createPartyOrder } from '../steamOrderService'
+import { createPartyOrder, markOrderReturned } from '../steamOrderService'
+import { findOrdersByPartyApplicationId } from '../../repositories/steamOrderRepository'
+import { releasePartyMembership } from './partyMembershipService'
 import { WITHDRAWN_USER_DISPLAY } from './userWithdrawalService'
 
 export async function applyToParty(productId: string, userId: string) {
@@ -371,6 +373,61 @@ export async function adminRejectApplication(applicationId: string) {
   })
 
   return { data: updated }
+}
+
+/**
+ * 확정 파티원 제거 (파티관리 화면) — 파티원을 빼고 연결된 파티 주문도 반품 처리한다.
+ *
+ * 파티원 제거가 주 책임이므로 제거 실패는 에러로 전파하고(404/409),
+ * 주문 반품 실패는 건별로 격리해 실패 건수만 반환한다
+ * (관리자는 주문관리에서 해당 주문을 반품하면 되고, 파티원 제거는 이미 확정된 상태라 중복되지 않는다).
+ */
+export async function adminCancelApplication(applicationId: string) {
+  const release = await releasePartyMembership(applicationId)
+
+  if (!release.released) {
+    if (release.reason === 'not_found') {
+      throw Object.assign(new Error('신청 내역을 찾을 수 없습니다.'), { statusCode: 404 })
+    }
+    throw Object.assign(
+      new Error('확정(참여중)된 파티원만 제거할 수 있습니다.'),
+      { statusCode: 409 },
+    )
+  }
+
+  // 재신청→재승인으로 한 신청에 주문이 여러 건일 수 있어 미반품 주문을 모두 반품한다.
+  const orders = await findOrdersByPartyApplicationId(applicationId, { excludeReturned: true })
+  let orderReturned = 0
+  let orderReturnFailed = 0
+
+  for (const order of orders) {
+    try {
+      const changed = await markOrderReturned(order, {
+        note: `└ 파티원 제거로 자동 반품 (${release.productName})`,
+      })
+      if (changed) orderReturned += 1
+    } catch (error) {
+      orderReturnFailed += 1
+      const reason = error instanceof Error ? error.message : String(error)
+      sendDiscordAlert(
+        'error',
+        `⚠️ 파티원 제거 — 연결 주문 반품 실패\n주문: ${order.productOrderId}\n파티: ${release.productName}\n사유: ${reason}\n주문관리에서 수동 반품이 필요합니다.`,
+      ).catch(() => {})
+    }
+  }
+
+  return {
+    data: {
+      productId: release.productId,
+      productName: release.productName,
+      userName: release.userName,
+      filledSlots: release.filledSlotsAfter,
+      totalSlots: release.totalSlots,
+      partyReopened: release.partyReopened,
+      orderReturned,
+      orderReturnFailed,
+    },
+  }
 }
 
 export async function getMyApplications(userId: string) {

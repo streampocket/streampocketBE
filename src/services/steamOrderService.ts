@@ -1,4 +1,4 @@
-import { FulfillmentStatus, OrderSource, Store } from '@prisma/client'
+import { FulfillmentStatus, OrderSource, Store, SteamOrderItem } from '@prisma/client'
 import {
   listOrders,
   exportOrders,
@@ -13,7 +13,14 @@ import {
   deleteOrderItemById,
   findOrdersForAutoExtend,
   incrementAutoExtendCount,
+  markOrderReturnedById,
 } from '../repositories/steamOrderRepository'
+// 파티원 제거 코어 — 이 서비스는 코어만 호출하고, 코어는 주문을 모른다(순환 호출 방지)
+import {
+  releasePartyMembership,
+  describeMembershipRelease,
+  type MembershipReleaseResult,
+} from './own/partyMembershipService'
 import { findExpenseBySteamOrderItemId } from '../repositories/expenseRepository'
 import { findAccountById, markAccountAsSent } from '../repositories/steamAccountRepository'
 import { findGameById } from '../repositories/steamGameRepository'
@@ -698,7 +705,70 @@ export async function deleteManualOrder(id: string): Promise<void> {
   await deleteOrderItemById(id)
 }
 
-export async function manualReturnOrder(id: string): Promise<void> {
+type ReturnableOrder = Pick<
+  SteamOrderItem,
+  'id' | 'productOrderId' | 'productName' | 'source' | 'store'
+>
+
+/**
+ * 주문 반품 코어 — 상태 전이 + 디스코드 알림만 담당한다.
+ *
+ * ⚠️ 파티 도메인을 import 하지 않는다 (반품↔파티원 제거 순환 호출 방지).
+ * 이미 반품된 주문이면 아무것도 하지 않고 false 반환(멱등).
+ * note에는 호출자가 파티원 제거 결과 요약을 넘겨 알림 한 건에 합칠 수 있다.
+ */
+export async function markOrderReturned(
+  order: ReturnableOrder,
+  options?: { note?: string },
+): Promise<boolean> {
+  const changed = await markOrderReturnedById(order.id)
+  if (!changed) return false
+
+  const sourceTag = order.source === 'party' ? ' [파티주문]' : order.source === 'manual' ? ' [수동]' : ''
+  const noteLine = options?.note ? `\n${options.note}` : ''
+  await sendDiscordAlert(
+    'order',
+    `📦 반품 처리${sourceTag}\n주문: ${order.productOrderId}\n상품: ${order.productName}${noteLine}`,
+    { store: order.store },
+  )
+  return true
+}
+
+/** 반품에 따른 파티원 제거 결과 — 코어 결과 + 반품 진입점에서만 생기는 두 사유 */
+export type PartyMemberReleaseOutcome =
+  | MembershipReleaseResult
+  // 파티 신청 연결 기능 도입 전 주문 (partyApplicationId 없음)
+  | { released: false; reason: 'not_linked' }
+  // 제거 처리 중 오류 — 주문 반품은 정상 수행됨
+  | { released: false; reason: 'failed' }
+
+export type ManualReturnResult = {
+  /** 파티 주문일 때만 채워진다. 비파티 주문은 null */
+  partyMember: PartyMemberReleaseOutcome | null
+}
+
+// 반품 디스코드 알림에 덧붙일 파티원 제거 요약 한 줄
+function buildPartyMemberNote(outcome: PartyMemberReleaseOutcome | null): string | undefined {
+  if (outcome === null) return undefined
+  if (!outcome.released) {
+    if (outcome.reason === 'not_linked') {
+      return '└ ⚠️ 연결된 파티 신청 없음 — 파티원 수동 확인 필요'
+    }
+    if (outcome.reason === 'failed') {
+      return '└ ⚠️ 파티원 제거 실패 — 파티관리에서 직접 제거 필요'
+    }
+  }
+  return describeMembershipRelease(outcome)
+}
+
+/**
+ * 관리자 수동 반품 — 파티 주문이면 연결된 파티원도 함께 제거한다.
+ *
+ * **반품 보장 원칙**: 파티원 제거가 실패해도 주문 반품은 반드시 수행한다.
+ * (제거 실패 시 관리자는 파티관리 화면에서 해당 파티원을 직접 제거하면 되고,
+ *  그때 주문은 이미 반품 상태라 중복 처리되지 않는다 — 두 화면이 서로의 복구 경로)
+ */
+export async function manualReturnOrder(id: string): Promise<ManualReturnResult> {
   const order = await findOrderById(id)
   if (!order) {
     throw Object.assign(new Error('주문을 찾을 수 없습니다.'), { statusCode: 404 })
@@ -708,15 +778,28 @@ export async function manualReturnOrder(id: string): Promise<void> {
     throw Object.assign(new Error('이미 반품 처리된 주문입니다.'), { statusCode: 400 })
   }
 
-  await updateOrderItem(order.id, {
-    fulfillmentStatus: 'returned',
-    returnedAt: new Date(),
-  })
+  let partyMember: ManualReturnResult['partyMember'] = null
 
-  const sourceTag = order.source === 'party' ? ' [파티주문]' : order.source === 'manual' ? ' [수동]' : ''
-  await sendDiscordAlert(
-    'order',
-    `📦 반품 처리${sourceTag}\n주문: ${order.productOrderId}\n상품: ${order.productName}`,
-    { store: order.store },
-  )
+  if (order.source === 'party') {
+    if (!order.partyApplicationId) {
+      // 파티 신청 연결 기능 도입 전 주문 — 주문만 반품하고 안내
+      partyMember = { released: false, reason: 'not_linked' }
+    } else {
+      try {
+        partyMember = await releasePartyMembership(order.partyApplicationId)
+      } catch (error) {
+        // 파티원 제거 실패가 주문 반품을 막지 않는다 (반품 보장 원칙)
+        partyMember = { released: false, reason: 'failed' }
+        const reason = error instanceof Error ? error.message : String(error)
+        sendDiscordAlert(
+          'error',
+          `⚠️ 반품 처리 중 파티원 제거 실패\n주문: ${order.productOrderId}\n신청: ${order.partyApplicationId}\n사유: ${reason}\n주문은 반품되었습니다. 파티관리에서 파티원을 직접 제거하세요.`,
+        ).catch(() => {})
+      }
+    }
+  }
+
+  await markOrderReturned(order, { note: buildPartyMemberNote(partyMember) })
+
+  return { partyMember }
 }

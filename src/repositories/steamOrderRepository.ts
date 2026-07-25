@@ -365,6 +365,30 @@ export async function updateOrderItem(
   return prisma.steamOrderItem.update({ where: { id }, data })
 }
 
+// 파티 신청에 연결된 주문 조회 — 재신청→재승인으로 한 신청에 주문이 여러 건일 수 있다.
+export async function findOrdersByPartyApplicationId(
+  partyApplicationId: string,
+  options?: { excludeReturned?: boolean },
+): Promise<SteamOrderItem[]> {
+  return prisma.steamOrderItem.findMany({
+    where: {
+      partyApplicationId,
+      ...(options?.excludeReturned ? { fulfillmentStatus: { not: 'returned' } } : {}),
+    },
+    orderBy: { createdAt: 'asc' },
+  })
+}
+
+// 조건부 반품 — 이미 returned면 아무것도 하지 않고 false 반환(멱등).
+// 동시 요청에도 단일 SQL로 한 번만 전이되므로 중복 알림·중복 매출 차감이 없다.
+export async function markOrderReturnedById(id: string): Promise<boolean> {
+  const result = await prisma.steamOrderItem.updateMany({
+    where: { id, fulfillmentStatus: { not: 'returned' } },
+    data: { fulfillmentStatus: 'returned', returnedAt: new Date() },
+  })
+  return result.count > 0
+}
+
 // 자동 +10분 연장 후보 조회 — in_progress + estimatedCompletedAt ≤ thresholdAt + 자동 연장 한도 미달
 export async function findOrdersForAutoExtend(
   thresholdAt: Date,

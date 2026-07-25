@@ -273,6 +273,11 @@ paths:
   /steam/admin/orders/{id}/return:
     post:
       summary: 수동 반품 처리
+      description: |
+        주문을 반품(returned) 처리한다. **파티 주문(source=party)이면 연결된 파티 신청도 취소되어
+        파티원에서 제거되고 모집 인원이 1 줄어든다** (정원 충족으로 닫혔던 파티는 모집중 복귀).
+        파티원 제거가 실패해도 **주문 반품은 반드시 수행**되며, 실패 사유는 응답 partyMember로 알린다
+        (관리자는 파티관리 화면에서 해당 파티원을 직접 제거하면 된다).
       tags: [SteamOrders]
       security:
         - bearerAuth: []
@@ -284,9 +289,12 @@ paths:
             type: string
       responses:
         '200':
-          description: 반품 처리 완료
+          description: |
+            반품 처리 완료. 응답 — message,
+            partyMember: 비파티 주문이면 null / 파티원 제거 성공 시 released=true와 인원·복귀 정보 /
+            실패 시 released=false와 reason(not_linked=구버전 미연결 주문, not_confirmed=확정 상태 아님, failed=처리 오류)
         '400':
-          description: 반품 불가 상태
+          description: 반품 불가 상태 (이미 반품됨)
         '404':
           description: 주문 없음
 

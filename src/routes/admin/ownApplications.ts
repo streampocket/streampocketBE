@@ -4,6 +4,7 @@ import {
   adminGetApplicationDetailHandler,
   adminApproveApplicationHandler,
   adminRejectApplicationHandler,
+  adminCancelApplicationHandler,
 } from '../../controllers/own/partyApplicationController'
 import { authMiddleware } from '../../middlewares/auth'
 import { asyncHandler } from '../../utils/asyncHandler'
@@ -16,3 +17,4 @@ adminOwnApplicationsRouter.get('/', asyncHandler(adminGetApplicationsHandler))
 adminOwnApplicationsRouter.get('/:id', asyncHandler(adminGetApplicationDetailHandler))
 adminOwnApplicationsRouter.post('/:id/approve', asyncHandler(adminApproveApplicationHandler))
 adminOwnApplicationsRouter.post('/:id/reject', asyncHandler(adminRejectApplicationHandler))
+adminOwnApplicationsRouter.post('/:id/cancel', asyncHandler(adminCancelApplicationHandler))

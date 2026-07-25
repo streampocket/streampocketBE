@@ -193,8 +193,9 @@ export async function manualReturnHandler(
   res: Response,
 ): Promise<void> {
   const { id } = req.params
-  await manualReturnOrder(id)
-  res.json({ message: '반품 처리 완료' })
+  // 파티 주문이면 연결된 파티원 제거 결과가 함께 반환된다 (비파티 주문은 null)
+  const result = await manualReturnOrder(id)
+  res.json({ message: '반품 처리 완료', partyMember: result.partyMember })
 }
 
 const friendLinksBodySchema = z.object({

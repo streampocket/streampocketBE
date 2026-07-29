@@ -43,6 +43,12 @@ components:
           type: array
           items: { type: string }
           description: 파티원 형식이 아닌 괄호 줄 (예 "(로그아웃완료)") — 원문 보존
+        updatedAt:
+          type: string
+          format: date-time
+          description: |
+            낙관적 잠금용 버전값. 편집기를 열 때 받은 값을 저장 요청의 `expectedUpdatedAt`으로
+            그대로 돌려보내야 한다. 저장은 파티원까지 통째 교체라 검사 없이는 남의 변경이 사라진다.
         members:
           type: array
           items: { $ref: '#/components/schemas/DramaMember' }
@@ -63,6 +69,12 @@ components:
             otpsecretotpsecret1234
             (스트림포켓 경원 - 2026.08.05/01:30 7일)
         dryRun: { type: boolean, default: true, description: true면 저장하지 않고 읽은 결과만 돌려준다 }
+        expectedUpdatedAt:
+          type: string
+          format: date-time
+          description: |
+            편집기를 열 때 받은 계정의 `updatedAt`. **수정 저장(PUT)에는 필수**이며,
+            그 사이 값이 바뀌었으면 409로 막는다. 신규 등록(POST)에서는 무시된다.
     DramaTextResult:
       type: object
       properties:
@@ -125,6 +137,10 @@ paths:
       description: |
         계정 정보를 덮어쓰고 **파티원은 전부 지운 뒤 텍스트의 줄로 새로 만든다**(통째 교체).
         줄 단위로 짝지을 키가 없어 대조 방식을 쓰지 않는다 — 저장할 때마다 파티원 id가 새로 생긴다.
+
+        통째 교체라 편집기를 열어둔 사이 다른 관리자가 파티원을 추가하면 그 변경이 사라진다.
+        그래서 `expectedUpdatedAt`(편집기를 열 때 받은 값)이 **필수**이고,
+        DB의 현재 값과 다르면 저장하지 않고 409를 돌려준다.
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
@@ -135,8 +151,9 @@ paths:
             schema: { $ref: '#/components/schemas/DramaTextBody' }
       responses:
         '200': { description: 성공 (dryRun이면 미리보기), content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/DramaTextResult' } } } } } }
-        '400': { description: 파싱 오류 · 빈 줄로 여러 계정 · 다른 계정의 이메일과 중복 }
+        '400': { description: 파싱 오류 · 빈 줄로 여러 계정 · 다른 계정의 이메일과 중복 · expectedUpdatedAt 누락 }
         '404': { description: 계정 없음 }
+        '409': { description: 다른 관리자가 먼저 수정함 (expectedUpdatedAt 불일치) — 창을 다시 열어야 한다 }
 
   /own/admin/drama-accounts/import:
     post:

@@ -19,6 +19,8 @@ const importSchema = z.object({
 const textSchema = z.object({
   text: z.string().min(1, '내용을 입력해 주세요.').max(20_000),
   dryRun: z.boolean().default(true),
+  // 편집기를 열 때 받은 계정의 updatedAt. 수정 저장에서 낙관적 잠금 기준값이 된다.
+  expectedUpdatedAt: z.string().datetime({ message: '올바른 버전 정보가 아닙니다.' }).optional(),
 })
 
 const idParam = z.string().uuid('올바른 식별자가 아닙니다.')
@@ -39,7 +41,12 @@ export async function createDramaAccountTextHandler(req: Request, res: Response)
 export async function updateDramaAccountTextHandler(req: Request, res: Response): Promise<void> {
   const id = idParam.parse(req.params.id)
   const body = textSchema.parse(req.body)
-  const data = await saveDramaAccountFromText({ id, text: body.text, dryRun: body.dryRun })
+  const data = await saveDramaAccountFromText({
+    id,
+    text: body.text,
+    dryRun: body.dryRun,
+    expectedUpdatedAt: body.expectedUpdatedAt,
+  })
   res.json({ data })
 }
 

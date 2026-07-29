@@ -19,6 +19,7 @@ import { parseDramaMemo, type ParsedAccount } from '../../utils/dramaMemoParser'
 
 const notFound = (what: string) => Object.assign(new Error(`${what}을(를) 찾을 수 없습니다.`), { statusCode: 404 })
 const badRequest = (message: string) => Object.assign(new Error(message), { statusCode: 400 })
+const conflict = (message: string) => Object.assign(new Error(message), { statusCode: 409 })
 
 export type DramaMemberView = {
   id: string
@@ -43,6 +44,8 @@ export type DramaAccountView = {
   /** 'YYYY-MM-DD' */
   dueAt: string | null
   notes: string[]
+  /** 낙관적 잠금용 버전값 — 편집기를 열 때 받아 저장할 때 그대로 돌려보낸다 */
+  updatedAt: string
   members: DramaMemberView[]
 }
 
@@ -73,6 +76,7 @@ function toView(account: DramaAccountWithMembers): DramaAccountView {
     capacityLabel: account.capacityLabel,
     dueAt: account.dueAt ? toDateString(account.dueAt) : null,
     notes: account.notes,
+    updatedAt: account.updatedAt.toISOString(),
     members: account.members.map((m) => ({
       id: m.id,
       site: m.site,
@@ -147,6 +151,8 @@ export async function saveDramaAccountFromText(input: {
   id?: string
   text: string
   dryRun: boolean
+  /** 편집기를 열 때 받은 updatedAt(ISO). 수정 저장에는 필수 — 그 사이 바뀌었으면 409 */
+  expectedUpdatedAt?: string
 }): Promise<TextSaveResult> {
   const blocks = parseDramaMemo(input.text)
   if (blocks.length === 0) throw badRequest('읽을 수 있는 내용이 없습니다.')
@@ -181,6 +187,16 @@ export async function saveDramaAccountFromText(input: {
 
   if (input.dryRun) return { dryRun: true, parsed, diff }
 
+  // 저장은 통째 교체라 남의 변경을 덮어쓸 수 있다. 편집기를 열 때 본 버전을 반드시 확인한다.
+  let expected: Date | null = null
+  if (current) {
+    if (!input.expectedUpdatedAt) {
+      throw badRequest('편집 중이던 내용이 오래되었습니다. 창을 닫고 다시 열어주세요.')
+    }
+    expected = new Date(input.expectedUpdatedAt)
+    if (Number.isNaN(expected.getTime())) throw badRequest('올바른 버전 정보가 아닙니다.')
+  }
+
   const accountData = {
     email: parsed.email,
     passwordEnc: encryptSecret(parsed.password),
@@ -193,9 +209,13 @@ export async function saveDramaAccountFromText(input: {
   }
   const members = parsed.members.map((m) => toMemberWrite(m))
 
-  const saved = current
-    ? await replaceDramaAccount(current.id, accountData, members)
-    : await createDramaAccount(accountData, members)
+  const saved =
+    current && expected
+      ? await replaceDramaAccount(current.id, accountData, members, expected)
+      : await createDramaAccount(accountData, members)
+
+  // null = 그 사이 다른 관리자가 먼저 저장했다. 덮어쓰면 그쪽 변경이 조용히 사라진다.
+  if (!saved) throw conflict('다른 관리자가 먼저 수정했습니다. 창을 닫고 다시 열어주세요.')
 
   return { dryRun: false, parsed, diff, account: toView(saved) }
 }

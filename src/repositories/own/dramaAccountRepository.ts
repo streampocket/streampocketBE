@@ -58,9 +58,28 @@ export function createDramaAccount(data: DramaAccountWriteData, members: DramaMe
   })
 }
 
-/** 이관 시 덮어쓰기 — 기존 파티원을 전부 지우고 메모 내용으로 다시 채운다 */
-export function replaceDramaAccount(id: string, data: DramaAccountWriteData, members: DramaMemberWriteData[]) {
+/**
+ * 통째 교체 — 기존 파티원을 전부 지우고 메모 내용으로 다시 채운다.
+ *
+ * expectedUpdatedAt을 주면 그 값과 일치할 때만 교체한다(낙관적 잠금).
+ * 조회 후 비교하면 그 사이에 끼어들 틈이 생기므로 where에 조건을 얹어 DB가 판정하게 한다.
+ * 이 UPDATE가 행 잠금을 잡으므로 뒤따르는 트랜잭션은 커밋을 기다렸다가 바뀐 값을 본다.
+ * 값이 다르면 그 사이 누군가 먼저 고친 것이므로 null을 돌려준다(호출측이 409로 옮긴다).
+ */
+export function replaceDramaAccount(
+  id: string,
+  data: DramaAccountWriteData,
+  members: DramaMemberWriteData[],
+  expectedUpdatedAt?: Date,
+): Promise<DramaAccountWithMembers | null> {
   return prisma.$transaction(async (tx) => {
+    if (expectedUpdatedAt) {
+      const { count } = await tx.dramaAccount.updateMany({
+        where: { id, updatedAt: expectedUpdatedAt },
+        data: { updatedAt: new Date() },
+      })
+      if (count === 0) return null
+    }
     await tx.dramaMember.deleteMany({ where: { accountId: id } })
     return tx.dramaAccount.update({
       where: { id },

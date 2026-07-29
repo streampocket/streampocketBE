@@ -34,9 +34,13 @@ const MEMO = [
   '(스트림포켓 지은 - 2026.08.05/02:30 7일)',
 ].join('\n')
 
+/** 편집기를 열 때 화면이 받아 간 버전값 */
+const VERSION = '2026-07-29T01:00:00.000Z'
+
 /** 저장된 계정 흉내 (파티원 3명) */
 const existing = (over: Record<string, unknown> = {}) => ({
   id: 'acc-1',
+  updatedAt: new Date(VERSION),
   email: 'sample@gmail.com',
   passwordEnc: encryptSecret('pw1234'),
   otpSecretEnc: encryptSecret('otpsecretotpsecret1234'),
@@ -147,7 +151,7 @@ describe('실제 저장', () => {
     repo.findDramaAccountsByEmails.mockResolvedValue([])
     repo.findDramaAccountById.mockResolvedValue(existing())
     repo.replaceDramaAccount.mockResolvedValue(existing({ members: [] }))
-    await saveDramaAccountFromText({ id: 'acc-1', text: MEMO, dryRun: false })
+    await saveDramaAccountFromText({ id: 'acc-1', text: MEMO, dryRun: false, expectedUpdatedAt: VERSION })
     expect(repo.replaceDramaAccount).toHaveBeenCalledTimes(1)
     expect(repo.createDramaAccount).not.toHaveBeenCalled()
   })
@@ -181,5 +185,60 @@ describe('실제 저장', () => {
     expect(accountData.notes).toEqual(['(로그아웃완료)'])
     expect(members[0]).toMatchObject({ site: '중고나라', name: '#7561308', siteSpaced: false })
     expect(members[1]).toMatchObject({ suffix: '-갤s26' })
+  })
+})
+
+// 저장이 파티원 통째 교체라, 편집기를 열어둔 사이 다른 관리자가 파티원을 추가하면
+// 그 변경이 알림 없이 사라진다. 그래서 열 때 본 버전과 같을 때만 저장한다.
+describe('동시 수정 방어 (낙관적 잠금)', () => {
+  it('편집기가 본 버전을 저장소에 그대로 넘긴다', async () => {
+    repo.findDramaAccountById.mockResolvedValue(existing())
+    repo.replaceDramaAccount.mockResolvedValue(existing({ members: [] }))
+    await saveDramaAccountFromText({ id: 'acc-1', text: MEMO, dryRun: false, expectedUpdatedAt: VERSION })
+
+    const [, , , expected] = repo.replaceDramaAccount.mock.calls[0]
+    expect(expected).toEqual(new Date(VERSION))
+  })
+
+  it('그 사이 바뀌었으면(저장소가 null) 409로 막는다', async () => {
+    repo.findDramaAccountById.mockResolvedValue(existing())
+    repo.replaceDramaAccount.mockResolvedValue(null) // 조건부 갱신 0건 = 남이 먼저 저장했다
+    await expect(
+      saveDramaAccountFromText({ id: 'acc-1', text: MEMO, dryRun: false, expectedUpdatedAt: VERSION }),
+    ).rejects.toMatchObject({ statusCode: 409 })
+  })
+
+  it('버전 없이 수정 저장하면 막는다 (검사를 건너뛰지 않는다)', async () => {
+    repo.findDramaAccountById.mockResolvedValue(existing())
+    await expect(
+      saveDramaAccountFromText({ id: 'acc-1', text: MEMO, dryRun: false }),
+    ).rejects.toMatchObject({ statusCode: 400 })
+    expect(repo.replaceDramaAccount).not.toHaveBeenCalled()
+  })
+
+  it('버전 형식이 깨졌으면 막는다', async () => {
+    repo.findDramaAccountById.mockResolvedValue(existing())
+    await expect(
+      saveDramaAccountFromText({ id: 'acc-1', text: MEMO, dryRun: false, expectedUpdatedAt: '어제' }),
+    ).rejects.toMatchObject({ statusCode: 400 })
+    expect(repo.replaceDramaAccount).not.toHaveBeenCalled()
+  })
+
+  it('신규 등록은 버전 없이도 저장된다 (덮어쓸 대상이 없다)', async () => {
+    repo.createDramaAccount.mockResolvedValue(existing({ members: [] }))
+    await saveDramaAccountFromText({ text: MEMO, dryRun: false })
+    expect(repo.createDramaAccount).toHaveBeenCalledTimes(1)
+  })
+
+  it('미리보기(dryRun)는 버전을 요구하지 않는다 — 저장하지 않기 때문', async () => {
+    repo.findDramaAccountById.mockResolvedValue(existing())
+    const result = await saveDramaAccountFromText({ id: 'acc-1', text: MEMO, dryRun: true })
+    expect(result.dryRun).toBe(true)
+  })
+
+  it('조회 응답에 버전값을 함께 내려준다 (화면이 이걸 들고 있다가 되돌려준다)', async () => {
+    repo.createDramaAccount.mockResolvedValue(existing({ members: [] }))
+    const { account } = await saveDramaAccountFromText({ text: MEMO, dryRun: false })
+    expect(account?.updatedAt).toBe(VERSION)
   })
 })

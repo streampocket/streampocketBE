@@ -34,6 +34,7 @@ import { adminOwnApplicationsRouter } from './routes/admin/ownApplications'
 import { adminOwnUsersRouter } from './routes/admin/ownUsers'
 import { adminOwnReviewsRouter } from './routes/admin/ownReviews'
 import { adminOwnRuleTemplatesRouter } from './routes/admin/ownRuleTemplates'
+import { adminDramaAccountsRouter } from './routes/admin/dramaAccounts'
 import { communityPostsRouter } from './routes/community/posts'
 import { adminCommunityPostsRouter } from './routes/community/admin'
 import { gcoinProductsRouter } from './routes/gcoin/products'
@@ -111,6 +112,7 @@ app.use('/own/admin/applications', adminOwnApplicationsRouter)
 app.use('/own/admin/users', adminOwnUsersRouter)
 app.use('/own/admin/reviews', adminOwnReviewsRouter)
 app.use('/own/admin/rule-templates', adminOwnRuleTemplatesRouter)
+app.use('/own/admin/drama-accounts', adminDramaAccountsRouter)
 app.use('/own/visits', ownVisitsRouter)
 app.use('/own/errors', ownErrorsRouter)
 

@@ -486,28 +486,28 @@ model OwnRuleTemplate {
 }
 
 model OwnProduct {
-  id              String           @id @default(uuid()) @db.Uuid
-  name            String           @db.VarChar(255)
-  categoryId      String           @map("category_id") @db.Uuid
-  durationDays    Int              @map("duration_days")
+  id              String            @id @default(uuid()) @db.Uuid
+  name            String            @db.VarChar(255)
+  categoryId      String            @map("category_id") @db.Uuid
+  durationDays    Int               @map("duration_days")
   price           Int
-  dailyDiscount   Int              @default(0) @map("daily_discount")
-  totalSlots      Int              @map("total_slots")
-  filledSlots     Int              @default(0) @map("filled_slots")
-  imagePath       String?          @map("image_path") @db.VarChar(500)
-  notes           String?          @db.Text
+  dailyDiscount   Int               @default(0) @map("daily_discount")
+  totalSlots      Int               @map("total_slots")
+  filledSlots     Int               @default(0) @map("filled_slots")
+  imagePath       String?           @map("image_path") @db.VarChar(500)
+  notes           String?           @db.Text
   /// deprecated: 파티 공유계정 기능 제거(2026-07). 기존 데이터 보존을 위해 컬럼 유지 — 삭제 금지
-  accountId       String?          @map("account_id") @db.Text
+  accountId       String?           @map("account_id") @db.Text
   /// deprecated: 파티 공유계정 기능 제거(2026-07). 기존 데이터 보존을 위해 컬럼 유지 — 삭제 금지
-  accountPassword String?          @map("account_password") @db.Text
-  status          OwnProductStatus @default(recruiting)
-  partyType       OwnProductType   @default(shared) @map("party_type")
+  accountPassword String?           @map("account_password") @db.Text
+  status          OwnProductStatus  @default(recruiting)
+  partyType       OwnProductType    @default(shared) @map("party_type")
   durationMode    PartyDurationMode @default(countdown) @map("duration_mode")
-  startedAt       DateTime?        @map("started_at") @db.Timestamptz(6)
-  deletedAt       DateTime?        @map("deleted_at") @db.Timestamptz(6)
-  leaderName      String           @map("leader_name") @db.VarChar(100)
-  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  startedAt       DateTime?         @map("started_at") @db.Timestamptz(6)
+  deletedAt       DateTime?         @map("deleted_at") @db.Timestamptz(6)
+  leaderName      String            @map("leader_name") @db.VarChar(100)
+  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   category     OwnCategory        @relation(fields: [categoryId], references: [id])
   applications PartyApplication[]
@@ -749,4 +749,60 @@ model SiteVisit {
   @@unique([site, visitorId, visitDate]) // 하루 1회 백스톱 (createMany skipDuplicates)
   @@index([site, visitDate, source]) // 일별 추이·소스별 집계 커버
   @@map("site_visits")
+}
+
+// ─────────────────────────────────────────────────────────────
+// 드라마 계정 관리 — 메모장으로 관리하던 OTT 멤버십 계정·파티원을 옮긴 것.
+// 화면이 메모 원문과 글자까지 같아야 해서, 계산용 값과 "표기 원문"을 따로 보존한다.
+// (capacityLabel="프라이빗", suffix=")-갤s26", notes="(로그아웃완료)")
+// OTTALL 파티(OwnProduct/PartyApplication)와는 의도적으로 연결하지 않는다 —
+// 중고나라·오픈챗 유입이 섞여 전원을 신청 레코드에 매칭할 수 없다.
+model DramaAccount {
+  id            String    @id @default(uuid()) @db.Uuid
+  email         String    @unique @db.VarChar(320)
+  // 비밀번호·OTP 시크릿 모두 AES-256-GCM 암호문 (lib/crypto.ts, env OTP_SECRET_ENC_KEY).
+  // 계정 171개의 아이디·비번·2FA가 한 테이블에 모이므로 평문 저장하지 않는다.
+  passwordEnc   String    @map("password_enc") @db.Text
+  otpSecretEnc  String    @map("otp_secret_enc") @db.Text
+  // 아래 4개가 모두 null이면 "계정만 등록된 상태"(멤버십 미개설).
+  // platform은 마스터 테이블 없이 자유 문자열 — 쓰던 약칭(비글/드박/드웨)을 그대로 보존하고
+  // 필터 목록은 등록된 값에서 distinct로 만든다.
+  platform      String?   @db.VarChar(50)
+  capacity      Int? // 계산용 정원. 프라이빗 = 1
+  capacityLabel String?   @map("capacity_label") @db.VarChar(20) // 표시용 원문 "3인" / "프라이빗"
+  dueAt         DateTime? @map("due_at") @db.Date // 멤버십 마감일
+  notes         String[]  @default([]) // 파티원 형식이 아닌 괄호 줄 — 버리지 않고 그대로 보존
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  members DramaMember[]
+
+  @@index([dueAt])
+  @@map("drama_accounts")
+}
+
+// 파티원 — 기간 만료 시 자동 삭제하지 않는다(연장 문의·입금 확인 중일 수 있어 수동 정리).
+// 만료 여부는 컬럼으로 두지 않고 조회 시 endDate로 계산한다(날짜만 지나도 저장값은 거짓이 되므로).
+model DramaMember {
+  id        String   @id @default(uuid()) @db.Uuid
+  accountId String   @map("account_id") @db.Uuid
+  site      String?  @db.VarChar(50) // 스트림포켓/중고나라/오픈챗. null = 카톡 닉네임만 적힌 경우
+  name      String   @db.VarChar(100)
+  // 사이트와 이름 사이 공백 유무. 메모에 "중고나라#7561308"처럼 붙여 쓴 줄이 있어,
+  // 원문을 글자까지 그대로 되돌리려면 이 구분이 필요하다 (site가 null이면 의미 없음)
+  siteSpaced Boolean @default(true) @map("site_spaced")
+  // 시작 시각과 만료 시각이 같아 시각은 문자열 하나로 충분하다.
+  // DateTime 하나로 합치지 않는 이유: 타임존 변환에서 날짜가 하루 밀릴 위험을 아예 만들지 않기 위함.
+  // 정렬은 endDate → startTime 순 (HH:mm은 사전순 = 시간순).
+  endDate   DateTime @map("end_date") @db.Date
+  startTime String   @map("start_time") @db.VarChar(5) // "01:30"
+  days      Int
+  suffix    String?  @db.VarChar(50) // 괄호 뒤 꼬리 원문 "-갤s26", " 아이폰"
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  account DramaAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@index([endDate])
+  @@map("drama_members")
 }

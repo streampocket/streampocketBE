@@ -1,0 +1,219 @@
+components:
+  schemas:
+    DramaMember:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        site:
+          type: string
+          nullable: true
+          description: 신청 사이트. 카카오톡 닉네임만 적힌 파티원은 null
+          example: 스트림포켓
+        name: { type: string, example: 경원 }
+        endDate: { type: string, example: '2026-08-05', description: 만료일 (YYYY-MM-DD) }
+        startTime: { type: string, example: '01:30', description: 시작 시각 = 만료 시각 }
+        days: { type: integer, example: 7 }
+        suffix:
+          type: string
+          nullable: true
+          description: 메모 원문에서 닫는 괄호 뒤에 붙어 있던 꼬리 (기기명 등)
+          example: '-갤s26'
+    DramaAccount:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, example: sample@gmail.com }
+        password:
+          type: string
+          description: 복호화된 평문. 화면이 메모장처럼 그대로 노출하는 것이 요구사항이라 마스킹하지 않는다
+        otpSecret: { type: string, description: 복호화된 평문 }
+        platform:
+          type: string
+          nullable: true
+          description: 자유 문자열. 마스터 테이블 없이 등록된 값에서 목록을 만든다
+          example: 릴숏
+        capacity: { type: integer, nullable: true, description: 계산용 정원. 프라이빗은 1 }
+        capacityLabel:
+          type: string
+          nullable: true
+          description: 화면 출력용 원문 표기
+          example: 프라이빗
+        dueAt: { type: string, nullable: true, example: '2026-08-29', description: 멤버십 마감일 }
+        notes:
+          type: array
+          items: { type: string }
+          description: 파티원 형식이 아닌 괄호 줄 (예 "(로그아웃완료)") — 원문 보존
+        members:
+          type: array
+          items: { $ref: '#/components/schemas/DramaMember' }
+    DramaTextBody:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          description: |
+            메모 한 덩어리. 첫 줄 = `[마감일]-플랫폼 정원`(없어도 됨), 2줄 = 아이디,
+            3줄 = 비밀번호, 4줄 = OTP 시크릿, 그 아래가 파티원.
+            **빈 줄은 계정 구분자**라 1건 편집에서는 허용하지 않는다.
+          example: |
+            [2026-08-29]-릴숏 3인
+            sample@gmail.com
+            pw1234
+            otpsecretotpsecret1234
+            (스트림포켓 경원 - 2026.08.05/01:30 7일)
+        dryRun: { type: boolean, default: true, description: true면 저장하지 않고 읽은 결과만 돌려준다 }
+    DramaTextResult:
+      type: object
+      properties:
+        dryRun: { type: boolean }
+        parsed: { type: object, description: 파싱 결과 (members·notes·warnings 포함) }
+        diff:
+          type: object
+          description: 저장 전후 변화 요약. 줄을 실수로 지운 것을 눈치채게 하려는 용도
+          properties:
+            membersBefore: { type: integer, nullable: true, description: 신규 등록이면 null }
+            membersAfter: { type: integer }
+            emailBefore: { type: string, nullable: true }
+            emailAfter: { type: string }
+            headBefore: { type: string, nullable: true }
+            headAfter: { type: string, nullable: true }
+        account:
+          $ref: '#/components/schemas/DramaAccount'
+          description: dryRun이 false일 때만 채워진다
+paths:
+  /own/admin/drama-accounts:
+    get:
+      tags: [OTTALL 관리자 - 드라마 계정]
+      summary: 드라마 계정 전건 조회
+      description: |
+        필터·검색·정렬은 프론트가 담당하므로 서버는 거르지 않고 전건을 내려준다.
+        비밀번호·OTP 시크릿은 복호화된 평문으로 포함된다 (관리자 전용).
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/DramaAccount' }
+        '401': { description: 인증 실패 }
+  /own/admin/drama-accounts/text:
+    post:
+      tags: [OTTALL 관리자 - 드라마 계정]
+      summary: 계정 등록 (메모 텍스트)
+      description: 빈 편집기에 적은 메모를 그대로 저장한다. 폼 입력 대신 이 경로를 쓴다.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DramaTextBody' }
+      responses:
+        '200': { description: 미리보기 성공 (dryRun), content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/DramaTextResult' } } } } } }
+        '201': { description: 등록 성공 }
+        '400': { description: 파싱 오류 · 빈 줄로 여러 계정 · 이메일 중복 }
+
+  /own/admin/drama-accounts/{id}/text:
+    put:
+      tags: [OTTALL 관리자 - 드라마 계정]
+      summary: 계정 교체 (메모 텍스트)
+      description: |
+        계정 정보를 덮어쓰고 **파티원은 전부 지운 뒤 텍스트의 줄로 새로 만든다**(통째 교체).
+        줄 단위로 짝지을 키가 없어 대조 방식을 쓰지 않는다 — 저장할 때마다 파티원 id가 새로 생긴다.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DramaTextBody' }
+      responses:
+        '200': { description: 성공 (dryRun이면 미리보기), content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/DramaTextResult' } } } } } }
+        '400': { description: 파싱 오류 · 빈 줄로 여러 계정 · 다른 계정의 이메일과 중복 }
+        '404': { description: 계정 없음 }
+
+  /own/admin/drama-accounts/import:
+    post:
+      tags: [OTTALL 관리자 - 드라마 계정]
+      summary: 메모장 붙여넣기 이관
+      description: |
+        메모장 전문을 파싱해 계정·파티원을 한 번에 등록한다.
+        `dryRun: true`면 저장하지 않고 읽은 결과만 돌려준다 — 미리보기와 저장이 같은 코드를 쓴다.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, description: 메모장 전문. 계정 사이는 빈 줄로 구분 }
+                dryRun: { type: boolean, default: true }
+                duplicateMode:
+                  type: string
+                  enum: [skip, overwrite]
+                  default: skip
+                  description: 이미 등록된 이메일 처리 방식
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      dryRun: { type: boolean }
+                      items:
+                        type: array
+                        description: 블록별 파싱 결과. errors는 등록 불가, warnings는 등록 가능
+                        items: { type: object }
+                      summary: { type: object }
+                      applied:
+                        type: object
+                        description: dryRun이 false일 때만 채워진다
+        '400': { description: 읽을 수 있는 계정이 없음 }
+
+  /own/admin/drama-accounts/{id}:
+    delete:
+      tags: [OTTALL 관리자 - 드라마 계정]
+      summary: 계정 삭제 (파티원도 함께 삭제)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: 삭제 성공 }
+        '404': { description: 계정 없음 }
+
+  /own/admin/drama-accounts/{id}/members/expired:
+    delete:
+      tags: [OTTALL 관리자 - 드라마 계정]
+      summary: 만료 파티원 일괄 삭제
+      description: KST 오늘 기준으로 만료일이 지난 파티원만 지운다. 자동 크론이 아니라 관리자가 확인 후 실행한다.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: 정리 성공 (removed 개수 포함) }
+        '404': { description: 계정 없음 }
+
+  /own/admin/drama-accounts/{id}/members/{memberId}:
+    delete:
+      tags: [OTTALL 관리자 - 드라마 계정]
+      summary: 파티원 삭제
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: memberId, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: 삭제 성공 }
+        '404': { description: 계정 또는 파티원 없음 }

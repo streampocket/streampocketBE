@@ -98,9 +98,20 @@ export function deleteDramaMember(accountId: string, memberId: string) {
   return prisma.dramaMember.deleteMany({ where: { id: memberId, accountId } })
 }
 
-/** 만료 파티원 일괄 삭제 — 기준일(오늘 KST)보다 이전 만료건만 */
-export function deleteExpiredDramaMembers(accountId: string, today: Date) {
-  return prisma.dramaMember.deleteMany({ where: { accountId, endDate: { lt: today } } })
+/**
+ * 만료 파티원 일괄 삭제 — 어제까지 전부 + 오늘 중 만료 시각이 이미 지난 건.
+ *
+ * `startTime`이 만료 시각이라 날짜만 보면 오늘 01:30에 끝난 자리가 하루 종일 남는다.
+ * 값이 'HH:mm' 고정폭(파서가 padStart로 보장)이라 문자열 lte가 곧 시간 비교다 —
+ * 파티원 정렬(MEMBER_ORDER)도 이미 이 성질에 기대고 있다.
+ */
+export function deleteExpiredDramaMembers(accountId: string, today: Date, nowHhmm: string) {
+  return prisma.dramaMember.deleteMany({
+    where: {
+      accountId,
+      OR: [{ endDate: { lt: today } }, { endDate: today, startTime: { lte: nowHhmm } }],
+    },
+  })
 }
 
 /** 대량 등록 — 이관 리허설에서 171건을 한 번에 넣으므로 트랜잭션으로 묶는다 */

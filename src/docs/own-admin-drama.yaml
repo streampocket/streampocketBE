@@ -215,7 +215,13 @@ paths:
     delete:
       tags: [OTTALL 관리자 - 드라마 계정]
       summary: 만료 파티원 일괄 삭제
-      description: KST 오늘 기준으로 만료일이 지난 파티원만 지운다. 자동 크론이 아니라 관리자가 확인 후 실행한다.
+      description: |
+        **KST 지금 시각** 기준으로 만료가 지난 파티원만 지운다. 자동 크론이 아니라 관리자가 확인 후 실행한다.
+
+        파티원의 `startTime`이 곧 만료 시각이므로 날짜만 보지 않는다 —
+        어제까지 전부 + **오늘 중 만료 시각이 이미 지난 건**을 지운다.
+        날짜로만 지우면 오늘 01:30에 끝난 자리가 하루 종일 남아,
+        화면이 세는 "만료 N명"과 실제로 지워지는 수가 어긋난다.
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: id, required: true, schema: { type: string, format: uuid } }

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // 저장소는 모킹한다 — 여기서 고정하려는 건 DB 동작이 아니라
 // "언제 막고 언제 저장하는가"라는 판단 규칙이다.
@@ -7,6 +7,7 @@ const repo = vi.hoisted(() => ({
   findDramaAccountsByEmails: vi.fn(),
   createDramaAccount: vi.fn(),
   replaceDramaAccount: vi.fn(),
+  deleteExpiredDramaMembers: vi.fn(),
 }))
 
 vi.mock('../../repositories/own/dramaAccountRepository', () => ({
@@ -15,7 +16,6 @@ vi.mock('../../repositories/own/dramaAccountRepository', () => ({
   createDramaAccountsBulk: vi.fn(),
   deleteDramaAccountById: vi.fn(),
   deleteDramaMember: vi.fn(),
-  deleteExpiredDramaMembers: vi.fn(),
 }))
 
 // 암호화는 실제 구현을 쓴다 (키만 테스트용으로 준다).
@@ -23,7 +23,7 @@ vi.mock('../../repositories/own/dramaAccountRepository', () => ({
 process.env['OTP_SECRET_ENC_KEY'] = 'a'.repeat(64)
 
 const { encryptSecret } = await import('../../lib/crypto')
-const { saveDramaAccountFromText } = await import('./dramaAccountService')
+const { nowInKst, removeExpiredDramaMembers, saveDramaAccountFromText } = await import('./dramaAccountService')
 
 const MEMO = [
   '[2026-08-29]-릴숏 3인',
@@ -240,5 +240,63 @@ describe('동시 수정 방어 (낙관적 잠금)', () => {
     repo.createDramaAccount.mockResolvedValue(existing({ members: [] }))
     const { account } = await saveDramaAccountFromText({ text: MEMO, dryRun: false })
     expect(account?.updatedAt).toBe(VERSION)
+  })
+})
+
+// 파티원의 startTime이 곧 만료 시각이다. 날짜로만 지우면 오늘 01:30에 끝난 자리가
+// 하루 종일 남아, 화면이 세는 "만료 N명"과 실제로 지워지는 수가 어긋난다.
+describe('만료 파티원 정리 — 시각 기준', () => {
+  beforeEach(() => {
+    repo.deleteExpiredDramaMembers.mockResolvedValue({ count: 0 })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  /** UTC 시각을 고정하고 그때의 KST 기준값을 얻는다 */
+  const atUtc = (iso: string) => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(iso))
+    return nowInKst()
+  }
+
+  it('KST 자정 직후에도 날짜가 하루 밀리지 않는다', () => {
+    // UTC 08-05 15:30 = KST 08-06 00:30
+    const now = atUtc('2026-08-05T15:30:00.000Z')
+    expect(now.date.toISOString().slice(0, 10)).toBe('2026-08-06')
+    expect(now.hhmm).toBe('00:30')
+  })
+
+  it('KST 자정 직전은 아직 전날이다', () => {
+    // UTC 08-05 14:30 = KST 08-05 23:30
+    const now = atUtc('2026-08-05T14:30:00.000Z')
+    expect(now.date.toISOString().slice(0, 10)).toBe('2026-08-05')
+    expect(now.hhmm).toBe('23:30')
+  })
+
+  it('시각을 0채움 두 자리로 준다 (파티원 startTime과 같은 형식이라야 문자열 비교가 성립)', () => {
+    // UTC 08-05 00:05 = KST 08-05 09:05
+    const now = atUtc('2026-08-05T00:05:00.000Z')
+    expect(now.hhmm).toBe('09:05')
+  })
+
+  it('저장소에 KST 날짜와 시각을 함께 넘긴다', async () => {
+    repo.findDramaAccountById.mockResolvedValue(existing())
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-05T04:20:00.000Z')) // KST 13:20
+
+    await removeExpiredDramaMembers('acc-1')
+
+    const [accountId, date, hhmm] = repo.deleteExpiredDramaMembers.mock.calls[0]
+    expect(accountId).toBe('acc-1')
+    expect(date.toISOString().slice(0, 10)).toBe('2026-08-05')
+    expect(hhmm).toBe('13:20')
+  })
+
+  it('없는 계정이면 404 (지우기 전에 막는다)', async () => {
+    repo.findDramaAccountById.mockResolvedValue(null)
+    await expect(removeExpiredDramaMembers('missing')).rejects.toMatchObject({ statusCode: 404 })
+    expect(repo.deleteExpiredDramaMembers).not.toHaveBeenCalled()
   })
 })

@@ -65,6 +65,18 @@ export function todayInKst(): Date {
   return toDateOnly(kst.toISOString().slice(0, 10))
 }
 
+/**
+ * KST 기준 지금 — 날짜와 시각을 함께 돌려준다.
+ *
+ * 파티원 만료는 날짜뿐 아니라 `startTime`(= 만료 시각)까지 봐야 한다.
+ * 날짜만 보면 오늘 01:30에 끝난 자리가 하루 종일 차 있는 것으로 남는다.
+ * `hhmm`은 `DramaMember.startTime`과 같은 'HH:mm' 5자리라 문자열 비교가 곧 시간 비교다.
+ */
+export function nowInKst(): { date: Date; hhmm: string } {
+  const kst = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString()
+  return { date: toDateOnly(kst.slice(0, 10)), hhmm: kst.slice(11, 16) }
+}
+
 function toView(account: DramaAccountWithMembers): DramaAccountView {
   return {
     id: account.id,
@@ -231,11 +243,16 @@ export async function removeDramaMember(accountId: string, memberId: string): Pr
   if (count === 0) throw notFound('파티원')
 }
 
-/** 만료 파티원 일괄 삭제 — 자동 크론이 아니라 관리자가 확인 후 누르는 동작이다 */
+/**
+ * 만료 파티원 일괄 삭제 — 자동 크론이 아니라 관리자가 확인 후 누르는 동작이다.
+ * 화면이 만료 시각까지 보고 "만료 N명"을 세므로 삭제도 같은 기준이어야 한다 —
+ * 날짜로만 지우면 화면이 말한 수와 실제로 지워진 수가 어긋난다.
+ */
 export async function removeExpiredDramaMembers(accountId: string): Promise<{ removed: number }> {
   const account = await findDramaAccountById(accountId)
   if (!account) throw notFound('계정')
-  const { count } = await deleteExpiredDramaMembers(accountId, todayInKst())
+  const now = nowInKst()
+  const { count } = await deleteExpiredDramaMembers(accountId, now.date, now.hhmm)
   return { removed: count }
 }
 

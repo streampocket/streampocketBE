@@ -6,6 +6,7 @@ import {
   findApplicationsByUserId,
   findApplicationsForAdmin,
   findApplicationDetailForAdmin,
+  groupApplicationsByHour,
 } from '../../repositories/own/partyApplicationRepository'
 import { isPartyJoinable, calculateCurrentPrice } from '../../utils/partyPricing'
 import { sendDiscordAlert } from '../../lib/discord'
@@ -451,5 +452,50 @@ export async function checkApplication(productId: string, userId: string) {
       applied: true,
       applicationStatus: application.status,
     },
+  }
+}
+
+// ─────────────── 신청 시간대 통계 (관리자) ───────────────
+
+const HOURS_IN_DAY = 24
+
+export type ApplicationHourlyStats = {
+  range: { from: string; to: string }
+  total: number
+  /** 가장 많이 들어온 시(0~23). 신청이 하나도 없으면 null */
+  peakHour: number | null
+  hourly: { hour: number; count: number }[]
+}
+
+/**
+ * 이용자가 신청한 시각을 KST 시간대(0~23시)별로 집계한다.
+ *
+ * from/to는 'YYYY-MM-DD'. 경계는 +09:00을 명시해 KST 하루 전체를 덮는다 —
+ * 오프셋을 빼면 UTC로 해석돼 9시간 밀린 구간을 세게 된다.
+ */
+export async function getApplicationHourlyStats(input: {
+  from: string
+  to: string
+}): Promise<ApplicationHourlyStats> {
+  const from = new Date(`${input.from}T00:00:00.000+09:00`)
+  const to = new Date(`${input.to}T23:59:59.999+09:00`)
+
+  const rows = await groupApplicationsByHour(from, to)
+  const countByHour = new Map(rows.map((row) => [row.hour, row.count]))
+
+  // 신청이 없는 시간대도 0으로 채운다 — 막대 자리가 있어야 분포가 읽힌다
+  const hourly = Array.from({ length: HOURS_IN_DAY }, (_, hour) => ({
+    hour,
+    count: countByHour.get(hour) ?? 0,
+  }))
+
+  const total = hourly.reduce((sum, item) => sum + item.count, 0)
+  const peak = total > 0 ? hourly.reduce((max, item) => (item.count > max.count ? item : max)) : null
+
+  return {
+    range: { from: input.from, to: input.to },
+    total,
+    peakHour: peak?.hour ?? null,
+    hourly,
   }
 }

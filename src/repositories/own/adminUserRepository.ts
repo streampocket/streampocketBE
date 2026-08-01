@@ -11,6 +11,16 @@ type ListUsersInput = {
   pageSize: number
 }
 
+/**
+ * 가입일 기준 회원 수 — 방문자 통계의 "오늘 가입" 카드용.
+ *
+ * 탈퇴 회원(deletedAt)도 센다. "그날 가입했다"는 사실은 나중에 탈퇴해도 변하지 않고,
+ * 빼면 어제 숫자가 오늘 줄어드는 지표가 된다.
+ */
+export function countUsersCreatedBetween(from: Date, to: Date): Promise<number> {
+  return prisma.user.count({ where: { createdAt: { gte: from, lte: to } } })
+}
+
 export async function findUsers(input: ListUsersInput) {
   const searchFields =
     input.status === 'withdrawn'
@@ -102,6 +112,14 @@ export function findUserDetailById(id: string) {
               name: true,
               status: true,
               durationDays: true,
+              // 아래는 회원 상세의 "참여 파티" 카드용 —
+              // price는 신청 시점 실결제가(application.price)와 비교해
+              // 기간 차감이 실제로 일어났는지 판정하는 데 쓴다
+              leaderName: true,
+              price: true,
+              totalSlots: true,
+              filledSlots: true,
+              category: { select: { name: true } },
             },
           },
         },

@@ -1,5 +1,6 @@
 import type { AuthProvider } from '@prisma/client'
 import {
+  countUsersCreatedBetween,
   findUsers,
   findUserDetailById,
   type UserStatusFilter,
@@ -18,6 +19,40 @@ type ListUsersInput = {
 function purgeScheduledAt(deletedAt: Date | null): Date | null {
   if (!deletedAt) return null
   return new Date(deletedAt.getTime() + WITHDRAWAL_RETENTION_DAYS * 24 * 60 * 60 * 1000)
+}
+
+export type SignupStats = {
+  range: { from: string; to: string }
+  /** KST 오늘 00:00 ~ 23:59:59.999 가입 수 */
+  today: number
+  /** 조회 기간(from~to) 가입 수 */
+  rangeTotal: number
+}
+
+/** KST 오늘 'YYYY-MM-DD' — +9h 시프트 후 getUTC*로 산출 (서버 타임존 무관) */
+function kstTodayString(): string {
+  return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
+}
+
+/**
+ * 가입자 수 — 방문자 통계 화면용.
+ * 경계는 +09:00을 명시한다. 빼면 UTC로 해석돼 9시간 어긋난 구간을 세게 된다.
+ */
+export async function getSignupStats(input: { from: string; to: string }): Promise<SignupStats> {
+  const today = kstTodayString()
+
+  const [todayCount, rangeTotal] = await Promise.all([
+    countUsersCreatedBetween(
+      new Date(`${today}T00:00:00.000+09:00`),
+      new Date(`${today}T23:59:59.999+09:00`),
+    ),
+    countUsersCreatedBetween(
+      new Date(`${input.from}T00:00:00.000+09:00`),
+      new Date(`${input.to}T23:59:59.999+09:00`),
+    ),
+  ])
+
+  return { range: { from: input.from, to: input.to }, today: todayCount, rangeTotal }
 }
 
 export async function getUsers(input: ListUsersInput) {

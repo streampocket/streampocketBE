@@ -1,4 +1,44 @@
 paths:
+  /own/admin/users/signup-stats:
+    get:
+      summary: 가입자 수 (오늘 + 조회 기간)
+      description: |
+        방문자 통계 화면의 "가입" 카드용. 경계는 전부 **KST**다.
+
+        **탈퇴 회원도 센다.** "그날 가입했다"는 사실은 나중에 탈퇴해도 변하지 않고,
+        빼면 어제 숫자가 오늘 줄어드는 지표가 된다.
+
+        > 한계: 탈퇴 후 완전 삭제(`purgeWithdrawnUsers`)가 돌면 행 자체가 사라져
+        > **과거 기간 합계가 줄어들 수 있다.** 오늘 숫자에는 영향이 없다(유예 후 삭제).
+
+        OTTALL 전용이다. 지코인은 회원가입 기능 자체가 없다(휴대폰 인증 기반 비회원 주문).
+      tags: [OwnAdminUsers]
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: query, name: from, required: true, schema: { type: string, example: '2026-07-03' }, description: 'YYYY-MM-DD (KST)' }
+        - { in: query, name: to, required: true, schema: { type: string, example: '2026-08-01' }, description: 'YYYY-MM-DD (KST). from보다 빠를 수 없다' }
+      responses:
+        '200':
+          description: 가입자 수
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      range:
+                        type: object
+                        properties:
+                          from: { type: string, example: '2026-07-03' }
+                          to: { type: string, example: '2026-08-01' }
+                      today: { type: integer, example: 31, description: KST 오늘 하루 가입 수 (조회 기간과 무관) }
+                      rangeTotal: { type: integer, example: 142, description: from~to 가입 수 }
+        '400': { description: 날짜 형식 오류 · 시작일이 종료일보다 늦음 }
+        '401': { description: 인증 필요 }
+
   /own/admin/users:
     get:
       summary: 회원 목록 조회

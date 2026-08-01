@@ -9,6 +9,7 @@ import {
   adminApproveApplication,
   adminRejectApplication,
   adminCancelApplication,
+  getApplicationHourlyStats,
 } from '../../services/own/partyApplicationService'
 
 const idParamSchema = z.object({
@@ -21,6 +22,15 @@ const adminListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 })
+
+const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD 형식이어야 합니다.')
+
+// 시간대 통계 조회 — siteVisitController의 statsQuerySchema와 같은 형태
+const hourlyQuerySchema = z
+  .object({ from: dateString, to: dateString })
+  .refine((query) => query.from <= query.to, {
+    message: '시작일이 종료일보다 늦을 수 없습니다.',
+  })
 
 export async function applyToPartyHandler(req: Request, res: Response): Promise<void> {
   const { id } = idParamSchema.parse(req.params)
@@ -48,6 +58,13 @@ export async function adminGetApplicationsHandler(req: Request, res: Response): 
   const query = adminListQuerySchema.parse(req.query)
   const result = await adminGetApplications(query)
   res.json(result)
+}
+
+/** 신청이 들어온 시간대 분포 — 기준은 이용자가 신청한 시각(관리자 승인 시각이 아니다) */
+export async function adminGetApplicationHoursHandler(req: Request, res: Response): Promise<void> {
+  const query = hourlyQuerySchema.parse(req.query)
+  const data = await getApplicationHourlyStats(query)
+  res.json({ data })
 }
 
 export async function adminGetApplicationDetailHandler(req: Request, res: Response): Promise<void> {

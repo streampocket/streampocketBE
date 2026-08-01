@@ -98,6 +98,30 @@ export function bulkExpireApplications(ids: string[]) {
   })
 }
 
+/**
+ * 신청이 들어온 시각을 KST 시(0~23)로 묶어 센다.
+ *
+ * 기준은 `created_at`(이용자가 신청 버튼을 누른 시각)이다.
+ * 파티 주문(SteamOrderItem)의 paid_at은 관리자가 승인한 시각이라 여기에 쓸 수 없다.
+ * Prisma groupBy는 시각 추출을 못 하므로 raw로 간다 (대시보드 매출 캘린더와 같은 패턴).
+ * 상태는 거르지 않는다 — 취소·만료됐어도 "그 시간에 들어왔다"는 사실은 변하지 않는다.
+ */
+export async function groupApplicationsByHour(
+  from: Date,
+  to: Date,
+): Promise<{ hour: number; count: number }[]> {
+  const rows = await prisma.$queryRaw<Array<{ hour: string; count: bigint }>>`
+    SELECT
+      to_char(created_at AT TIME ZONE 'Asia/Seoul', 'HH24') AS hour,
+      COUNT(*)::bigint AS count
+    FROM party_applications
+    WHERE created_at >= ${from}
+      AND created_at <= ${to}
+    GROUP BY 1
+  `
+  return rows.map((row) => ({ hour: Number(row.hour), count: Number(row.count) }))
+}
+
 // ─────────────── 관리자용 ───────────────
 
 type AdminListInput = {

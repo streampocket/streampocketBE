@@ -92,8 +92,9 @@ export async function getUserDetail(id: string) {
     throw Object.assign(new Error('회원을 찾을 수 없습니다.'), { statusCode: 404 })
   }
 
+  // 실제로 받은 돈 기준 — 포인트로 깎인 만큼은 입금되지 않았으므로 빼고 센다
   const totalPaidAmount = user.partyApplications.reduce((sum, app) => {
-    return app.status === 'confirmed' ? sum + app.totalAmount : sum
+    return app.status === 'confirmed' ? sum + (app.totalAmount - app.usedPoint) : sum
   }, 0)
 
   const now = new Date()
@@ -109,6 +110,7 @@ export async function getUserDetail(id: string) {
       phone: user.phone,
       phoneVerified: user.phoneVerified,
       provider: user.provider,
+      pointBalance: user.pointBalance,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
       deletedAt: user.deletedAt,

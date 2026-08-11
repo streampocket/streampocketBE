@@ -32,10 +32,17 @@ const hourlyQuerySchema = z
     message: '시작일이 종료일보다 늦을 수 없습니다.',
   })
 
+// 사용 금액이 아니라 "쓸지 말지"만 받는다 — 금액은 서버가 min(잔액, 총액)으로 정한다.
+// 클라이언트가 보낸 숫자를 신뢰하면 조작 여지가 생긴다.
+const applyBodySchema = z.object({
+  usePoint: z.boolean().default(false),
+})
+
 export async function applyToPartyHandler(req: Request, res: Response): Promise<void> {
   const { id } = idParamSchema.parse(req.params)
+  const body = applyBodySchema.parse(req.body ?? {})
   const userId = req.user!.id
-  const result = await applyToParty(id, userId)
+  const result = await applyToParty(id, userId, body.usePoint)
   res.status(201).json(result)
 }
 

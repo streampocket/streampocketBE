@@ -1,8 +1,25 @@
+components:
+  schemas:
+    ReviewPointTiers:
+      type: object
+      description: |
+        리뷰 적립 포인트 3구간. **실결제액(총액 − 사용 포인트)** 기준이다.
+        총액 기준이면 포인트로 산 건에 또 포인트가 붙어 계속 불어나므로 실결제액을 쓴다.
+
+        구간 개수는 **3으로 고정**이다. 가변으로 두면 추가·삭제·순서·겹침 검증이 붙는데,
+        실제 결제액이 두 덩어리로 몰려 있어 잘게 나눌 값어치가 없다.
+      properties:
+        tier1Max: { type: integer, example: 7000, description: 이 금액 이하 → tier1Point }
+        tier2Max: { type: integer, example: 10000, description: 이 금액 이하 → tier2Point }
+        tier1Point: { type: integer, example: 100 }
+        tier2Point: { type: integer, example: 200 }
+        tier3Point: { type: integer, example: 300, description: tier2Max 초과 }
+
 paths:
   /steam/admin/settings:
     get:
       summary: 시스템 설정 조회
-      description: 전역 기본 소요시간 등 시스템 설정을 조회한다.
+      description: 전역 기본 소요시간·리뷰 적립 포인트 구간을 조회한다.
       tags: [SystemSettings]
       security:
         - bearerAuth: []
@@ -21,9 +38,16 @@ paths:
                         type: integer
                         description: 진행중 전환 시 적용되는 전역 기본 소요시간(분)
                         example: 60
+                      reviewPointTiers:
+                        $ref: '#/components/schemas/ReviewPointTiers'
     patch:
       summary: 시스템 설정 수정
-      description: 전역 기본 소요시간을 수정한다. 허용 값은 20·40·60·90·120분.
+      description: |
+        기본 소요시간(허용 값 20·40·60·90·120분)과 리뷰 적립 구간을 수정한다.
+        **두 설정은 화면이 달라 각각 단독으로 보낼 수 있다** — 둘 다 생략하면 400.
+
+        `tier1Max >= tier2Max`면 400. 경계가 뒤집히면 2구간이 영영 지급되지 않는다.
+        바꾼 값은 **다음 지급부터** 적용되고 이미 지급된 건은 그대로다.
       tags: [SystemSettings]
       security:
         - bearerAuth: []
@@ -33,13 +57,14 @@ paths:
           application/json:
             schema:
               type: object
-              required: [defaultDurationMinutes]
               properties:
                 defaultDurationMinutes:
                   type: integer
                   enum: [20, 40, 60, 90, 120]
+                reviewPointTiers:
+                  $ref: '#/components/schemas/ReviewPointTiers'
       responses:
         '200':
           description: 수정된 시스템 설정
         '400':
-          description: 허용되지 않는 값
+          description: 허용되지 않는 소요시간 · 경계 역전(tier1Max >= tier2Max) · 변경할 설정 없음

@@ -20,6 +20,7 @@ import {
 } from '../../repositories/own/partyApplicationRepository'
 import { sendDiscordAlert } from '../../lib/discord'
 import { PARTY_TYPE_LABEL } from '../../constants/party'
+import { PARTY_APPLICATION_FEE } from '../../constants/fees'
 import { WITHDRAWN_USER_DISPLAY } from './userWithdrawalService'
 import {
   calculateCurrentPrice,
@@ -73,7 +74,15 @@ function enrichWithPricing<T extends { price: number; dailyDiscount: number; dur
     ? Math.max(0, Math.floor(getRemainingDays(product.startedAt, product.durationDays)))
     : product.durationDays
 
-  return { ...product, currentPrice, partyExpiresAt, remainingDays }
+  // 신청 수수료를 함께 내려준다 — 화면이 "결제 예정 금액"을 계산하려면 필요한데,
+  // fe에 상수를 복제하면 값이 바뀔 때 갈라진다. 단일 출처(constants/fees.ts)를 그대로 전달한다.
+  return {
+    ...product,
+    currentPrice,
+    applicationFee: PARTY_APPLICATION_FEE,
+    partyExpiresAt,
+    remainingDays,
+  }
 }
 
 async function resolveCategoryByName(name: string): Promise<string> {

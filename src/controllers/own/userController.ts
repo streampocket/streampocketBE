@@ -38,6 +38,9 @@ export async function getMeHandler(req: Request, res: Response): Promise<void> {
       provider: user.provider,
       loginMethods,
       phoneVerified: user.phoneVerified,
+      // 헤더 드롭다운이 이 값을 쓴다. localStorage 캐시가 아니라 매번 여기서 읽어야
+      // 리뷰 적립 직후에도 최신 잔액이 보인다.
+      pointBalance: user.pointBalance,
       createdAt: user.createdAt,
     },
   })

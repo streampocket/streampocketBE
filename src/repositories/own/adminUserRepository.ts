@@ -92,6 +92,7 @@ export function findUserDetailById(id: string) {
       withdrawnByAdmin: true,
       originalEmail: true,
       originalPhone: true,
+      pointBalance: true,
       termsAgreements: {
         select: { type: true, agreedAt: true },
         orderBy: { agreedAt: 'desc' },
@@ -103,6 +104,7 @@ export function findUserDetailById(id: string) {
           price: true,
           fee: true,
           totalAmount: true,
+          usedPoint: true,
           startedAt: true,
           expiresAt: true,
           createdAt: true,

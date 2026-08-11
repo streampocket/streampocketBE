@@ -724,6 +724,11 @@ type SendPartyApplicationAlimtalkInput = {
   price: number
   fee: number
   totalAmount: number
+  /**
+   * 사용한 포인트. 현재 템플릿(UJ_2053)에는 포인트 줄이 없어 '총액'을 차감가로 바꾸는 데만 쓴다.
+   * 포인트 줄이 있는 새 템플릿을 받으면 여기서 별도 변수로 넘기면 된다.
+   */
+  usedPoint?: number
 }
 
 export async function sendPartyApplicationAlimtalk(
@@ -747,13 +752,16 @@ export async function sendPartyApplicationAlimtalk(
 
   const buttonJson = buildButtonPayload(template)
   const templateContent = template.templateContent ?? ''
-  // 템플릿(UJ_2053)이 '총액 #{총액}원'처럼 원 단위를 포함하므로 값에는 콤마 숫자만 넣는다
+  // 템플릿(UJ_2053)이 '총액 #{총액}원'처럼 원 단위를 포함하므로 값에는 콤마 숫자만 넣는다.
+  // 포인트를 쓴 경우 '총액'에 차감된 최종 금액을 넣는다 — 템플릿 본문은 알리고 심사가 필요해
+  // 코드로 못 고치므로, 구매자가 실제로 낼 돈이 정확히 찍히는 쪽을 택했다.
+  const payableAmount = input.totalAmount - (input.usedPoint ?? 0)
   const vars: Record<string, string> = {
     성함: input.recipientName,
     상품명: input.productName,
     금액: input.price.toLocaleString('ko-KR'),
     수수료: input.fee.toLocaleString('ko-KR'),
-    총액: input.totalAmount.toLocaleString('ko-KR'),
+    총액: payableAmount.toLocaleString('ko-KR'),
   }
   const message = applyTemplate(templateContent, normalizeTemplateVars(vars))
 

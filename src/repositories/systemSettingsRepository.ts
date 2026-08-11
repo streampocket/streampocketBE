@@ -7,6 +7,11 @@ export async function getSystemSettingsRow(): Promise<SystemSettings | null> {
 
 type SystemSettingsUpdate = {
   defaultDurationMinutes?: number
+  reviewPointTier1Max?: number
+  reviewPointTier2Max?: number
+  reviewPointTier1Point?: number
+  reviewPointTier2Point?: number
+  reviewPointTier3Point?: number
 }
 
 export async function upsertSystemSettings(data: SystemSettingsUpdate): Promise<SystemSettings> {

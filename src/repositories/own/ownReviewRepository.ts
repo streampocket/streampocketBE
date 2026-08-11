@@ -67,8 +67,10 @@ type CreateReviewInput = {
   imageUrl: string | null
 }
 
-export function createReview(data: CreateReviewInput) {
-  return prisma.ownReview.create({
+// 포인트 적립과 한 트랜잭션으로 묶어야 해서 db를 받는다 —
+// 리뷰만 저장되고 적립이 실패하면 사용자에겐 실패로 보이는데 재작성은 409가 된다.
+export function createReview(data: CreateReviewInput, db: Prisma.TransactionClient | typeof prisma = prisma) {
+  return db.ownReview.create({
     data,
     include: PUBLIC_INCLUDE,
   })
@@ -103,6 +105,9 @@ export function findReviewableApplications(userId: string) {
       id: true,
       startedAt: true,
       expiresAt: true,
+      // 적립 예정액 계산용 — 기준이 실결제액(총액 − 사용 포인트)이다
+      totalAmount: true,
+      usedPoint: true,
       product: {
         select: {
           id: true,

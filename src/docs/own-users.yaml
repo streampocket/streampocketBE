@@ -35,6 +35,13 @@ paths:
                           type: string
                           enum: [local, kakao, google]
                         description: 사용 가능한 로그인 수단 목록 (password 보유 시 local + 연동 소셜)
+                      pointBalance:
+                        type: integer
+                        example: 1200
+                        description: |
+                          보유 포인트. 헤더 드롭다운이 이 값을 쓴다.
+                          로그인 응답의 localStorage 캐시가 아니라 **항상 이 API로 읽어야** 한다 —
+                          리뷰 적립·파티 사용으로 잔액이 바뀌어도 캐시는 갱신되지 않는다.
         '401':
           description: 인증 필요 (탈퇴 처리된 계정 포함)
 

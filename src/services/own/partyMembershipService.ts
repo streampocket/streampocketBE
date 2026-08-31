@@ -81,9 +81,11 @@ export async function releasePartyMembership(
     }
 
     // 확정 상태일 때만 취소 — 동시 요청/재클릭 시 두 번째는 count 0으로 조용히 no-op
+    // 이 코어를 지나는 해제 = 반품으로 기록(returnedAt) — 같은 카테고리 12시간 재신청 차단의 기준.
+    // 거절(adminReject)은 이 코어를 지나지 않으므로 자연히 차단 대상에서 빠진다.
     const cancelled = await tx.partyApplication.updateMany({
       where: { id: applicationId, status: 'confirmed' },
-      data: { status: 'cancelled' },
+      data: { status: 'cancelled', returnedAt: new Date() },
     })
     if (cancelled.count === 0) {
       return { released: false, reason: 'not_confirmed', ...base }

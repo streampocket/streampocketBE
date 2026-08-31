@@ -4,6 +4,7 @@ import {
   adminGetUserDetailHandler,
   adminGetSignupStatsHandler,
   adminWithdrawUserHandler,
+  adminReleaseReturnCooldownHandler,
 } from '../../controllers/own/adminUserController'
 import { authMiddleware } from '../../middlewares/auth'
 import { asyncHandler } from '../../utils/asyncHandler'
@@ -17,3 +18,7 @@ adminOwnUsersRouter.get('/', asyncHandler(adminGetUsersHandler))
 adminOwnUsersRouter.get('/signup-stats', asyncHandler(adminGetSignupStatsHandler))
 adminOwnUsersRouter.get('/:id', asyncHandler(adminGetUserDetailHandler))
 adminOwnUsersRouter.post('/:id/withdraw', asyncHandler(adminWithdrawUserHandler))
+adminOwnUsersRouter.post(
+  '/:id/release-return-cooldown',
+  asyncHandler(adminReleaseReturnCooldownHandler),
+)

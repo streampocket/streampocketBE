@@ -52,6 +52,17 @@ export function findRecentReturnInCategory(
   })
 }
 
+/**
+ * 유저의 유효한(12시간 이내) 반품 쿨다운 일괄 해제 — 관리자 회원관리 액션.
+ * 유효분만 지운다: 경과한 returnedAt은 가드에 안 걸리는 이력이므로 보존 (카드 "반품" 뱃지 유지).
+ */
+export function releaseActiveReturnCooldowns(userId: string, since: Date) {
+  return prisma.partyApplication.updateMany({
+    where: { userId, returnedAt: { gt: since } },
+    data: { returnedAt: null },
+  })
+}
+
 export function findActiveApplication(productId: string, userId: string) {
   return prisma.partyApplication.findFirst({
     where: {

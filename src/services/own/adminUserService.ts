@@ -6,6 +6,11 @@ import {
   type UserStatusFilter,
 } from '../../repositories/own/adminUserRepository'
 import { WITHDRAWAL_RETENTION_DAYS } from './userWithdrawalService'
+import { RETURN_REAPPLY_BLOCK_HOURS } from '../../constants/party'
+import { releaseActiveReturnCooldowns } from '../../repositories/own/partyApplicationRepository'
+import { findUserById } from '../../repositories/own/userRepository'
+import { sendDiscordAlert } from '../../lib/discord'
+import { formatKstDateTime } from '../../utils/kst'
 
 type ListUsersInput = {
   search?: string
@@ -86,6 +91,34 @@ export async function getUsers(input: ListUsersInput) {
   }
 }
 
+/**
+ * 유저의 유효한 반품 재신청 차단(12시간 이내 returnedAt)을 일괄 해제한다.
+ * 해제 즉시 재신청 가능. 12시간 경과분은 가드에 안 걸리는 이력이므로 건드리지 않는다.
+ */
+export async function releaseUserReturnCooldowns(userId: string) {
+  const user = await findUserById(userId)
+  if (!user) {
+    throw Object.assign(new Error('회원을 찾을 수 없습니다.'), { statusCode: 404 })
+  }
+
+  const since = new Date(Date.now() - RETURN_REAPPLY_BLOCK_HOURS * 60 * 60 * 1000)
+  const { count } = await releaseActiveReturnCooldowns(userId, since)
+  if (count === 0) {
+    // 버튼은 차단이 있을 때만 노출되므로 0건 = 낡은 화면(타 관리자 해제/12시간 자연 경과)
+    throw Object.assign(new Error('해제할 재신청 차단이 없습니다.'), { statusCode: 409 })
+  }
+
+  const message = [
+    '[재신청 차단 해제 — 관리자]',
+    `회원: ${user.name} (${user.email})`,
+    `해제 건수: ${count}건`,
+    `해제일시: ${formatKstDateTime()} (KST)`,
+  ].join('\n')
+  sendDiscordAlert('partyApply', message, { color: 0x95a5a6 }).catch(() => {})
+
+  return { data: { releasedCount: count } }
+}
+
 export async function getUserDetail(id: string) {
   const user = await findUserDetailById(id)
   if (!user) {
@@ -101,6 +134,29 @@ export async function getUserDetail(id: string) {
   const activePartyCount = user.partyApplications.filter(
     (app) => app.status === 'confirmed' && app.expiresAt && new Date(app.expiresAt) > now,
   ).length
+
+  // 현재 유효한 재신청 차단 — 차단 판정(findRecentReturnInCategory)과 같은 기준:
+  // 12시간 이내 returnedAt, 카테고리 단위, 같은 카테고리에 여러 건이면 최신 1건
+  const cooldownSince = now.getTime() - RETURN_REAPPLY_BLOCK_HOURS * 60 * 60 * 1000
+  const cooldownByCategory = new Map<
+    string,
+    { categoryId: string; categoryName: string; partyName: string; returnedAt: Date; retryAt: Date }
+  >()
+  for (const app of user.partyApplications) {
+    if (!app.returnedAt || app.returnedAt.getTime() <= cooldownSince) continue
+    const existing = cooldownByCategory.get(app.product.category.id)
+    if (existing && existing.returnedAt.getTime() >= app.returnedAt.getTime()) continue
+    cooldownByCategory.set(app.product.category.id, {
+      categoryId: app.product.category.id,
+      categoryName: app.product.category.name,
+      partyName: app.product.name,
+      returnedAt: app.returnedAt,
+      retryAt: new Date(app.returnedAt.getTime() + RETURN_REAPPLY_BLOCK_HOURS * 60 * 60 * 1000),
+    })
+  }
+  const returnCooldowns = [...cooldownByCategory.values()].sort(
+    (a, b) => b.retryAt.getTime() - a.retryAt.getTime(),
+  )
 
   return {
     user: {
@@ -121,6 +177,7 @@ export async function getUserDetail(id: string) {
       purgeScheduledAt: purgeScheduledAt(user.deletedAt),
     },
     partyApplications: user.partyApplications,
+    returnCooldowns,
     termsAgreements: user.termsAgreements,
     stats: {
       totalPaidAmount,

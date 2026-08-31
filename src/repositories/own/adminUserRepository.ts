@@ -107,6 +107,8 @@ export function findUserDetailById(id: string) {
           usedPoint: true,
           startedAt: true,
           expiresAt: true,
+          // 반품 시각 — 재신청 차단(returnCooldowns) 계산 + 카드 "반품" 뱃지 구분용
+          returnedAt: true,
           createdAt: true,
           product: {
             select: {
@@ -121,7 +123,7 @@ export function findUserDetailById(id: string) {
               price: true,
               totalSlots: true,
               filledSlots: true,
-              category: { select: { name: true } },
+              category: { select: { id: true, name: true } },
             },
           },
         },

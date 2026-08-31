@@ -9,6 +9,60 @@ type CreateApplicationInput = {
   totalAmount: number
 }
 
+// 카테고리 가드는 신청 트랜잭션 안에서 최신 커밋 기준으로 읽어야 한다.
+// pointRepository와 같은 관례 — 트랜잭션 클라이언트를 첫 인자로 받고, 단독 호출은 prisma를 넘긴다.
+type Db = Prisma.TransactionClient | typeof prisma
+
+/**
+ * 같은 카테고리의 "다른" 파티에 승인 대기(pending) 신청이 있는지.
+ * 삭제된 파티(deletedAt) 밑에 남은 고아 pending이 영구 차단으로 이어지지 않도록 거른다.
+ */
+export function findPendingApplicationInCategory(
+  db: Db,
+  input: { userId: string; categoryId: string; excludeProductId: string },
+) {
+  return db.partyApplication.findFirst({
+    where: {
+      userId: input.userId,
+      status: 'pending',
+      productId: { not: input.excludeProductId },
+      product: { categoryId: input.categoryId, deletedAt: null },
+    },
+    select: { id: true, product: { select: { name: true } } },
+  })
+}
+
+/**
+ * 같은 카테고리에서 since 이후 반품(returnedAt)된 신청이 있는지 — 최신 반품 기준.
+ * 파티 삭제로 쿨다운이 풀리면 안 되므로 deletedAt은 거르지 않는다.
+ * status 필터 불필요: 반품 행은 cancelled이고, 재신청(revive)되면 returnedAt이 null로 초기화된다.
+ */
+export function findRecentReturnInCategory(
+  db: Db,
+  input: { userId: string; categoryId: string; since: Date },
+) {
+  return db.partyApplication.findFirst({
+    where: {
+      userId: input.userId,
+      returnedAt: { gt: input.since },
+      product: { categoryId: input.categoryId },
+    },
+    orderBy: { returnedAt: 'desc' },
+    select: { returnedAt: true, product: { select: { name: true } } },
+  })
+}
+
+/**
+ * 유저의 유효한(12시간 이내) 반품 쿨다운 일괄 해제 — 관리자 회원관리 액션.
+ * 유효분만 지운다: 경과한 returnedAt은 가드에 안 걸리는 이력이므로 보존 (카드 "반품" 뱃지 유지).
+ */
+export function releaseActiveReturnCooldowns(userId: string, since: Date) {
+  return prisma.partyApplication.updateMany({
+    where: { userId, returnedAt: { gt: since } },
+    data: { returnedAt: null },
+  })
+}
+
 export function findActiveApplication(productId: string, userId: string) {
   return prisma.partyApplication.findFirst({
     where: {

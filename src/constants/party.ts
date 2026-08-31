@@ -6,6 +6,9 @@ export const PARTY_TYPE_LABEL: Record<OwnProductType, string> = {
   shared: '공유형',
 }
 
+// 반품(파티원 제거) 후 같은 카테고리 파티 재신청 차단 시간 — 부정결제 방지
+export const RETURN_REAPPLY_BLOCK_HOURS = 12
+
 // 파티 OTP: 구매자당 최대 발급 횟수 — 재발급 포함 모든 발급이 1회씩 차감
 export const PARTY_OTP_MAX_ISSUES = 3
 

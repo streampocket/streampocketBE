@@ -6,6 +6,8 @@ import {
   findApplicationsByUserId,
   findApplicationsForAdmin,
   findApplicationDetailForAdmin,
+  findPendingApplicationInCategory,
+  findRecentReturnInCategory,
   groupApplicationsByHour,
 } from '../../repositories/own/partyApplicationRepository'
 import { isPartyJoinable, calculateCurrentPrice } from '../../utils/partyPricing'
@@ -16,7 +18,8 @@ import {
 } from '../alimtalkService'
 import { findDeliveryLogsByPartyApplicationId } from '../../repositories/deliveryLogRepository'
 import { PARTY_APPLICATION_FEE } from '../../constants/fees'
-import { PARTY_TYPE_LABEL } from '../../constants/party'
+import { PARTY_TYPE_LABEL, RETURN_REAPPLY_BLOCK_HOURS } from '../../constants/party'
+import { formatKstDateTime } from '../../utils/kst'
 import { createPartyOrder, markOrderReturned } from '../steamOrderService'
 import { findOrdersByPartyApplicationId } from '../../repositories/steamOrderRepository'
 import { releasePartyMembership } from './partyMembershipService'
@@ -63,6 +66,41 @@ export async function applyToParty(productId: string, userId: string, usePoint =
       throw Object.assign(new Error('모집이 마감되었습니다.'), { statusCode: 409 })
     }
 
+    // 같은 카테고리(OTT 서비스) 중복 신청 가드 — 결제 없는 무한 신청 방지.
+    // pending만 본다: 확정(이용 중)은 같은 카테고리 추가 신청을 허용한다.
+    const pendingInCategory = await findPendingApplicationInCategory(tx, {
+      userId,
+      categoryId: product.categoryId,
+      excludeProductId: productId,
+    })
+    if (pendingInCategory) {
+      throw Object.assign(
+        new Error(
+          `같은 OTT(${product.category.name})의 다른 파티 "${pendingInCategory.product.name}"에 이미 신청 대기 중입니다. 기존 신청이 처리된 뒤 다시 신청해주세요.`,
+        ),
+        { statusCode: 409 },
+      )
+    }
+
+    // 반품 쿨다운 가드 — 반품(파티원 제거) 후 같은 카테고리는 12시간 동안 재신청 불가 (부정결제 방지)
+    const since = new Date(Date.now() - RETURN_REAPPLY_BLOCK_HOURS * 60 * 60 * 1000)
+    const recentReturn = await findRecentReturnInCategory(tx, {
+      userId,
+      categoryId: product.categoryId,
+      since,
+    })
+    if (recentReturn?.returnedAt) {
+      const retryAt = new Date(
+        recentReturn.returnedAt.getTime() + RETURN_REAPPLY_BLOCK_HOURS * 60 * 60 * 1000,
+      )
+      throw Object.assign(
+        new Error(
+          `반품 이력이 있어 반품 후 ${RETURN_REAPPLY_BLOCK_HOURS}시간 동안 같은 OTT 파티에 신청할 수 없습니다. ${formatKstDateTime(retryAt).slice(0, 16)} 이후 다시 신청 가능합니다.`,
+        ),
+        { statusCode: 409 },
+      )
+    }
+
     const prior = await tx.partyApplication.findUnique({
       where: { productId_userId: { productId, userId } },
     })
@@ -91,6 +129,9 @@ export async function applyToParty(productId: string, userId: string, usePoint =
           usedPoint,
           startedAt: null,
           expiresAt: null,
+          // 이전 사이클의 반품 이력이 새 사이클로 이월되지 않도록 초기화.
+          // 쿨다운 12시간 이내면 위 가드가 먼저 409로 끊으므로 여기 도달 시점엔 항상 해제 대상이다.
+          returnedAt: null,
         },
       })
       // 재신청 시 이전 사이클의 OTP 시크릿·소진 횟수가 새 사이클로 이월되지 않도록 삭제.
@@ -503,17 +544,63 @@ export async function getMyApplications(userId: string) {
   }
 }
 
+// 신청 불가 사유 — 프론트가 신청 폼 대신 안내 박스를 그릴 때 쓴다
+type ApplyRestriction = {
+  type: 'category_pending' | 'return_cooldown'
+  /** 차단 원인 파티명 (pending 중인 파티 / 반품된 파티) */
+  partyName: string
+  /** return_cooldown일 때 재신청 가능 시각(ISO). category_pending은 null */
+  retryAt: string | null
+}
+
 export async function checkApplication(productId: string, userId: string) {
   const application = await findActiveApplication(productId, userId)
-  if (!application) {
-    return { data: { applied: false, applicationStatus: null } }
+  if (application) {
+    return {
+      data: {
+        applied: true,
+        applicationStatus: application.status,
+        restriction: null,
+      },
+    }
   }
-  return {
-    data: {
-      applied: true,
-      applicationStatus: application.status,
-    },
+
+  // 이미 신청 상태 UI가 우선이므로 미신청일 때만 제한 사유를 계산한다.
+  // 사유 우선순위: 같은 카테고리 pending → 반품 쿨다운 (더 행동 가능한 사유 먼저)
+  let restriction: ApplyRestriction | null = null
+  const product = await findOwnProductById(productId)
+  if (product) {
+    const pendingInCategory = await findPendingApplicationInCategory(prisma, {
+      userId,
+      categoryId: product.categoryId,
+      excludeProductId: productId,
+    })
+    if (pendingInCategory) {
+      restriction = {
+        type: 'category_pending',
+        partyName: pendingInCategory.product.name,
+        retryAt: null,
+      }
+    } else {
+      const since = new Date(Date.now() - RETURN_REAPPLY_BLOCK_HOURS * 60 * 60 * 1000)
+      const recentReturn = await findRecentReturnInCategory(prisma, {
+        userId,
+        categoryId: product.categoryId,
+        since,
+      })
+      if (recentReturn?.returnedAt) {
+        restriction = {
+          type: 'return_cooldown',
+          partyName: recentReturn.product.name,
+          retryAt: new Date(
+            recentReturn.returnedAt.getTime() + RETURN_REAPPLY_BLOCK_HOURS * 60 * 60 * 1000,
+          ).toISOString(),
+        }
+      }
+    }
   }
+
+  return { data: { applied: false, applicationStatus: null, restriction } }
 }
 
 // ─────────────── 신청 시간대 통계 (관리자) ───────────────

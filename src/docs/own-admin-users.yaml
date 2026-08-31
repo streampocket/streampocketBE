@@ -93,7 +93,10 @@ paths:
             format: uuid
       responses:
         '200':
-          description: 회원 상세 정보 (파트너, 파티, 결제, 통계, 탈퇴 정보 포함)
+          description: >
+            회원 상세 정보 (파트너, 파티, 결제, 통계, 탈퇴 정보 포함).
+            returnCooldowns에 현재 유효한 반품 재신청 차단 목록
+            (카테고리별 최신 1건 — categoryId/categoryName/partyName/returnedAt/retryAt) 포함.
         '404':
           description: 회원을 찾을 수 없음
 
@@ -134,3 +137,41 @@ paths:
           description: 회원을 찾을 수 없음
         '409':
           description: 진행 중/대기중 파티가 있어 처리 불가, 또는 이미 탈퇴 처리됨
+
+  /own/admin/users/{id}/release-return-cooldown:
+    post:
+      summary: 반품 재신청 차단 일괄 해제 (관리자)
+      description: >
+        유저의 유효한(12시간 이내) 반품 재신청 차단을 한 번에 해제한다
+        (해당 신청들의 returnedAt을 null 처리). 해제 즉시 재신청 가능.
+        12시간이 경과한 returnedAt은 가드에 걸리지 않는 이력이므로 보존한다.
+        해제 내역은 Discord(파티 채널)로 알림.
+      tags: [OwnAdminUsers]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 해제 완료
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: 재신청 차단을 해제했습니다. }
+                  data:
+                    type: object
+                    properties:
+                      releasedCount:
+                        type: integer
+                        description: returnedAt이 해제된 신청 건수
+        '404':
+          description: 회원을 찾을 수 없음
+        '409':
+          description: 해제할 재신청 차단이 없음 (이미 해제됐거나 12시간 자연 경과)

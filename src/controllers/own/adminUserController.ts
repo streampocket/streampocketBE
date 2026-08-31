@@ -1,6 +1,11 @@
 import { z } from 'zod'
 import type { Request, Response } from 'express'
-import { getUsers, getUserDetail, getSignupStats } from '../../services/own/adminUserService'
+import {
+  getUsers,
+  getUserDetail,
+  getSignupStats,
+  releaseUserReturnCooldowns,
+} from '../../services/own/adminUserService'
 import { adminWithdrawUser } from '../../services/own/userWithdrawalService'
 
 // ───────────────────────── Zod 스키마 ─────────────────────────
@@ -56,4 +61,14 @@ export async function adminWithdrawUserHandler(req: Request, res: Response): Pro
   const body = withdrawBodySchema.parse(req.body)
   const result = await adminWithdrawUser(id, body.reason)
   res.json({ message: '탈퇴 처리가 완료되었습니다.', ...result })
+}
+
+/** 반품 재신청 차단(12시간) 유저 단위 일괄 해제 */
+export async function adminReleaseReturnCooldownHandler(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  const { id } = idParamSchema.parse(req.params)
+  const result = await releaseUserReturnCooldowns(id)
+  res.json({ message: '재신청 차단을 해제했습니다.', ...result })
 }

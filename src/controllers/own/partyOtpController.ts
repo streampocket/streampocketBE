@@ -5,6 +5,7 @@ import {
   adminGetPartyOtpInfo,
   adminSetPartyOtpSecret,
   adminResetPartyOtpCount,
+  adminAutoAssignPartyAccount,
 } from '../../services/own/partyOtpService'
 
 const idParamSchema = z.object({
@@ -43,5 +44,12 @@ export async function adminSetPartyOtpSecretHandler(req: Request, res: Response)
 export async function adminResetPartyOtpCountHandler(req: Request, res: Response): Promise<void> {
   const { id } = idParamSchema.parse(req.params)
   const result = await adminResetPartyOtpCount(id)
+  res.json(result)
+}
+
+// 계정 자동 배정 + 알림톡 발송 재시도 — 승인 시 자동발송이 꺼져 있었거나 실패한 건 보정용
+export async function adminAutoAssignPartyAccountHandler(req: Request, res: Response): Promise<void> {
+  const { id } = idParamSchema.parse(req.params)
+  const result = await adminAutoAssignPartyAccount(id)
   res.json(result)
 }

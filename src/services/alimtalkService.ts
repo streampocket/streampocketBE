@@ -6,6 +6,8 @@ import {
   upsertAlimtalkSettings,
 } from '../repositories/alimtalkSettingsRepository'
 import { createDeliveryLog, updateDeliveryLog } from '../repositories/deliveryLogRepository'
+import { decryptSecret } from '../lib/crypto'
+import { kstMonthDay } from '../utils/kstDate'
 
 type SendOrderAlimtalkInput =
   | {
@@ -76,6 +78,7 @@ export type AlimtalkSettingsView = {
     templateCodeReviewGame: string | null
     templateCodeBG: string | null
     templateCodePartyApply: string | null
+    templateCodePartyAccount: string | null
     templateCodeOrderStatus: string | null
     templateCodeOrderCompleted: string | null
     templateCodePhoneVerify: string | null
@@ -122,6 +125,8 @@ type EnvConfig = {
   templateCodeReviewGame: string
   templateCodeBG: string
   templateCodePartyApply: string
+  /** 파티 승인 시 배정된 계정 아이디·비밀번호 안내 */
+  templateCodePartyAccount: string
   templateCodeOrderStatus: string
   templateCodeOrderCompleted: string
   templateCodePhoneVerify: string
@@ -232,6 +237,7 @@ export function getEnvConfig(store: Store | null = DEFAULT_STORE): EnvConfig {
     templateCodeReviewGame: aligoEnv('ALIGO_TEMPLATE_CODE_REVIEW_GAME', resolved),
     templateCodeBG: aligoEnv('ALIGO_TEMPLATE_CODE_BG', resolved),
     templateCodePartyApply: aligoEnv('ALIGO_TEMPLATE_CODE_PARTY_APPLY', resolved),
+    templateCodePartyAccount: aligoEnv('ALIGO_TEMPLATE_CODE_PARTY_ACCOUNT', resolved),
     templateCodeOrderStatus: aligoEnv('ALIGO_TEMPLATE_CODE_ORDER_STATUS', resolved),
     templateCodeOrderCompleted: aligoEnv('ALIGO_TEMPLATE_CODE_ORDER_COMPLETED', resolved),
     templateCodePhoneVerify: aligoEnv('ALIGO_TEMPLATE_CODE_PHONE_VERIFY', resolved),
@@ -499,6 +505,7 @@ export async function getAlimtalkSettings(
       templateCodeReviewGame: config.templateCodeReviewGame || null,
       templateCodeBG: config.templateCodeBG || null,
       templateCodePartyApply: config.templateCodePartyApply || null,
+      templateCodePartyAccount: config.templateCodePartyAccount || null,
       templateCodeOrderStatus: config.templateCodeOrderStatus || null,
       templateCodeOrderCompleted: config.templateCodeOrderCompleted || null,
       templateCodePhoneVerify: config.templateCodePhoneVerify || null,
@@ -776,6 +783,95 @@ export async function sendPartyApplicationAlimtalk(
   try {
     const json = await sendAlimtalkMessage({
       templateCode: config.templateCodePartyApply,
+      recipientPhoneNumber: input.recipientPhoneNumber,
+      recipientName: input.recipientName,
+      message,
+      buttonJson,
+    })
+
+    const providerMessageId = getProviderMessageId(json)
+    await updateDeliveryLog(deliveryLog.id, {
+      status: 'sent',
+      providerMessageId,
+      sentAt: new Date(),
+      errorMessage: null,
+    })
+    return { ok: true, providerMessageId }
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    await updateDeliveryLog(deliveryLog.id, {
+      status: 'failed',
+      errorMessage: reason,
+    })
+    return { ok: false, reason }
+  }
+}
+
+type SendPartyAccountAlimtalkInput = {
+  partyApplicationId: string
+  recipientPhoneNumber: string
+  recipientName: string | null
+  /** 이용 만료 시각 — 본문에는 KST 'MM-DD'로만 찍힌다 ("[ 09-07 ] 현재시간 까지") */
+  expiresAt: Date
+  accountEmail: string
+  /** DramaAccount.passwordEnc 암호문 — 발송 직전에만 복호화한다 */
+  accountPasswordEnc: string
+}
+
+/**
+ * 파티 승인 후 배정된 계정 아이디·비밀번호 안내.
+ *
+ * sendPartyApplicationAlimtalk과 같은 이유로 store를 받지 않는다 —
+ * OTTALL은 스토어 구분이 없어 항상 기본 스토어(streampocket) 알리고 설정으로 발송한다.
+ * throw 대신 결과를 반환해, 발송 실패가 승인 흐름을 롤백하지 않게 한다.
+ */
+export async function sendPartyAccountAlimtalk(
+  input: SendPartyAccountAlimtalkInput,
+): Promise<AlimtalkSendResult> {
+  const config = getEnvConfig()
+  if (!isConfigured(config)) {
+    return { ok: false, reason: '알리고 환경변수 미설정' }
+  }
+  if (!config.templateCodePartyAccount) {
+    return { ok: false, reason: '템플릿 코드 미설정 (ALIGO_TEMPLATE_CODE_PARTY_ACCOUNT)' }
+  }
+
+  let template: AligoTemplateView
+  try {
+    template = await getActiveTemplateOrThrow(config, config.templateCodePartyAccount)
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    return { ok: false, reason }
+  }
+
+  let password: string
+  try {
+    password = decryptSecret(input.accountPasswordEnc)
+  } catch (error) {
+    // 키가 바뀌었거나 암호문이 깨진 경우 — 비밀번호 없이 보내면 안 되므로 중단한다
+    const reason = error instanceof Error ? error.message : String(error)
+    return { ok: false, reason: `계정 비밀번호 복호화 실패: ${reason}` }
+  }
+
+  const buttonJson = buildButtonPayload(template)
+  const vars: Record<string, string> = {
+    만료기간: kstMonthDay(input.expiresAt),
+    아이디: input.accountEmail,
+    비밀번호: password,
+  }
+  const message = applyTemplate(template.templateContent ?? '', normalizeTemplateVars(vars))
+
+  const deliveryLog = await createDeliveryLog({
+    partyApplicationId: input.partyApplicationId,
+    channel: 'alimtalk',
+    recipient: input.recipientPhoneNumber,
+    templateCode: config.templateCodePartyAccount,
+    message,
+  })
+
+  try {
+    const json = await sendAlimtalkMessage({
+      templateCode: config.templateCodePartyAccount,
       recipientPhoneNumber: input.recipientPhoneNumber,
       recipientName: input.recipientName,
       message,

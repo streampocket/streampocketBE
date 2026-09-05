@@ -439,7 +439,10 @@ paths:
             type: string
       responses:
         '200':
-          description: linked / secretRegistered / secretUpdatedAt / issueCount / maxIssues / logs
+          description: >-
+            linked / secretRegistered / secretUpdatedAt / issueCount / maxIssues / logs /
+            autoAssign({ assigned, accountEmail, eligible, reason }) — 계정 자동 배정 상태.
+            eligible=false면 지금 자동배정을 실행할 수 없고 reason이 사유 코드를 담는다.
         '400':
           description: 파티 주문 아님
         '404':
@@ -502,3 +505,34 @@ paths:
           description: 주문 없음
         '409':
           description: 신청 미연결 또는 시크릿 미등록
+
+  /steam/admin/orders/{id}/party-otp/auto-assign:
+    post:
+      summary: 계정 자동 배정 + 알림톡 발송 (재시도)
+      description: >-
+        승인 시 자동발송이 꺼져 있었거나 실패한 건을 보정한다.
+        조건(파티명↔platform 매핑 · 빈자리 · 마감일 ≥ 이용 만료일)에 맞는 계정 중
+        마감일이 가장 빠른 것을 골라 파티원으로 등록하고, 계정의 OTP 시크릿을 신청에 복사한 뒤
+        계정 아이디·비밀번호를 알림톡으로 보낸다.
+        이미 배정된 건이면 배정은 건너뛰고 **발송만** 재시도한다.
+        **수동으로 시크릿이 등록된 건은 거부한다**(already_has_secret) — 덮어쓰기 방지.
+      tags: [SteamOrders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: assigned / sent / account({ id, email, dueAt, freeSlots }) / reason
+        '400':
+          description: 파티 주문 아님
+        '404':
+          description: 주문 없음
+        '409':
+          description: >-
+            신청 미연결, 또는 배정·발송 모두 실패 (조건에 맞는 계정 없음 / 매핑 없는 파티 /
+            이미 시크릿 등록됨 / 승인 완료 상태 아님)

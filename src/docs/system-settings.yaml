@@ -40,6 +40,10 @@ paths:
                         example: 60
                       reviewPointTiers:
                         $ref: '#/components/schemas/ReviewPointTiers'
+                      partyAutoDeliverEnabled:
+                        type: boolean
+                        description: 파티 승인 모달의 자동발송 토글 기본값
+                        example: false
     patch:
       summary: 시스템 설정 수정
       description: |
@@ -63,6 +67,12 @@ paths:
                   enum: [20, 40, 60, 90, 120]
                 reviewPointTiers:
                   $ref: '#/components/schemas/ReviewPointTiers'
+                partyAutoDeliverEnabled:
+                  type: boolean
+                  description: >-
+                    파티 승인 시 계정 자동 배정 + 알림톡 발송 여부.
+                    설정 화면이 아니라 **신청 승인 모달의 토글**이 단독으로 보낸다
+                    (관리자가 마지막에 둔 상태를 다음 승인에도 유지하기 위함).
       responses:
         '200':
           description: 수정된 시스템 설정

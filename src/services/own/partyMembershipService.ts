@@ -33,6 +33,8 @@ export type MembershipReleaseResult =
         filledSlotsAfter: number
         /** 모집완료 → 모집중으로 되돌렸는지 */
         partyReopened: boolean
+        /** 자동 배정됐던 드라마 계정 자리를 회수했으면 그 계정 이메일 (배정 없었으면 null) */
+        dramaSlotReleased: string | null
       })
 
 /**
@@ -62,6 +64,7 @@ export async function releasePartyMembership(
           },
         },
         user: { select: { name: true } },
+        dramaAccount: { select: { email: true } },
       },
     })
 
@@ -118,7 +121,22 @@ export async function releasePartyMembership(
       })
     }
 
-    return { released: true, ...base, slotDecremented, filledSlotsAfter, partyReopened }
+    // 자동 배정됐던 드라마 계정 자리를 함께 비운다 — 안 비우면 재고가 유령으로 남는다.
+    // deleteMany인 이유: 그 사이 관리자가 계정 메모를 통째 교체(replaceDramaAccount)해
+    // 파티원 행이 이미 없을 수 있고, delete는 그때 예외를 던져 반품 전체를 롤백시킨다.
+    let dramaSlotReleased: string | null = null
+    if (application.dramaMemberId || application.dramaAccountId) {
+      if (application.dramaMemberId) {
+        await tx.dramaMember.deleteMany({ where: { id: application.dramaMemberId } })
+      }
+      await tx.partyApplication.update({
+        where: { id: applicationId },
+        data: { dramaAccountId: null, dramaMemberId: null },
+      })
+      dramaSlotReleased = application.dramaAccount?.email ?? null
+    }
+
+    return { released: true, ...base, slotDecremented, filledSlotsAfter, partyReopened, dramaSlotReleased }
   })
 
   if (!result.released) return result
@@ -129,9 +147,12 @@ export async function releasePartyMembership(
   const stateLine = result.partyReopened
     ? '모집중으로 다시 전환되었습니다.'
     : '파티 상태는 유지됩니다.'
+  const dramaLine = result.dramaSlotReleased
+    ? `\n드라마 계정 자리 회수: ${result.dramaSlotReleased}`
+    : ''
   sendDiscordAlert(
     'partyApply',
-    `**파티원 제거:** [${result.partyTypeLabel}] "${result.productName}" — ${memberLabel} 님이 파티에서 제거되었습니다.\n인원: ${slotLine}\n${stateLine}`,
+    `**파티원 제거:** [${result.partyTypeLabel}] "${result.productName}" — ${memberLabel} 님이 파티에서 제거되었습니다.\n인원: ${slotLine}\n${stateLine}${dramaLine}`,
   ).catch(() => {})
 
   if (!result.slotDecremented) {
@@ -149,7 +170,8 @@ export function describeMembershipRelease(result: MembershipReleaseResult): stri
   if (result.released) {
     const member = result.userName ?? '탈퇴한 회원'
     const reopened = result.partyReopened ? ', 모집중 전환' : ''
-    return `└ 파티원 제거: ${member} (${result.filledSlotsBefore}/${result.totalSlots} → ${result.filledSlotsAfter}/${result.totalSlots}${reopened})`
+    const drama = result.dramaSlotReleased ? `\n└ 드라마 계정 자리 회수: ${result.dramaSlotReleased}` : ''
+    return `└ 파티원 제거: ${member} (${result.filledSlotsBefore}/${result.totalSlots} → ${result.filledSlotsAfter}/${result.totalSlots}${reopened})${drama}`
   }
   if (result.reason === 'not_found') {
     return '└ ⚠️ 연결된 파티 신청을 찾을 수 없어 파티원은 변동 없음'

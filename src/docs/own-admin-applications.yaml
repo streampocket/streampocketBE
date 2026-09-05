@@ -112,13 +112,31 @@ paths:
           schema:
             type: string
             format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                autoDeliver:
+                  type: boolean
+                  default: false
+                  description: |
+                    true면 승인 직후 드라마 계정을 자동 배정하고 계정 아이디·비밀번호를 알림톡으로 보낸다.
+                    배정 조건: 파티명↔계정 platform 매핑 일치 · 빈자리 있음 · 계정 마감일 ≥ 이용 만료일.
+                    조건에 맞는 계정이 여럿이면 마감일이 빠른 계정부터 소진한다.
+                    **배정·발송 실패는 승인을 롤백하지 않는다** — autoDeliver 필드로 결과만 알린다.
       responses:
         '200':
           description: |
             승인 완료. status=confirmed, startedAt/expiresAt 셋팅.
             응답: data(신청), autoRejected(정원 초과 자동거절 여부),
             partyClosed(이번 승인으로 파티가 모집완료됐는지 — true면 fe가 동일 파티 재생성 여부를 확인),
-            productId(파티 id — 재생성 API 호출용, autoRejected 시 null)
+            productId(파티 id — 재생성 API 호출용, autoRejected 시 null),
+            autoDeliver({ attempted, assigned, sent, reason }) — 자동 배정·발송 결과.
+            reason은 배정 실패 시 사유 코드(unmapped_party/no_account/already_has_secret 등),
+            발송 실패 시 알리고 응답 메시지.
         '404':
           description: 신청 없음
         '409':

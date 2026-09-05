@@ -25,6 +25,8 @@ import { findOrdersByPartyApplicationId } from '../../repositories/steamOrderRep
 import { releasePartyMembership } from './partyMembershipService'
 import { WITHDRAWN_USER_DISPLAY } from './userWithdrawalService'
 import { refundApplicationPoint, usePointForApplication } from './pointService'
+import { alertAutoDeliverFailure, assignAndDeliver, previewAssignment } from './dramaAssignmentService'
+import { toDateString } from '../../utils/kstDate'
 
 export async function applyToParty(productId: string, userId: string, usePoint = false) {
   const product = await findOwnProductById(productId)
@@ -132,6 +134,11 @@ export async function applyToParty(productId: string, userId: string, usePoint =
           // 이전 사이클의 반품 이력이 새 사이클로 이월되지 않도록 초기화.
           // 쿨다운 12시간 이내면 위 가드가 먼저 409로 끊으므로 여기 도달 시점엔 항상 해제 대상이다.
           returnedAt: null,
+          // 이전 사이클에 배정됐던 드라마 계정 링크도 해제한다.
+          // 안 하면 새 사이클이 already_assigned로 판정돼 계정을 새로 못 받는다.
+          // (파티원 행 자체는 반품 시점에 이미 지워졌다 — releasePartyMembership)
+          dramaAccountId: null,
+          dramaMemberId: null,
         },
       })
       // 재신청 시 이전 사이클의 OTP 시크릿·소진 횟수가 새 사이클로 이월되지 않도록 삭제.
@@ -294,6 +301,7 @@ export async function adminGetApplicationDetail(applicationId: string) {
   }
 
   const logs = await findDeliveryLogsByPartyApplicationId(applicationId)
+  // message는 의도적으로 제외한다 — 계정 비밀번호가 본문에 들어 있다.
   const alimtalkLogs = logs.map((log) => ({
     id: log.id,
     status: log.status,
@@ -303,10 +311,46 @@ export async function adminGetApplicationDetail(applicationId: string) {
     createdAt: log.createdAt,
   }))
 
-  return { data: { ...application, user: application.user ?? WITHDRAWN_USER_DISPLAY, alimtalkLogs } }
+  // 대기 중이면 "지금 승인하면 어떤 계정이 배정되는지"를 미리 보여줘 자동발송 토글 가능 여부를 판단하게 한다.
+  const preview = await previewAssignment(applicationId)
+  const autoDeliverPreview = preview.ok
+    ? { eligible: true as const, reason: null, account: preview.account }
+    : { eligible: false as const, reason: preview.reason, account: null }
+
+  // 확정 건은 실제로 배정된 계정을 보여준다 (비밀번호·시크릿은 내려주지 않는다)
+  const dramaAccount = await findAssignedAccountSummary(applicationId)
+
+  return {
+    data: {
+      ...application,
+      user: application.user ?? WITHDRAWN_USER_DISPLAY,
+      alimtalkLogs,
+      autoDeliverPreview,
+      dramaAccount,
+    },
+  }
 }
 
-export async function adminApproveApplication(applicationId: string) {
+/** 배정된 계정 요약 — 관리자가 "어떤 계정을 줬는지" 확인하는 용도 */
+async function findAssignedAccountSummary(applicationId: string) {
+  const row = await prisma.partyApplication.findUnique({
+    where: { id: applicationId },
+    select: { dramaAccount: { select: { id: true, email: true, dueAt: true, platform: true } } },
+  })
+  const account = row?.dramaAccount
+  if (!account) return null
+  return {
+    id: account.id,
+    email: account.email,
+    platform: account.platform,
+    dueAt: account.dueAt ? toDateString(account.dueAt) : null,
+  }
+}
+
+export async function adminApproveApplication(
+  applicationId: string,
+  options: { autoDeliver: boolean } = { autoDeliver: false },
+) {
   const result = await prisma.$transaction(async (tx) => {
     const application = await tx.partyApplication.findUnique({
       where: { id: applicationId },
@@ -424,12 +468,58 @@ export async function adminApproveApplication(applicationId: string) {
     }
   }
 
+  // 계정 자동 배정 + 알림톡 발송. 주문 자동 생성과 같은 관행으로 트랜잭션 밖에서 수행한다 —
+  // 배정·발송 실패가 이미 끝난 승인을 롤백하면 안 되고, 실패해도 수동으로 보정할 수 있다.
+  let autoDeliver: AutoDeliverOutcome = { attempted: false, assigned: false, sent: false, reason: null }
+  if (options.autoDeliver && !result.autoRejected && result.orderInfo) {
+    autoDeliver = await runAutoDeliver(applicationId, result.orderInfo)
+  }
+
   return {
     data: result.application,
     autoRejected: result.autoRejected,
     // 이번 승인으로 파티가 모집완료됐는지 — fe가 동일 파티 재생성 여부를 물을 때 사용
     partyClosed: result.partyClosed ?? false,
     productId: result.productId ?? null,
+    autoDeliver,
+  }
+}
+
+export type AutoDeliverOutcome = {
+  /** 자동발송을 시도했는지 (토글 OFF면 false) */
+  attempted: boolean
+  assigned: boolean
+  sent: boolean
+  /** 실패 사유 — 배정 실패는 AssignFailReason, 발송 실패는 알리고 응답 메시지 */
+  reason: string | null
+}
+
+async function runAutoDeliver(
+  applicationId: string,
+  orderInfo: { partyName: string; receiverName: string },
+): Promise<AutoDeliverOutcome> {
+  try {
+    const result = await assignAndDeliver(applicationId)
+    if (!result.assigned || !result.sent) {
+      alertAutoDeliverFailure({
+        applicationId,
+        productName: orderInfo.partyName,
+        userName: orderInfo.receiverName,
+        result,
+      })
+    }
+    return { attempted: true, assigned: result.assigned, sent: result.sent, reason: result.reason }
+  } catch (error) {
+    // 정원 동시 점유 등으로 배정 트랜잭션이 롤백된 경우 — 승인은 이미 확정이므로 삼키고 알린다
+    const reason = error instanceof Error ? error.message : String(error)
+    console.error('[party-approval] 계정 자동 배정 실패', { applicationId, error })
+    alertAutoDeliverFailure({
+      applicationId,
+      productName: orderInfo.partyName,
+      userName: orderInfo.receiverName,
+      result: { assigned: false, sent: false, account: null, reason },
+    })
+    return { attempted: true, assigned: false, sent: false, reason }
   }
 }
 

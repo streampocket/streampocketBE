@@ -30,11 +30,14 @@ export type ReviewPointTiers = {
 type SystemSettingsResult = {
   defaultDurationMinutes: number
   reviewPointTiers: ReviewPointTiers
+  /** 파티 승인 시 계정 자동 배정 + 알림톡 발송 (승인 모달 토글의 기본값) */
+  partyAutoDeliverEnabled: boolean
 }
 
 export async function getSystemSettings(): Promise<SystemSettingsResult> {
   const row = await getSystemSettingsRow()
   return {
+    partyAutoDeliverEnabled: row?.partyAutoDeliverEnabled ?? false,
     defaultDurationMinutes: row?.defaultDurationMinutes ?? DEFAULT_DURATION_MINUTES,
     reviewPointTiers: row
       ? {
@@ -59,6 +62,7 @@ const badRequest = (message: string) => Object.assign(new Error(message), { stat
 export async function updateSystemSettings(input: {
   defaultDurationMinutes?: number
   reviewPointTiers?: ReviewPointTiers
+  partyAutoDeliverEnabled?: boolean
 }): Promise<SystemSettingsResult> {
   if (input.reviewPointTiers) {
     const tiers = input.reviewPointTiers
@@ -77,6 +81,10 @@ export async function updateSystemSettings(input: {
 
   if (input.defaultDurationMinutes !== undefined) {
     await upsertSystemSettings({ defaultDurationMinutes: input.defaultDurationMinutes })
+  }
+
+  if (input.partyAutoDeliverEnabled !== undefined) {
+    await upsertSystemSettings({ partyAutoDeliverEnabled: input.partyAutoDeliverEnabled })
   }
 
   return getSystemSettings()

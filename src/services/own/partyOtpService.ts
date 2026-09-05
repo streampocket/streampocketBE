@@ -3,6 +3,7 @@ import { encryptSecret, decryptSecret } from '../../lib/crypto'
 import { normalizeSecret, isValidSecret, generateIssueCode, TOTP_PERIOD } from '../../lib/totp'
 import { PARTY_OTP_MAX_ISSUES, PARTY_OTP_VIEW_MINUTES } from '../../constants/party'
 import { findOrderById } from '../../repositories/steamOrderRepository'
+import { assignAndDeliver, previewAssignment } from './dramaAssignmentService'
 
 const VIEW_MS = PARTY_OTP_VIEW_MINUTES * 60 * 1000
 
@@ -92,7 +93,7 @@ export async function adminGetPartyOtpInfo(orderId: string) {
     return { data: { linked: false as const } }
   }
 
-  const [credential, logs] = await Promise.all([
+  const [credential, logs, assignment] = await Promise.all([
     prisma.partyOtpCredential.findUnique({
       where: { applicationId },
       select: { issueCount: true, updatedAt: true },
@@ -102,6 +103,8 @@ export async function adminGetPartyOtpInfo(orderId: string) {
       orderBy: { issuedAt: 'desc' },
       select: { id: true, issuedAt: true },
     }),
+    // 자동 배정 상태 — 화면이 "지금 자동배정을 누를 수 있는지"와 그 사유를 보여준다
+    describeAutoAssign(applicationId),
   ])
 
   return {
@@ -112,7 +115,68 @@ export async function adminGetPartyOtpInfo(orderId: string) {
       issueCount: credential?.issueCount ?? 0,
       maxIssues: PARTY_OTP_MAX_ISSUES,
       logs,
+      autoAssign: assignment,
     },
+  }
+}
+
+export type AutoAssignInfo = {
+  /** 이미 계정이 배정돼 있는지 */
+  assigned: boolean
+  accountEmail: string | null
+  /** 지금 자동배정을 실행할 수 있는지 */
+  eligible: boolean
+  /** 불가 사유 (가능하면 null) */
+  reason: string | null
+}
+
+async function describeAutoAssign(applicationId: string): Promise<AutoAssignInfo> {
+  const application = await prisma.partyApplication.findUnique({
+    where: { id: applicationId },
+    select: { dramaAccount: { select: { email: true } } },
+  })
+  const assignedEmail = application?.dramaAccount?.email ?? null
+
+  const preview = await previewAssignment(applicationId)
+  return {
+    assigned: assignedEmail != null,
+    accountEmail: assignedEmail,
+    eligible: preview.ok,
+    reason: preview.ok ? null : preview.reason,
+  }
+}
+
+/** 관리자 — 계정 자동 배정 + 알림톡 발송 재시도 (승인 때 놓친 건 보정용) */
+export async function adminAutoAssignPartyAccount(orderId: string) {
+  const applicationId = await resolvePartyApplicationId(orderId)
+  if (!applicationId) {
+    throw Object.assign(new Error('이 주문은 파티 신청과 연결되어 있지 않습니다.'), { statusCode: 409 })
+  }
+
+  const result = await assignAndDeliver(applicationId)
+  // 배정도 발송도 못 했으면 사유를 그대로 400으로 올린다 — 화면이 원인을 보여줘야 한다
+  if (!result.assigned && !result.sent) {
+    throw Object.assign(new Error(describeAssignFailure(result.reason)), { statusCode: 409 })
+  }
+
+  return { data: { assigned: result.assigned, sent: result.sent, account: result.account, reason: result.reason } }
+}
+
+/** 실패 사유 코드를 관리자용 문구로 — 화면과 디스코드가 같은 문구를 쓰도록 한 곳에 둔다 */
+export function describeAssignFailure(reason: string | null): string {
+  switch (reason) {
+    case 'not_found':
+      return '신청 내역을 찾을 수 없습니다.'
+    case 'not_confirmed':
+      return '승인 완료된 신청만 계정을 배정할 수 있습니다.'
+    case 'already_has_secret':
+      return '이미 OTP 시크릿이 등록되어 있습니다. 자동 배정은 시크릿이 없는 건에만 가능합니다.'
+    case 'unmapped_party':
+      return '이 파티는 드라마 계정 플랫폼 매핑이 없어 자동 배정할 수 없습니다.'
+    case 'no_account':
+      return '조건에 맞는 계정이 없습니다 (플랫폼·빈자리·마감일 확인 필요).'
+    default:
+      return reason ?? '알 수 없는 이유로 실패했습니다.'
   }
 }
 

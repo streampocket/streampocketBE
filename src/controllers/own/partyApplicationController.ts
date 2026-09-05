@@ -80,9 +80,15 @@ export async function adminGetApplicationDetailHandler(req: Request, res: Respon
   res.json(result)
 }
 
+// 자동발송 토글 — 보내지 않으면 기존 동작(수동)을 유지한다
+const approveBodySchema = z.object({
+  autoDeliver: z.boolean().default(false),
+})
+
 export async function adminApproveApplicationHandler(req: Request, res: Response): Promise<void> {
   const { id } = idParamSchema.parse(req.params)
-  const result = await adminApproveApplication(id)
+  const { autoDeliver } = approveBodySchema.parse(req.body ?? {})
+  const result = await adminApproveApplication(id, { autoDeliver })
   res.json(result)
 }
 

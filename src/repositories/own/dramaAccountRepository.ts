@@ -23,6 +23,38 @@ export function findDramaAccountById(id: string) {
   return prisma.dramaAccount.findUnique({ where: { id }, include: WITH_MEMBERS })
 }
 
+/** 자동 배정 후보 조회 — 빈자리 계산에 필요한 최소 컬럼만. 정렬은 화면·배정 순서와 같은 마감일 빠른 순 */
+const ASSIGN_CANDIDATE_SELECT = {
+  id: true,
+  email: true,
+  platform: true,
+  capacity: true,
+  dueAt: true,
+  members: { select: { endDate: true, startTime: true } },
+} satisfies Prisma.DramaAccountSelect
+
+/**
+ * 플랫폼·마감일로 1차로 거른 배정 후보.
+ *
+ * 빈자리(정원 − 활성 파티원)는 파티원 만료 시각까지 봐야 해서 SQL로 세지 않고
+ * 호출측이 utils/dramaAssignment로 계산한다.
+ * `tx`를 받는 이유: 배정은 트랜잭션 안에서 후보를 다시 읽어 동시 승인을 방어한다.
+ */
+export function findAssignCandidates(
+  tx: Prisma.TransactionClient,
+  input: { platforms: readonly string[]; minDueAt: Date },
+) {
+  return tx.dramaAccount.findMany({
+    where: {
+      platform: { in: [...input.platforms] },
+      capacity: { not: null },
+      dueAt: { gte: input.minDueAt },
+    },
+    select: ASSIGN_CANDIDATE_SELECT,
+    orderBy: [{ dueAt: 'asc' }, { email: 'asc' }],
+  })
+}
+
 export function findDramaAccountsByEmails(emails: string[]) {
   return prisma.dramaAccount.findMany({
     where: { email: { in: emails } },

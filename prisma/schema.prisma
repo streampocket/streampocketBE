@@ -330,6 +330,9 @@ model SystemSettings {
   reviewPointTier1Point  Int      @default(100) @map("review_point_tier1_point")
   reviewPointTier2Point  Int      @default(200) @map("review_point_tier2_point")
   reviewPointTier3Point  Int      @default(300) @map("review_point_tier3_point")
+  // 파티 신청 승인 시 "계정 자동 배정 + 알림톡 발송"을 수행할지 — 승인 모달 토글의 기본값.
+  // 관리자가 마지막에 둔 상태를 유지하려고 전역으로 저장한다(승인 건마다 저장하지 않는다).
+  partyAutoAssignEnabled Boolean  @default(false) @map("party_auto_assign_enabled")
   updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@map("system_settings")
@@ -534,24 +537,30 @@ model OwnProduct {
 }
 
 model PartyApplication {
-  id          String                 @id @default(uuid()) @db.Uuid
-  productId   String                 @map("product_id") @db.Uuid
+  id             String                 @id @default(uuid()) @db.Uuid
+  productId      String                 @map("product_id") @db.Uuid
   // 탈퇴 회원 완전 삭제 시 신청 내역은 익명(userId null)으로 보존 — 리뷰(Cascade)·파티 정합성 유지
-  userId      String?                @map("user_id") @db.Uuid
-  price       Int
-  fee         Int
-  totalAmount Int                    @map("total_amount")
+  userId         String?                @map("user_id") @db.Uuid
+  price          Int
+  fee            Int
+  totalAmount    Int                    @map("total_amount")
   // 신청 시점에 차감한 포인트 (price/fee/totalAmount와 같은 스냅샷).
   // 실결제액은 파생값이라 저장하지 않는다 — 항상 totalAmount - usedPoint로 만든다.
-  usedPoint   Int                    @default(0) @map("used_point")
-  status      PartyApplicationStatus @default(pending)
-  startedAt   DateTime?              @map("started_at") @db.Timestamptz(6)
-  expiresAt   DateTime?              @map("expires_at") @db.Timestamptz(6)
+  usedPoint      Int                    @default(0) @map("used_point")
+  status         PartyApplicationStatus @default(pending)
+  startedAt      DateTime?              @map("started_at") @db.Timestamptz(6)
+  expiresAt      DateTime?              @map("expires_at") @db.Timestamptz(6)
   // 확정 후 반품(파티원 제거)된 시각 — 같은 카테고리 12시간 재신청 차단의 기준.
   // 거절·만료·만석 자동거절은 세팅하지 않는다. 재신청(revive) 시 null로 초기화.
-  returnedAt  DateTime?              @map("returned_at") @db.Timestamptz(6)
-  createdAt   DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+  returnedAt     DateTime?              @map("returned_at") @db.Timestamptz(6)
+  // 승인 시 자동 배정된 드라마 계정과 그때 만든 파티원 행.
+  // 링크를 DramaMember가 아니라 이쪽에 두는 이유: 드라마 계정 수정(replaceDramaAccount)이
+  // 파티원을 전부 지우고 새 id로 다시 만들어, DramaMember에 건 링크는 메모를 한 번만 고쳐도 사라진다.
+  // 둘 다 SetNull이라 계정·파티원이 지워져도 신청 데이터는 멀쩡하다.
+  dramaAccountId String?                @map("drama_account_id") @db.Uuid
+  dramaMemberId  String?                @map("drama_member_id") @db.Uuid
+  createdAt      DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   product       OwnProduct          @relation(fields: [productId], references: [id])
   user          User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -560,6 +569,8 @@ model PartyApplication {
   orderItems    SteamOrderItem[]
   otpCredential PartyOtpCredential?
   otpIssueLogs  PartyOtpIssueLog[]
+  dramaAccount  DramaAccount?       @relation(fields: [dramaAccountId], references: [id], onDelete: SetNull)
+  dramaMember   DramaMember?        @relation(fields: [dramaMemberId], references: [id], onDelete: SetNull)
 
   @@unique([productId, userId])
   @@index([userId, createdAt])
@@ -569,7 +580,10 @@ model PartyApplication {
 
 // 파티 OTP 시크릿 — PartyApplication과 분리된 1:1 테이블.
 // 분리 이유: PartyApplication은 include-all로 유저 응답에 실리는 경로가 많아, 같은 모델에 두면 암호문 유출 위험.
-// secretEnc는 AES-256-GCM 암호문(lib/crypto.ts) — 어떤 API 응답에도 포함 금지. 행 존재 = 시크릿 등록됨
+// secretEnc는 AES-256-GCM 암호문(lib/crypto.ts) — 암호문 자체는 어떤 응답에도 포함 금지.
+// 단 관리자 전용 API(신청 상세·주문 OTP 탭)는 복호화한 평문을 내려준다 —
+// 드라마 계정 관리와 같은 정책이며, 관리자가 계정 정보를 확인하려고 화면을 옮기지 않게 하기 위함이다.
+// 유저 응답에는 평문·암호문 모두 절대 실리면 안 된다. 행 존재 = 시크릿 등록됨
 model PartyOtpCredential {
   id            String   @id @default(uuid()) @db.Uuid
   applicationId String   @unique @map("application_id") @db.Uuid
@@ -810,8 +824,9 @@ model SiteVisit {
 // 드라마 계정 관리 — 메모장으로 관리하던 OTT 멤버십 계정·파티원을 옮긴 것.
 // 화면이 메모 원문과 글자까지 같아야 해서, 계산용 값과 "표기 원문"을 따로 보존한다.
 // (capacityLabel="프라이빗", suffix=")-갤s26", notes="(로그아웃완료)")
-// OTTALL 파티(OwnProduct/PartyApplication)와는 의도적으로 연결하지 않는다 —
-// 중고나라·오픈챗 유입이 섞여 전원을 신청 레코드에 매칭할 수 없다.
+// OTTALL 파티와의 연결은 "스트림포켓 유입 건에 한한 단방향 링크"다 —
+// 중고나라·오픈챗 유입이 섞여 전원을 신청 레코드에 매칭할 수 없으므로, 이쪽에서 신청을 찾지 않는다.
+// 승인 시 자동 배정된 건만 PartyApplication.dramaAccountId/dramaMemberId가 이 테이블을 가리킨다.
 model DramaAccount {
   id            String    @id @default(uuid()) @db.Uuid
   email         String    @unique @db.VarChar(320)
@@ -830,7 +845,8 @@ model DramaAccount {
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  members DramaMember[]
+  members      DramaMember[]
+  applications PartyApplication[]
 
   @@index([dueAt])
   @@map("drama_accounts")
@@ -838,6 +854,12 @@ model DramaAccount {
 
 // 파티원 — 기간 만료 시 자동 삭제하지 않는다(연장 문의·입금 확인 중일 수 있어 수동 정리).
 // 만료 여부는 컬럼으로 두지 않고 조회 시 endDate로 계산한다(날짜만 지나도 저장값은 거짓이 되므로).
+//
+// ⚠️ 코드로 파티원을 추가·삭제할 때는 계정(DramaAccount)의 updatedAt도 함께 올려야 한다.
+// 자식 행 변경은 부모 updatedAt을 올리지 않아, 메모 편집기(replaceDramaAccount)의 낙관적 잠금이
+// 걸리지 않는다. 그대로 저장하면 파티원을 전부 지우고 메모 텍스트로 재생성하므로
+// 방금 넣은 파티원이 사라지거나(배정) 방금 뺀 파티원이 되살아난다(반품).
+// 적용 지점: dramaAssignmentService.assignAccountToApplication, partyMembershipService.releasePartyMembership
 model DramaMember {
   id         String   @id @default(uuid()) @db.Uuid
   accountId  String   @map("account_id") @db.Uuid
@@ -855,7 +877,8 @@ model DramaMember {
   suffix     String?  @db.VarChar(50) // 괄호 뒤 꼬리 원문 "-갤s26", " 아이폰"
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  account DramaAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  account      DramaAccount       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  applications PartyApplication[]
 
   @@index([accountId])
   @@index([endDate])

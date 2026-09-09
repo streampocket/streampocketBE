@@ -439,7 +439,17 @@ paths:
             type: string
       responses:
         '200':
-          description: linked / secretRegistered / secretUpdatedAt / issueCount / maxIssues / logs
+          description: >-
+            linked / secretRegistered / secretUpdatedAt / issueCount / maxIssues / logs /
+            autoAssign({ assigned, accountEmail, eligible, reason, credentials }) — 계정 자동 배정 상태.
+            eligible=false면 지금 자동배정을 실행할 수 없고 reason이 사유 코드를 담는다.
+
+
+            **credentials는 계정 아이디·비밀번호·OTP 시크릿을 평문으로 포함한다** (관리자 전용).
+            드라마 계정 관리와 같은 정책이며 유저 경로에서는 절대 노출되지 않는다.
+            source=assigned(링크로 찾음) / matched_by_secret(시크릿 역추적) / secret_only(계정 못 찾음),
+            secretMismatch=true면 계정의 현재 시크릿과 신청 복사본이 달라 구매자가 틀린 코드를 받는 상태,
+            ambiguous=true면 같은 시크릿을 쓰는 계정이 여럿이라 확정할 수 없다.
         '400':
           description: 파티 주문 아님
         '404':
@@ -502,3 +512,68 @@ paths:
           description: 주문 없음
         '409':
           description: 신청 미연결 또는 시크릿 미등록
+
+  /steam/admin/orders/{id}/party-otp/auto-assign:
+    post:
+      summary: 계정 자동 배정 (재시도)
+      description: >-
+        승인 시 자동 배정이 꺼져 있었거나 실패한 건을 보정한다.
+        조건(파티명↔platform 매핑 · 파티 타입 일치 · 빈자리 · 마감일 ≥ 이용 만료일)에 맞는 계정 중
+        마감일이 가장 빠른 것을 골라 파티원으로 등록하고, 계정의 OTP 시크릿을 신청에 복사한다.
+        계정 정보 전달은 관리자가 신청 관리에서 안내 양식을 복사해 직접 한다(알림톡 자동 발송 없음).
+        **이미 배정된 건은 거부한다**(already_assigned).
+        **수동으로 시크릿이 등록된 건도 거부한다**(already_has_secret) — 덮어쓰기 방지.
+      tags: [SteamOrders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: assigned(항상 true) / account({ id, email, password, otpSecret, platform, dueAt, freeSlots })
+        '400':
+          description: 파티 주문 아님
+        '404':
+          description: 주문 없음
+        '409':
+          description: >-
+            신청 미연결, 또는 배정 실패 (조건에 맞는 계정 없음 / 매핑 없는 파티 /
+            이미 배정됨 / 이미 시크릿 등록됨 / 승인 완료 상태 아님 /
+            assigned_by_other — 동시에 배정한 다른 관리자가 먼저 커밋)
+
+  /steam/admin/orders/{id}/party-otp/sync-secret:
+    post:
+      summary: 계정 OTP 시크릿 동기화
+      description: >-
+        배정된 드라마 계정의 **현재** OTP 시크릿을 신청 복사본에 다시 복사한다.
+
+
+        배정 시점에 시크릿을 복사하는 구조라, 이후 관리자가 드라마 계정 메모에서 그 계정의
+        시크릿을 바꾸면 두 값이 갈라진다 — 구매자는 복사본으로 발급받으므로 틀린 코드를 받게 된다.
+        이 API가 그 상태(`autoAssign.credentials.secretMismatch = true`)를 해소한다.
+
+
+        발급 횟수(issueCount)는 유지한다 — 수동 재등록과 같은 관행.
+        시크릿 역추적으로 찾은 건(계정 링크 없음)은 대상이 아니다.
+      tags: [SteamOrders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 동기화 완료 (synced=true)
+        '400':
+          description: 파티 주문 아님
+        '404':
+          description: 주문 없음
+        '409':
+          description: 신청 미연결, 배정된 계정 없음, 또는 시크릿 미등록

@@ -13,6 +13,7 @@ import {
   type DramaMemberWriteData,
 } from '../../repositories/own/dramaAccountRepository'
 import { parseDramaMemo, type ParsedAccount } from '../../utils/dramaMemoParser'
+import { kstMomentOf, toDateOnly, toDateString, type KstMoment } from '../../utils/kstDate'
 
 // 드라마 계정 — 비밀번호·OTP 시크릿은 AES-256-GCM으로 저장하고 조회 시 복호화해 내려준다.
 // 화면이 메모장처럼 평문을 그대로 보여주는 것이 요구사항이라 마스킹하지 않는다.
@@ -49,20 +50,9 @@ export type DramaAccountView = {
   members: DramaMemberView[]
 }
 
-/** @db.Date 컬럼은 UTC 자정으로 저장되므로 UTC 기준으로 읽어야 날짜가 밀리지 않는다 */
-function toDateString(date: Date): string {
-  return date.toISOString().slice(0, 10)
-}
-
-/** 'YYYY-MM-DD' → UTC 자정 Date. @db.Date에 그대로 저장된다 */
-function toDateOnly(value: string): Date {
-  return new Date(`${value}T00:00:00.000Z`)
-}
-
 /** KST 기준 오늘(UTC 자정 Date) — 만료 판정 기준일 */
 export function todayInKst(): Date {
-  const kst = new Date(Date.now() + 9 * 60 * 60 * 1000)
-  return toDateOnly(kst.toISOString().slice(0, 10))
+  return kstMomentOf(new Date()).date
 }
 
 /**
@@ -72,9 +62,8 @@ export function todayInKst(): Date {
  * 날짜만 보면 오늘 01:30에 끝난 자리가 하루 종일 차 있는 것으로 남는다.
  * `hhmm`은 `DramaMember.startTime`과 같은 'HH:mm' 5자리라 문자열 비교가 곧 시간 비교다.
  */
-export function nowInKst(): { date: Date; hhmm: string } {
-  const kst = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString()
-  return { date: toDateOnly(kst.slice(0, 10)), hhmm: kst.slice(11, 16) }
+export function nowInKst(): KstMoment {
+  return kstMomentOf(new Date())
 }
 
 function toView(account: DramaAccountWithMembers): DramaAccountView {

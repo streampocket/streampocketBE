@@ -5,6 +5,8 @@ import {
   adminGetPartyOtpInfo,
   adminSetPartyOtpSecret,
   adminResetPartyOtpCount,
+  adminAutoAssignPartyAccount,
+  adminSyncPartyOtpSecret,
 } from '../../services/own/partyOtpService'
 
 const idParamSchema = z.object({
@@ -43,5 +45,19 @@ export async function adminSetPartyOtpSecretHandler(req: Request, res: Response)
 export async function adminResetPartyOtpCountHandler(req: Request, res: Response): Promise<void> {
   const { id } = idParamSchema.parse(req.params)
   const result = await adminResetPartyOtpCount(id)
+  res.json(result)
+}
+
+// 계정 자동 배정 + 알림톡 발송 재시도 — 승인 시 자동발송이 꺼져 있었거나 실패한 건 보정용
+export async function adminAutoAssignPartyAccountHandler(req: Request, res: Response): Promise<void> {
+  const { id } = idParamSchema.parse(req.params)
+  const result = await adminAutoAssignPartyAccount(id)
+  res.json(result)
+}
+
+// 계정 시크릿 동기화 — 배정 후 계정 시크릿이 바뀌어 구매자가 틀린 코드를 받는 상태를 해소한다
+export async function adminSyncPartyOtpSecretHandler(req: Request, res: Response): Promise<void> {
+  const { id } = idParamSchema.parse(req.params)
+  const result = await adminSyncPartyOtpSecret(id)
   res.json(result)
 }

@@ -26,6 +26,8 @@ import {
   adminGetPartyOtpInfoHandler,
   adminSetPartyOtpSecretHandler,
   adminResetPartyOtpCountHandler,
+  adminAutoAssignPartyAccountHandler,
+  adminSyncPartyOtpSecretHandler,
 } from '../../controllers/own/partyOtpController'
 import { authMiddleware } from '../../middlewares/auth'
 import { asyncHandler } from '../../utils/asyncHandler'
@@ -62,3 +64,5 @@ adminOrdersRouter.post(
 adminOrdersRouter.get('/:id/party-otp', asyncHandler(adminGetPartyOtpInfoHandler))
 adminOrdersRouter.post('/:id/party-otp/secret', asyncHandler(adminSetPartyOtpSecretHandler))
 adminOrdersRouter.post('/:id/party-otp/reset', asyncHandler(adminResetPartyOtpCountHandler))
+adminOrdersRouter.post('/:id/party-otp/auto-assign', asyncHandler(adminAutoAssignPartyAccountHandler))
+adminOrdersRouter.post('/:id/party-otp/sync-secret', asyncHandler(adminSyncPartyOtpSecretHandler))

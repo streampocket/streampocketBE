@@ -1,3 +1,5 @@
+import type { PartyDurationMode } from '@prisma/client'
+
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 
 type PartyPricingInput = {
@@ -20,6 +22,35 @@ export function calculatePartyExpiresAt(startedAt: Date, durationDays: number): 
 export function getRemainingDays(startedAt: Date, durationDays: number): number {
   const expiresAt = calculatePartyExpiresAt(startedAt, durationDays)
   return (expiresAt.getTime() - Date.now()) / MS_PER_DAY
+}
+
+export type ApplicationExpiryInput = {
+  /** 승인 시각 (기존 건은 PartyApplication.startedAt에 남아 있다) */
+  approvedAt: Date
+  durationDays: number
+  durationMode: PartyDurationMode
+  /** 파티의 공유 시작 시각 — countdown에서 첫 승인 때만 세팅된다. null이면 아직 시작 전 */
+  partyStartedAt: Date | null
+}
+
+/**
+ * 이 신청의 실제 이용 만료 시각.
+ *
+ * fixed(기간 유지형)는 각 참여자가 durationDays를 온전히 보장받으므로 승인시각 + durationDays.
+ *
+ * countdown(기간 차감형)은 파티 전체가 "첫 승인시각 + durationDays"에 끝나므로
+ * 늦게 들어온 사람이 그 종료일을 넘을 수 없다 — 남은 기간만큼 값을 깎아 파는 구조
+ * (calculateCurrentPrice)와 짝이 맞아야 한다.
+ * 예: 30일 파티가 9/1에 시작(종료 10/1)했고 9/20에 승인되면 만료는 10/20이 아니라 10/1이다.
+ *
+ * 파티가 아직 시작 전(partyStartedAt null)이면 이 승인이 첫 승인이라 자를 대상이 없다.
+ */
+export function resolveApplicationExpiry(input: ApplicationExpiryInput): Date {
+  const individualExpiry = new Date(input.approvedAt.getTime() + input.durationDays * MS_PER_DAY)
+  if (input.durationMode !== 'countdown' || !input.partyStartedAt) return individualExpiry
+
+  const partyExpiry = calculatePartyExpiresAt(input.partyStartedAt, input.durationDays)
+  return partyExpiry.getTime() < individualExpiry.getTime() ? partyExpiry : individualExpiry
 }
 
 export function calculateCurrentPrice(input: PartyPricingInput): number {

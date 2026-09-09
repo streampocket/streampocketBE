@@ -29,10 +29,16 @@ const updateSystemSettingsSchema = z
       })
       .optional(),
     reviewPointTiers: reviewPointTiersSchema.optional(),
+    // 신청 승인 모달의 자동 배정 토글 — 설정 화면이 아니라 승인 모달에서 단독으로 보낸다
+    partyAutoAssignEnabled: z.boolean().optional(),
   })
-  .refine((body) => body.defaultDurationMinutes !== undefined || body.reviewPointTiers !== undefined, {
-    message: '변경할 설정이 없습니다.',
-  })
+  .refine(
+    (body) =>
+      body.defaultDurationMinutes !== undefined ||
+      body.reviewPointTiers !== undefined ||
+      body.partyAutoAssignEnabled !== undefined,
+    { message: '변경할 설정이 없습니다.' },
+  )
 
 export async function getSystemSettingsHandler(_req: Request, res: Response): Promise<void> {
   const settings = await getSystemSettings()

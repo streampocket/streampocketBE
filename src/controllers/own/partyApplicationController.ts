@@ -80,9 +80,15 @@ export async function adminGetApplicationDetailHandler(req: Request, res: Respon
   res.json(result)
 }
 
+// 자동 배정 토글 — 보내지 않으면 배정 없이 승인만 한다(수동 처리)
+const approveBodySchema = z.object({
+  autoAssign: z.boolean().default(false),
+})
+
 export async function adminApproveApplicationHandler(req: Request, res: Response): Promise<void> {
   const { id } = idParamSchema.parse(req.params)
-  const result = await adminApproveApplication(id)
+  const { autoAssign } = approveBodySchema.parse(req.body ?? {})
+  const result = await adminApproveApplication(id, { autoAssign })
   res.json(result)
 }
 

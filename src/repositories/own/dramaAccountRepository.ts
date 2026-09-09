@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client'
+import { Prisma, type OwnProductType } from '@prisma/client'
 import { prisma } from '../../lib/prisma'
 
 // 파티원은 만료일 → 시작 시각 순. startTime이 'HH:mm'이라 사전순 정렬이 곧 시간순이다.
@@ -21,6 +21,66 @@ export function findAllDramaAccounts() {
 
 export function findDramaAccountById(id: string) {
   return prisma.dramaAccount.findUnique({ where: { id }, include: WITH_MEMBERS })
+}
+
+// 자동 배정 후보 조회 — 빈자리 계산에 필요한 컬럼 + 관리자 화면에 보여줄 자격증명.
+// passwordEnc/otpSecretEnc를 함께 읽는 이유: 승인 전 미리보기가 아이디뿐 아니라
+// 비밀번호·OTP 시크릿까지 보여주므로, 계정을 두 번 조회하지 않기 위함이다.
+// 복호화는 서비스 층에서 하고, 이 암호문은 절대 응답에 그대로 실리지 않는다.
+const ASSIGN_CANDIDATE_SELECT = {
+  id: true,
+  email: true,
+  platform: true,
+  capacity: true,
+  dueAt: true,
+  passwordEnc: true,
+  otpSecretEnc: true,
+  members: { select: { endDate: true, startTime: true } },
+} satisfies Prisma.DramaAccountSelect
+
+/**
+ * 플랫폼·마감일로 1차로 거른 배정 후보.
+ *
+ * 빈자리(정원 − 활성 파티원)는 파티원 만료 시각까지 봐야 해서 SQL로 세지 않고
+ * 호출측이 utils/dramaAssignment로 계산한다.
+ * `tx`를 받는 이유: 배정은 트랜잭션 안에서 후보를 다시 읽어 동시 승인을 방어한다.
+ */
+export function findAssignCandidates(
+  tx: Prisma.TransactionClient,
+  input: { platforms: readonly string[]; minDueAt: Date; partyType: OwnProductType },
+) {
+  return tx.dramaAccount.findMany({
+    where: {
+      platform: { in: [...input.platforms] },
+      // 개인형은 프라이빗(정원 1), 공유형은 2인 이상. 순수 함수 matchesPartyType과 같은 규칙이며
+      // 여기서 1차로 걸러 불필요한 행을 읽지 않는다. capacity null은 양쪽 모두에서 빠진다.
+      capacity: input.partyType === 'personal' ? 1 : { gt: 1 },
+      dueAt: { gte: input.minDueAt },
+    },
+    select: ASSIGN_CANDIDATE_SELECT,
+    orderBy: [{ dueAt: 'asc' }, { email: 'asc' }],
+  })
+}
+
+/**
+ * 시크릿 역추적용 전건 조회 — 자동 배정 없이 시크릿만 수동 등록된 건에서 계정을 되찾을 때 쓴다.
+ *
+ * `findAllDramaAccounts`를 쓰지 않는 이유: 그쪽은 파티원까지 include해 불필요하게 무겁다.
+ * 암호문끼리는 비교할 수 없어(AES-GCM 랜덤 IV) 호출측이 전건을 복호화해 평문으로 맞춰야 하므로,
+ * 컬럼을 최소로 줄여 둔다.
+ */
+export function findAccountsForSecretLookup() {
+  return prisma.dramaAccount.findMany({
+    select: {
+      id: true,
+      email: true,
+      platform: true,
+      dueAt: true,
+      passwordEnc: true,
+      otpSecretEnc: true,
+    },
+    orderBy: { email: 'asc' },
+  })
 }
 
 export function findDramaAccountsByEmails(emails: string[]) {

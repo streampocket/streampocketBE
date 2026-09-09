@@ -10,7 +10,13 @@ import {
   findRecentReturnInCategory,
   groupApplicationsByHour,
 } from '../../repositories/own/partyApplicationRepository'
-import { isPartyJoinable, calculateCurrentPrice } from '../../utils/partyPricing'
+import {
+  isPartyJoinable,
+  calculateCurrentPrice,
+  calculatePartyExpiresAt,
+  getRemainingDays,
+  resolveApplicationExpiry,
+} from '../../utils/partyPricing'
 import { sendDiscordAlert } from '../../lib/discord'
 import {
   sendPartyApplicationAlimtalk,
@@ -25,6 +31,12 @@ import { findOrdersByPartyApplicationId } from '../../repositories/steamOrderRep
 import { releasePartyMembership } from './partyMembershipService'
 import { WITHDRAWN_USER_DISPLAY } from './userWithdrawalService'
 import { refundApplicationPoint, usePointForApplication } from './pointService'
+import {
+  alertAutoAssignFailure,
+  assignAccountToApplication,
+  previewAssignment,
+  resolveApplicationCredentials,
+} from './dramaAssignmentService'
 
 export async function applyToParty(productId: string, userId: string, usePoint = false) {
   const product = await findOwnProductById(productId)
@@ -132,6 +144,11 @@ export async function applyToParty(productId: string, userId: string, usePoint =
           // 이전 사이클의 반품 이력이 새 사이클로 이월되지 않도록 초기화.
           // 쿨다운 12시간 이내면 위 가드가 먼저 409로 끊으므로 여기 도달 시점엔 항상 해제 대상이다.
           returnedAt: null,
+          // 이전 사이클에 배정됐던 드라마 계정 링크도 해제한다.
+          // 안 하면 새 사이클이 already_assigned로 판정돼 계정을 새로 못 받는다.
+          // (파티원 행 자체는 반품 시점에 이미 지워졌다 — releasePartyMembership)
+          dramaAccountId: null,
+          dramaMemberId: null,
         },
       })
       // 재신청 시 이전 사이클의 OTP 시크릿·소진 횟수가 새 사이클로 이월되지 않도록 삭제.
@@ -293,6 +310,7 @@ export async function adminGetApplicationDetail(applicationId: string) {
     throw Object.assign(new Error('신청 내역을 찾을 수 없습니다.'), { statusCode: 404 })
   }
 
+  // 신청 접수 알림톡(UJ_2053) 발송 이력. message는 본문이 길고 화면에 쓰이지 않아 제외한다.
   const logs = await findDeliveryLogsByPartyApplicationId(applicationId)
   const alimtalkLogs = logs.map((log) => ({
     id: log.id,
@@ -303,10 +321,59 @@ export async function adminGetApplicationDetail(applicationId: string) {
     createdAt: log.createdAt,
   }))
 
-  return { data: { ...application, user: application.user ?? WITHDRAWN_USER_DISPLAY, alimtalkLogs } }
+  // 대기 중이면 "지금 승인하면 어떤 계정이 배정되는지"를 미리 보여줘 자동 배정 토글 가능 여부를 판단하게 한다.
+  const preview = await previewAssignment(applicationId)
+  const autoAssignPreview = preview.ok
+    ? { eligible: true as const, reason: null, account: preview.account }
+    : { eligible: false as const, reason: preview.reason, account: null }
+
+  // 배정된 계정의 아이디·비밀번호·OTP 시크릿 — 관리자가 드라마 계정 관리로 넘어가지 않아도 되게 한다.
+  // 시크릿만 수동 등록된 건도 시크릿으로 계정을 역추적해 보여준다. (관리자 전용 응답)
+  const dramaAccount = await resolveApplicationCredentials(applicationId)
+
+  const { startedAt: partyStartedAt, durationDays, durationMode } = application.product
+
+  // 파티 자체가 끝나는 시각 — 신청자 개인 만료(expiresAt)와는 다른 값이다.
+  // 이름·계산식을 파티 화면(ownProductService.enrichWithPricing)과 똑같이 맞춰,
+  // 두 화면이 같은 파티에 대해 다른 날짜를 말하는 일이 없게 한다.
+  // startedAt이 null이면 아직 아무도 승인되지 않은 파티라 종료일이 정해지지 않았다.
+  const partyExpiresAt = partyStartedAt
+    ? calculatePartyExpiresAt(partyStartedAt, durationDays)
+    : null
+  const partyRemainingDays = partyStartedAt
+    ? Math.max(0, Math.floor(getRemainingDays(partyStartedAt, durationDays)))
+    : durationDays
+
+  // 대기 건은 "지금 승인하면 언제까지 쓰는지"를 미리 보여준다 — 승인 로직과 같은
+  // resolveApplicationExpiry라 실제로 승인했을 때 저장될 값과 일치한다.
+  // 확정 건은 저장된 expiresAt이 이미 답이라 계산하지 않는다(둘이 갈라지면 안 된다).
+  const expiresAtIfApprovedNow =
+    application.status === 'pending'
+      ? resolveApplicationExpiry({
+          approvedAt: new Date(),
+          durationDays,
+          durationMode,
+          partyStartedAt,
+        })
+      : null
+
+  return {
+    data: {
+      ...application,
+      product: { ...application.product, partyExpiresAt, partyRemainingDays },
+      user: application.user ?? WITHDRAWN_USER_DISPLAY,
+      alimtalkLogs,
+      autoAssignPreview,
+      dramaAccount,
+      expiresAtIfApprovedNow,
+    },
+  }
 }
 
-export async function adminApproveApplication(applicationId: string) {
+export async function adminApproveApplication(
+  applicationId: string,
+  options: { autoAssign: boolean } = { autoAssign: false },
+) {
   const result = await prisma.$transaction(async (tx) => {
     const application = await tx.partyApplication.findUnique({
       where: { id: applicationId },
@@ -319,6 +386,8 @@ export async function adminApproveApplication(applicationId: string) {
             totalSlots: true,
             filledSlots: true,
             durationMode: true,
+            // 차감형 파티의 만료일을 파티 종료일로 자르려면 파티 시작 시각이 필요하다
+            startedAt: true,
           },
         },
         user: { select: { name: true } },
@@ -341,7 +410,14 @@ export async function adminApproveApplication(applicationId: string) {
     }
 
     const startedAt = new Date()
-    const expiresAt = new Date(startedAt.getTime() + application.product.durationDays * 24 * 60 * 60 * 1000)
+    // 차감형은 파티 종료일을 넘지 않게 자른다 — 남은 기간만큼 값을 깎아 파는 구조와 맞춘다.
+    // (아래 startedAt 세팅보다 먼저 읽어야 한다. 첫 승인이면 product.startedAt이 아직 null이라 자르지 않는다)
+    const expiresAt = resolveApplicationExpiry({
+      approvedAt: startedAt,
+      durationDays: application.product.durationDays,
+      durationMode: application.product.durationMode,
+      partyStartedAt: application.product.startedAt,
+    })
 
     const confirmed = await tx.partyApplication.update({
       where: { id: applicationId },
@@ -424,12 +500,58 @@ export async function adminApproveApplication(applicationId: string) {
     }
   }
 
+  // 계정 자동 배정. 주문 자동 생성과 같은 관행으로 트랜잭션 밖에서 수행한다 —
+  // 배정 실패가 이미 끝난 승인을 롤백하면 안 되고, 실패해도 수동으로 보정할 수 있다.
+  let autoAssign: AutoAssignOutcome = { attempted: false, assigned: false, reason: null }
+  if (options.autoAssign && !result.autoRejected && result.orderInfo) {
+    autoAssign = await runAutoAssign(applicationId, result.orderInfo)
+  }
+
   return {
     data: result.application,
     autoRejected: result.autoRejected,
     // 이번 승인으로 파티가 모집완료됐는지 — fe가 동일 파티 재생성 여부를 물을 때 사용
     partyClosed: result.partyClosed ?? false,
     productId: result.productId ?? null,
+    autoAssign,
+  }
+}
+
+export type AutoAssignOutcome = {
+  /** 자동 배정을 시도했는지 (토글 OFF면 false) */
+  attempted: boolean
+  assigned: boolean
+  /** 실패 사유 — AssignFailReason 또는 트랜잭션 오류 메시지 */
+  reason: string | null
+}
+
+async function runAutoAssign(
+  applicationId: string,
+  orderInfo: { partyName: string; receiverName: string },
+): Promise<AutoAssignOutcome> {
+  try {
+    const result = await assignAccountToApplication(applicationId)
+    if (!result.ok) {
+      alertAutoAssignFailure({
+        applicationId,
+        productName: orderInfo.partyName,
+        userName: orderInfo.receiverName,
+        reason: result.reason,
+      })
+      return { attempted: true, assigned: false, reason: result.reason }
+    }
+    return { attempted: true, assigned: true, reason: null }
+  } catch (error) {
+    // 정원 동시 점유 등으로 배정 트랜잭션이 롤백된 경우 — 승인은 이미 확정이므로 삼키고 알린다
+    const reason = error instanceof Error ? error.message : String(error)
+    console.error('[party-approval] 계정 자동 배정 실패', { applicationId, error })
+    alertAutoAssignFailure({
+      applicationId,
+      productName: orderInfo.partyName,
+      userName: orderInfo.receiverName,
+      reason,
+    })
+    return { attempted: true, assigned: false, reason }
   }
 }
 

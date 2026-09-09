@@ -3,6 +3,13 @@ import { encryptSecret, decryptSecret } from '../../lib/crypto'
 import { normalizeSecret, isValidSecret, generateIssueCode, TOTP_PERIOD } from '../../lib/totp'
 import { PARTY_OTP_MAX_ISSUES, PARTY_OTP_VIEW_MINUTES } from '../../constants/party'
 import { findOrderById } from '../../repositories/steamOrderRepository'
+import {
+  assignAccountToApplication,
+  previewAssignment,
+  resolveApplicationCredentials,
+  syncCredentialSecret,
+  type PartyAccountCredentials,
+} from './dramaAssignmentService'
 
 const VIEW_MS = PARTY_OTP_VIEW_MINUTES * 60 * 1000
 
@@ -92,7 +99,7 @@ export async function adminGetPartyOtpInfo(orderId: string) {
     return { data: { linked: false as const } }
   }
 
-  const [credential, logs] = await Promise.all([
+  const [credential, logs, assignment] = await Promise.all([
     prisma.partyOtpCredential.findUnique({
       where: { applicationId },
       select: { issueCount: true, updatedAt: true },
@@ -102,6 +109,8 @@ export async function adminGetPartyOtpInfo(orderId: string) {
       orderBy: { issuedAt: 'desc' },
       select: { id: true, issuedAt: true },
     }),
+    // 자동 배정 상태 — 화면이 "지금 자동배정을 누를 수 있는지"와 그 사유를 보여준다
+    describeAutoAssign(applicationId),
   ])
 
   return {
@@ -112,7 +121,89 @@ export async function adminGetPartyOtpInfo(orderId: string) {
       issueCount: credential?.issueCount ?? 0,
       maxIssues: PARTY_OTP_MAX_ISSUES,
       logs,
+      autoAssign: assignment,
     },
+  }
+}
+
+export type AutoAssignInfo = {
+  /** 이미 계정이 배정돼 있는지 */
+  assigned: boolean
+  accountEmail: string | null
+  /** 지금 자동배정을 실행할 수 있는지 */
+  eligible: boolean
+  /** 불가 사유 (가능하면 null) */
+  reason: string | null
+  /**
+   * 계정 아이디·비밀번호·OTP 시크릿 (관리자 전용 평문).
+   * 시크릿이 등록돼 있어야 채워진다 — 수동 등록 건은 시크릿으로 계정을 역추적한다.
+   */
+  credentials: PartyAccountCredentials | null
+}
+
+async function describeAutoAssign(applicationId: string): Promise<AutoAssignInfo> {
+  const [credentials, preview] = await Promise.all([
+    resolveApplicationCredentials(applicationId),
+    previewAssignment(applicationId),
+  ])
+  const application = await prisma.partyApplication.findUnique({
+    where: { id: applicationId },
+    select: { dramaAccount: { select: { email: true } } },
+  })
+  const assignedEmail = application?.dramaAccount?.email ?? null
+
+  return {
+    assigned: assignedEmail != null,
+    accountEmail: assignedEmail,
+    eligible: preview.ok,
+    reason: preview.ok ? null : preview.reason,
+    credentials,
+  }
+}
+
+/** 관리자 — 계정의 현재 OTP 시크릿을 신청 복사본에 다시 복사 (불일치 해소) */
+export async function adminSyncPartyOtpSecret(orderId: string) {
+  const applicationId = await resolvePartyApplicationId(orderId)
+  if (!applicationId) {
+    throw Object.assign(new Error('이 주문은 파티 신청과 연결되어 있지 않습니다.'), { statusCode: 409 })
+  }
+  await syncCredentialSecret(applicationId)
+  return { data: { synced: true as const } }
+}
+
+/** 관리자 — 계정 자동 배정 재시도 (승인 때 놓친 건 보정용) */
+export async function adminAutoAssignPartyAccount(orderId: string) {
+  const applicationId = await resolvePartyApplicationId(orderId)
+  if (!applicationId) {
+    throw Object.assign(new Error('이 주문은 파티 신청과 연결되어 있지 않습니다.'), { statusCode: 409 })
+  }
+
+  const result = await assignAccountToApplication(applicationId)
+  // 배정에 실패하면 사유를 그대로 409로 올린다 — 화면이 원인을 보여줘야 한다
+  if (!result.ok) {
+    throw Object.assign(new Error(describeAssignFailure(result.reason)), { statusCode: 409 })
+  }
+
+  return { data: { assigned: true as const, account: result.account } }
+}
+
+/** 실패 사유 코드를 관리자용 문구로 — 화면과 디스코드가 같은 문구를 쓰도록 한 곳에 둔다 */
+export function describeAssignFailure(reason: string | null): string {
+  switch (reason) {
+    case 'not_found':
+      return '신청 내역을 찾을 수 없습니다.'
+    case 'not_confirmed':
+      return '승인 완료된 신청만 계정을 배정할 수 있습니다.'
+    case 'assigned_by_other':
+      return '다른 관리자가 먼저 배정했습니다. 화면을 새로고침해 확인해 주세요.'
+    case 'already_has_secret':
+      return '이미 OTP 시크릿이 등록되어 있습니다. 자동 배정은 시크릿이 없는 건에만 가능합니다.'
+    case 'unmapped_party':
+      return '이 파티는 드라마 계정 플랫폼 매핑이 없어 자동 배정할 수 없습니다.'
+    case 'no_account':
+      return '조건에 맞는 계정이 없습니다 (플랫폼·파티 타입·빈자리·마감일 확인 필요).'
+    default:
+      return reason ?? '알 수 없는 이유로 실패했습니다.'
   }
 }
 

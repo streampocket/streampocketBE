@@ -107,6 +107,11 @@ export function findApplicationsByUserId(userId: string) {
       },
       // 시크릿 암호문(secretEnc)은 절대 select 금지 — 유저 응답에 그대로 실리는 경로
       otpCredential: { select: { issueCount: true } },
+      // ⚠️ dramaAccount 관계도 절대 include 금지 — passwordEnc·otpSecretEnc 암호문이
+      // 구매자 응답에 통째로 실린다. 관리자 화면에만 복호화해 내려주는 값이다
+      // (dramaAssignmentService.resolveApplicationCredentials).
+      // top-level scalar는 include가 전부 싣기 때문에 dramaAccountId/dramaMemberId(UUID)는 이미 나간다 —
+      // 링크 id 자체는 무해하나, 관계를 펼치는 순간 자격증명이 새어 나간다.
     },
     orderBy: { createdAt: 'desc' },
   })
@@ -239,6 +244,8 @@ export function findApplicationDetailForAdmin(applicationId: string) {
           filledSlots: true,
           partyType: true,
           durationMode: true,
+          // 차감형 파티의 종료일 계산에 필요하다 (승인 미리보기가 만료일을 가정할 때 쓴다)
+          startedAt: true,
           category: { select: { id: true, name: true } },
         },
       },

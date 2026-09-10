@@ -87,6 +87,21 @@ export async function findAllOwnProducts(filters: OwnProductFilters) {
   return { items, total: items.length }
 }
 
+/**
+ * sitemap용 최소 조회 — id·상태·수정시각만.
+ *
+ * `findAllOwnProducts`를 쓰지 않는 이유: 그쪽은 전체 필드 + category를 include해
+ * 1,500여 건이면 응답이 3MB에 달한다. sitemap은 URL과 lastModified만 필요하다.
+ * status는 모집중/마감을 나눠 changeFrequency·priority를 달리 주는 데 쓴다.
+ */
+export function findOwnProductIdsForSitemap() {
+  return prisma.ownProduct.findMany({
+    where: { deletedAt: null },
+    select: { id: true, status: true, updatedAt: true },
+    orderBy: { createdAt: 'desc' },
+  })
+}
+
 export function findOwnProductById(id: string) {
   return prisma.ownProduct.findUnique({
     where: { id },

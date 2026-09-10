@@ -58,6 +58,14 @@ export function findReviewById(id: string) {
   return prisma.ownReview.findUnique({ where: { id } })
 }
 
+/** sitemap용 최소 조회 — 리뷰 상세는 UGC라 검색 롱테일의 원천이다 */
+export function findReviewIdsForSitemap() {
+  return prisma.ownReview.findMany({
+    select: { id: true, updatedAt: true },
+    orderBy: { createdAt: 'desc' },
+  })
+}
+
 type CreateReviewInput = {
   applicationId: string
   productId: string

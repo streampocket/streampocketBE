@@ -5,6 +5,7 @@ import {
   getReviewableApplicationsHandler,
   issueReviewImageUploadUrlHandler,
   listReviewsHandler,
+  getReviewsSitemapHandler,
   updateReviewHandler,
 } from '../../controllers/own/ownReviewController'
 import { userAuthMiddleware } from '../../middlewares/userAuth'
@@ -14,6 +15,8 @@ export const ownReviewsRouter = Router()
 
 // 공개 라우트 (인증 불필요)
 ownReviewsRouter.get('/', asyncHandler(listReviewsHandler))
+// '/:id'보다 먼저 등록해야 한다 (아래 '/eligible'과 같은 이유)
+ownReviewsRouter.get('/sitemap', asyncHandler(getReviewsSitemapHandler))
 ownReviewsRouter.get('/eligible', userAuthMiddleware, asyncHandler(getReviewableApplicationsHandler))
 ownReviewsRouter.post(
   '/uploads/presigned-url',

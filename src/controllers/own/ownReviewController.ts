@@ -8,6 +8,7 @@ import {
   getReviewableApplications,
   issueReviewImageUploadUrl,
   listReviews,
+  listReviewIdsForSitemap,
   updateReviewForUser,
 } from '../../services/own/ownReviewService'
 
@@ -53,6 +54,12 @@ export async function listReviewsHandler(req: Request, res: Response): Promise<v
   const query = listQuerySchema.parse(req.query)
   const result = await listReviews(query)
   res.json(result)
+}
+
+// sitemap 생성용 — id·updatedAt만
+export async function getReviewsSitemapHandler(_req: Request, res: Response): Promise<void> {
+  const items = await listReviewIdsForSitemap()
+  res.json({ items })
 }
 
 export async function getReviewHandler(req: Request, res: Response): Promise<void> {

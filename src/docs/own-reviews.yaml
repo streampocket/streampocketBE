@@ -50,6 +50,32 @@ paths:
         '404': { description: 신청 내역 없음 }
         '409': { description: 이미 이 파티에 작성한 리뷰 존재 }
 
+  /own/reviews/sitemap:
+    get:
+      summary: sitemap용 리뷰 목록 (공개)
+      description: |
+        `fe/app/sitemap.ts`가 쓰는 경량 조회 — `id`·`updatedAt`만.
+
+        리뷰 상세는 회원이 직접 쓴 콘텐츠라 검색 롱테일의 원천인데 sitemap에서 빠져 있었다.
+
+        > 라우터에서 `/:id`보다 **먼저** 등록해야 한다 (`/eligible`과 같은 이유).
+      tags: [OwnReviews]
+      responses:
+        '200':
+          description: 전체 리뷰 (생성 역순)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string, format: uuid }
+                        updatedAt: { type: string, format: date-time }
+
   /own/reviews/{id}:
     get:
       summary: 리뷰 단건 조회 (공개)

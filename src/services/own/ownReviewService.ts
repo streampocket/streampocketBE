@@ -8,6 +8,7 @@ import {
   findReviewByIdForPublic,
   findReviewsForAdmin,
   findReviewsForPublic,
+  findReviewIdsForSitemap,
   updateReview,
   type ReviewListSort,
 } from '../../repositories/own/ownReviewRepository'
@@ -51,6 +52,11 @@ export async function getReview(id: string) {
     throw Object.assign(new Error('리뷰를 찾을 수 없습니다.'), { statusCode: 404 })
   }
   return { data: withDisplayUser(review) }
+}
+
+/** sitemap용 리뷰 목록 — 리뷰 상세는 UGC라 검색 롱테일의 원천이다 */
+export async function listReviewIdsForSitemap(): Promise<{ id: string; updatedAt: Date }[]> {
+  return findReviewIdsForSitemap()
 }
 
 export async function getReviewableApplications(userId: string) {

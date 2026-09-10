@@ -13,6 +13,7 @@ import {
   bulkExpireProducts,
   findRecruitingStartedProducts,
   bulkCloseProducts,
+  findOwnProductIdsForSitemap,
 } from '../../repositories/own/ownProductRepository'
 import {
   findExpiredApplications,
@@ -162,6 +163,19 @@ export async function getOwnProductDetail(id: string) {
     throw Object.assign(new Error('파티를 찾을 수 없습니다.'), { statusCode: 404 })
   }
   return enrichWithPricing(stripCredentials(product))
+}
+
+/**
+ * sitemap용 파티 목록 — 마감·만료 파티도 포함한다.
+ *
+ * 마감 파티도 페이지가 살아 있고(모집 마감 안내 + 모집중 보기 버튼) 검색 유입 창구로 쓰이므로
+ * sitemap에서 빼면 재크롤 경로가 사라진다. 2026-08에 noindex와 sitemap 제외가 겹쳐
+ * 색인된 파티가 계속 빠져나갔던 것을 되돌리는 조회다.
+ */
+export async function listOwnProductIdsForSitemap(): Promise<
+  { id: string; status: string; updatedAt: Date }[]
+> {
+  return findOwnProductIdsForSitemap()
 }
 
 // 관리자용 (소유권 검증 없음)

@@ -9,6 +9,7 @@ import {
   adminDeleteOwnProduct,
   adminGetOwnProductDetailWithApplications,
   adminUpdatePartyStatus,
+  listOwnProductIdsForSitemap,
 } from '../../services/own/ownProductService'
 
 // ───────────────────────── Zod 스키마 ─────────────────────────
@@ -68,6 +69,12 @@ export async function getOwnProductsHandler(req: Request, res: Response): Promis
   const query = listQuerySchema.parse(req.query)
   const result = await getOwnProducts(query)
   res.json({ data: result.data })
+}
+
+// sitemap 생성용 — 마감·만료 파티까지 전부 내려준다 (id·status·updatedAt만)
+export async function getOwnProductsSitemapHandler(_req: Request, res: Response): Promise<void> {
+  const items = await listOwnProductIdsForSitemap()
+  res.json({ items })
 }
 
 export async function getOwnProductDetailHandler(req: Request, res: Response): Promise<void> {

@@ -98,12 +98,23 @@ paths:
           description: >-
             신청 상세 + alimtalkLogs(신청 접수 UJ_2053 이력, 본문 message는 제외) +
             autoAssignPreview({ eligible, reason, account }) +
-            dramaAccount({ source, email, password, otpSecret, platform, dueAt, secretMismatch, ambiguous }) +
+            dramaAccount({ source, accountId, memberId, email, password, otpSecret, platform, dueAt,
+            secretMismatch, ambiguous, memo }) +
             product.partyExpiresAt/partyRemainingDays + expiresAtIfApprovedNow.
 
 
             **autoAssignPreview.account와 dramaAccount는 계정 아이디·비밀번호·OTP 시크릿을
             평문으로 포함한다** (관리자 전용, 드라마 계정 관리와 같은 정책).
+
+
+            **memo({ capacity, capacityLabel, notes, members })** 는 관리자 화면이 드라마 계정 관리와
+            같은 메모 원문(헤더 줄 + 파티원 괄호 줄 + 메모 줄 + 빈자리)을 그리는 데 쓴다.
+            members는 파티원 전체이며 만료된 파티원도 포함한다(정리 전까지 메모에 남아 있으므로).
+            정렬은 endDate → startTime 순으로 드라마 계정 관리와 같다.
+            계정을 찾지 못한 source=secret_only면 memo는 null이다.
+            memberId는 이 신청이 차지한 파티원 행으로, 메모에서 해당 줄을 강조하는 데 쓴다
+            (수동 등록 건은 링크가 없어 null).
+            autoAssignPreview.account에도 같은 memo가 실린다 — 승인 전에 "누구와 함께 쓰게 되는지"를 보여준다.
 
 
             autoAssignPreview는 **예약이 아니라 매번 다시 계산하는 스냅샷**이다 —

@@ -37,6 +37,7 @@ import {
   previewAssignment,
   resolveApplicationCredentials,
 } from './dramaAssignmentService'
+import { loadAccountMemo } from './dramaAccountService'
 
 export async function applyToParty(productId: string, userId: string, usePoint = false) {
   const product = await findOwnProductById(productId)
@@ -323,8 +324,15 @@ export async function adminGetApplicationDetail(applicationId: string) {
 
   // 대기 중이면 "지금 승인하면 어떤 계정이 배정되는지"를 미리 보여줘 자동 배정 토글 가능 여부를 판단하게 한다.
   const preview = await previewAssignment(applicationId)
+  // 배정 예정 계정의 메모(파티원 목록)는 이 화면만 쓴다 — previewAssignment 안에 넣으면
+  // eligible/reason만 쓰고 account는 버리는 주문 관리 OTP 탭이 쓸데없이 한 번 더 조회한다.
+  const previewMemo = preview.ok ? await loadAccountMemo(preview.account.id) : null
   const autoAssignPreview = preview.ok
-    ? { eligible: true as const, reason: null, account: preview.account }
+    ? {
+        eligible: true as const,
+        reason: null,
+        account: { ...preview.account, memo: previewMemo },
+      }
     : { eligible: false as const, reason: preview.reason, account: null }
 
   // 배정된 계정의 아이디·비밀번호·OTP 시크릿 — 관리자가 드라마 계정 관리로 넘어가지 않아도 되게 한다.

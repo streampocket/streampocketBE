@@ -66,6 +66,25 @@ export function nowInKst(): KstMoment {
   return kstMomentOf(new Date())
 }
 
+/**
+ * 파티원 행 → 응답 DTO.
+ *
+ * `toView`(드라마 계정 관리)와 `toAccountMemo`(신청 관리의 메모 표시)가 **함께 쓴다.**
+ * 따로 매핑하면 `endDate`를 KST 문자열로 바꾸는 이 한 줄이 어긋나 두 화면의 날짜가 달라진다.
+ */
+export function toMemberView(member: DramaAccountWithMembers['members'][number]): DramaMemberView {
+  return {
+    id: member.id,
+    site: member.site,
+    name: member.name,
+    siteSpaced: member.siteSpaced,
+    endDate: toDateString(member.endDate),
+    startTime: member.startTime,
+    days: member.days,
+    suffix: member.suffix,
+  }
+}
+
 function toView(account: DramaAccountWithMembers): DramaAccountView {
   return {
     id: account.id,
@@ -78,22 +97,53 @@ function toView(account: DramaAccountWithMembers): DramaAccountView {
     dueAt: account.dueAt ? toDateString(account.dueAt) : null,
     notes: account.notes,
     updatedAt: account.updatedAt.toISOString(),
-    members: account.members.map((m) => ({
-      id: m.id,
-      site: m.site,
-      name: m.name,
-      siteSpaced: m.siteSpaced,
-      endDate: toDateString(m.endDate),
-      startTime: m.startTime,
-      days: m.days,
-      suffix: m.suffix,
-    })),
+    members: account.members.map(toMemberView),
   }
 }
 
 export async function listDramaAccounts(): Promise<DramaAccountView[]> {
   const accounts = await findAllDramaAccounts()
   return accounts.map(toView)
+}
+
+/**
+ * 메모 원문을 재현하는 데 필요한 계정 상태.
+ *
+ * 신청 관리·주문 관리가 배정된 계정의 메모(헤더 줄 + 파티원 괄호 줄 + 메모 줄)를
+ * 드라마 계정 관리와 같은 글자로 그리기 위해 쓴다. 아이디·비밀번호·시크릿은
+ * `PartyAccountCredentials`가 이미 담고 있어 여기 넣지 않는다.
+ *
+ * `DramaAccountView`에서 Pick으로 뽑아 **드라마 계정 관리 응답과 타입이 묶이게** 했다.
+ */
+export type DramaAccountMemo = Pick<
+  DramaAccountView,
+  'capacity' | 'capacityLabel' | 'notes' | 'members'
+>
+
+/**
+ * 계정 행 → 메모 뷰 (순수 함수).
+ *
+ * `toView`를 재사용하지 않는 이유: 그쪽은 비밀번호·OTP 시크릿을 복호화하는데
+ * 메모 뷰는 그 값이 필요 없다. 평문이 메모리에 뜨는 구간을 늘리지 않는다.
+ */
+export function toAccountMemo(account: DramaAccountWithMembers): DramaAccountMemo {
+  return {
+    capacity: account.capacity,
+    capacityLabel: account.capacityLabel,
+    notes: account.notes,
+    members: account.members.map(toMemberView),
+  }
+}
+
+/**
+ * 계정 id로 메모 뷰를 읽는다 — 배정 건·시크릿 역추적 건·승인 전 미리보기가 공유한다.
+ *
+ * `findDramaAccountById`에 이미 파티원 정렬(endDate asc → startTime asc)이 걸려 있어
+ * 정렬을 호출부마다 복제할 필요가 없다. 덕분에 드라마 계정 관리와 줄 순서가 어긋날 수 없다.
+ */
+export async function loadAccountMemo(accountId: string): Promise<DramaAccountMemo | null> {
+  const account = await findDramaAccountById(accountId)
+  return account ? toAccountMemo(account) : null
 }
 
 /** 파서가 읽은 파티원 → 저장용 데이터 */

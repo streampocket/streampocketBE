@@ -23,7 +23,9 @@ import { resolveApplicationExpiry } from '../../utils/partyPricing'
 import {
   findAccountsForSecretLookup,
   findAssignCandidates,
+  findDramaAccountById,
 } from '../../repositories/own/dramaAccountRepository'
+import { loadAccountMemo, toAccountMemo, type DramaAccountMemo } from './dramaAccountService'
 
 /** 자동 배정이 불가능한 이유 — 화면에 그대로 사유로 표시된다 */
 export type AssignFailReason =
@@ -295,6 +297,11 @@ export type AccountCredentialSource =
 export type PartyAccountCredentials = {
   source: AccountCredentialSource
   accountId: string | null
+  /**
+   * 이 신청이 차지한 파티원 행 — 메모에서 "어느 줄이 이 신청인지" 강조하는 데 쓴다.
+   * 수동 등록(역추적) 건은 링크가 없어 null이다.
+   */
+  memberId: string | null
   email: string | null
   password: string | null
   /** 신청에 등록된 시크릿 — 구매자가 실제로 발급받는 값 */
@@ -302,6 +309,11 @@ export type PartyAccountCredentials = {
   platform: string | null
   /** 'YYYY-MM-DD' */
   dueAt: string | null
+  /**
+   * 계정의 정원·정원 표기·메모 줄·파티원 목록 — 관리자 화면이 드라마 계정 관리와
+   * 같은 메모 원문을 그리는 데 쓴다. 계정을 찾지 못한 secret_only면 null이다.
+   */
+  memo: DramaAccountMemo | null
   /**
    * 계정의 현재 시크릿과 신청 복사본이 다른가.
    * true면 구매자가 발급받는 코드가 실제 계정에서 통하지 않는다 —
@@ -320,10 +332,11 @@ export async function resolveApplicationCredentials(
     where: { id: applicationId },
     select: {
       dramaAccountId: true,
+      dramaMemberId: true,
       otpCredential: { select: { secretEnc: true } },
-      dramaAccount: {
-        select: { id: true, email: true, passwordEnc: true, otpSecretEnc: true, platform: true, dueAt: true },
-      },
+      // 계정 본체는 중첩 select로 읽지 않는다 — 메모(파티원·정원 표기·메모 줄)까지 필요해서
+      // findDramaAccountById를 쓰는데, 그러면 이 select와 모양이 둘로 갈라진다.
+      dramaAccount: { select: { id: true } },
     },
   })
   if (!application?.otpCredential) return null
@@ -331,20 +344,25 @@ export async function resolveApplicationCredentials(
   const otpSecret = decryptSecret(application.otpCredential.secretEnc)
 
   // 자동 배정 건 — 링크로 바로 찾으므로 전건 스캔이 필요 없다
-  const linked = application.dramaAccount
-  if (linked) {
-    return {
-      source: 'assigned',
-      accountId: linked.id,
-      email: linked.email,
-      password: decryptSecret(linked.passwordEnc),
-      otpSecret,
-      platform: linked.platform,
-      dueAt: linked.dueAt ? toDateString(linked.dueAt) : null,
-      // 계정의 현재 시크릿과 신청 복사본을 비교한다 (암호문이 아니라 평문끼리)
-      secretMismatch: decryptSecret(linked.otpSecretEnc) !== otpSecret,
-      ambiguous: false,
+  if (application.dramaAccount) {
+    const linked = await findDramaAccountById(application.dramaAccount.id)
+    if (linked) {
+      return {
+        source: 'assigned',
+        accountId: linked.id,
+        memberId: application.dramaMemberId,
+        email: linked.email,
+        password: decryptSecret(linked.passwordEnc),
+        otpSecret,
+        platform: linked.platform,
+        dueAt: linked.dueAt ? toDateString(linked.dueAt) : null,
+        // 계정의 현재 시크릿과 신청 복사본을 비교한다 (암호문이 아니라 평문끼리)
+        secretMismatch: decryptSecret(linked.otpSecretEnc) !== otpSecret,
+        ambiguous: false,
+        memo: toAccountMemo(linked),
+      }
     }
+    // 링크를 읽은 직후 계정이 삭제된 경우 — 아래 역추적으로 떨어진다
   }
 
   // 수동 등록 건 — 시크릿 평문으로 계정을 되찾는다.
@@ -357,6 +375,7 @@ export async function resolveApplicationCredentials(
     return {
       source: 'secret_only',
       accountId: null,
+      memberId: null,
       email: null,
       password: null,
       otpSecret,
@@ -364,12 +383,15 @@ export async function resolveApplicationCredentials(
       dueAt: null,
       secretMismatch: false,
       ambiguous: false,
+      memo: null,
     }
   }
 
   return {
     source: 'matched_by_secret',
     accountId: account.id,
+    // 역추적 건은 신청↔파티원 링크가 없다 (관리자가 시크릿만 손으로 등록한 건)
+    memberId: null,
     email: account.email,
     password: decryptSecret(account.passwordEnc),
     otpSecret,
@@ -378,6 +400,8 @@ export async function resolveApplicationCredentials(
     // 시크릿이 같아서 찾은 계정이므로 정의상 어긋날 수 없다
     secretMismatch: false,
     ambiguous,
+    // 역추적은 파티원을 포함하지 않는 최소 컬럼만 읽으므로 메모는 따로 조회한다
+    memo: await loadAccountMemo(account.id),
   }
 }
 

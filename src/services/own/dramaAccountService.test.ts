@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const repo = vi.hoisted(() => ({
   findDramaAccountById: vi.fn(),
   findDramaAccountsByEmails: vi.fn(),
+  findAllDramaAccounts: vi.fn(),
   createDramaAccount: vi.fn(),
   replaceDramaAccount: vi.fn(),
   deleteExpiredDramaMembers: vi.fn(),
@@ -12,7 +13,6 @@ const repo = vi.hoisted(() => ({
 
 vi.mock('../../repositories/own/dramaAccountRepository', () => ({
   ...repo,
-  findAllDramaAccounts: vi.fn(),
   createDramaAccountsBulk: vi.fn(),
   deleteDramaAccountById: vi.fn(),
   deleteDramaMember: vi.fn(),
@@ -23,7 +23,15 @@ vi.mock('../../repositories/own/dramaAccountRepository', () => ({
 process.env['OTP_SECRET_ENC_KEY'] = 'a'.repeat(64)
 
 const { encryptSecret } = await import('../../lib/crypto')
-const { nowInKst, removeExpiredDramaMembers, saveDramaAccountFromText } = await import('./dramaAccountService')
+const {
+  listDramaAccounts,
+  loadAccountMemo,
+  nowInKst,
+  removeExpiredDramaMembers,
+  saveDramaAccountFromText,
+  toAccountMemo,
+  toMemberView,
+} = await import('./dramaAccountService')
 
 const MEMO = [
   '[2026-08-29]-릴숏 3인',
@@ -298,5 +306,166 @@ describe('만료 파티원 정리 — 시각 기준', () => {
     repo.findDramaAccountById.mockResolvedValue(null)
     await expect(removeExpiredDramaMembers('missing')).rejects.toMatchObject({ statusCode: 404 })
     expect(repo.deleteExpiredDramaMembers).not.toHaveBeenCalled()
+  })
+})
+
+// ── 응답 조립 (toMemberView / toView / toAccountMemo) ──────────────────
+//
+// 이 구역은 **원래 비어 있던 공백**을 메운다. 위 케이스들은 전부 저장 경로만 검증하고
+// (변화 요약·암호문 저장·파서 출력), listDramaAccounts/toView를 호출하는 케이스가 없었다.
+// 그 증거가 위 `existing()` 픽스처다 — 파티원에 id만 있어 toView를 태우면 터진다.
+//
+// 파티원 매핑을 toMemberView로 빼내 신청 관리와 공유하게 됐으므로,
+// 그 추출이 GET /own/admin/drama-accounts 응답을 바꾸지 않음을 여기서 고정한다.
+
+/** 8필드를 모두 채운 파티원 — toView/메모 뷰를 태울 수 있는 픽스처 */
+const memberRow = (over: Record<string, unknown> = {}) => ({
+  id: 'm1',
+  site: '스트림포켓',
+  name: '경원',
+  siteSpaced: true,
+  endDate: new Date('2026-08-05T00:00:00.000Z'),
+  startTime: '01:30',
+  days: 7,
+  suffix: null,
+  ...over,
+})
+
+/** 파티원이 채워진 계정 — existing()은 파티원에 id만 있어 여기선 쓸 수 없다 */
+const accountRow = (over: Record<string, unknown> = {}) => ({
+  ...existing(),
+  members: [memberRow()],
+  ...over,
+})
+
+describe('toMemberView — 파티원 행 → 응답 DTO', () => {
+  it('endDate를 KST YYYY-MM-DD 문자열로 바꾸고 나머지는 그대로 싣는다', () => {
+    expect(toMemberView(memberRow())).toEqual({
+      id: 'm1',
+      site: '스트림포켓',
+      name: '경원',
+      siteSpaced: true,
+      endDate: '2026-08-05',
+      startTime: '01:30',
+      days: 7,
+      suffix: null,
+    })
+  })
+
+  it('사이트 없음·공백 없음·괄호 꼬리 같은 원문 표기를 보존한다', () => {
+    const view = toMemberView(
+      memberRow({ site: null, name: '#7561308', siteSpaced: false, suffix: '-갤s26' }),
+    )
+    expect(view.site).toBeNull()
+    expect(view.siteSpaced).toBe(false)
+    expect(view.suffix).toBe('-갤s26')
+  })
+
+  it("startTime은 'HH:mm' 5자리를 그대로 둔다 (사전순 = 시간순이라 가공하면 정렬이 깨진다)", () => {
+    expect(toMemberView(memberRow({ startTime: '00:05' })).startTime).toBe('00:05')
+  })
+})
+
+describe('toView — 드라마 계정 관리 응답 (toMemberView 추출 후에도 같아야 한다)', () => {
+  it('계정·파티원 전 필드를 기존과 똑같이 내려준다', async () => {
+    repo.findAllDramaAccounts.mockResolvedValue([accountRow()])
+
+    const [view] = await listDramaAccounts()
+
+    expect(view).toEqual({
+      id: 'acc-1',
+      email: 'sample@gmail.com',
+      // 저장은 암호문이지만 응답은 평문이다 (화면이 메모장처럼 그대로 보여주는 요구사항)
+      password: 'pw1234',
+      otpSecret: 'otpsecretotpsecret1234',
+      platform: '릴숏',
+      capacity: 3,
+      capacityLabel: '3인',
+      dueAt: '2026-08-29',
+      notes: [],
+      updatedAt: VERSION,
+      members: [
+        {
+          id: 'm1',
+          site: '스트림포켓',
+          name: '경원',
+          siteSpaced: true,
+          endDate: '2026-08-05',
+          startTime: '01:30',
+          days: 7,
+          suffix: null,
+        },
+      ],
+    })
+  })
+
+  it('멤버십 미개설 계정(platform·capacity·dueAt null)도 그대로 내려준다', async () => {
+    repo.findAllDramaAccounts.mockResolvedValue([
+      accountRow({ platform: null, capacity: null, capacityLabel: null, dueAt: null, members: [] }),
+    ])
+
+    const [view] = await listDramaAccounts()
+
+    expect(view).toMatchObject({
+      platform: null,
+      capacity: null,
+      capacityLabel: null,
+      dueAt: null,
+      members: [],
+    })
+  })
+})
+
+describe('toAccountMemo — 메모 원문 재현용 뷰', () => {
+  it('정원 표기·메모 줄·파티원만 담는다', () => {
+    expect(toAccountMemo(accountRow({ notes: ['(로그아웃완료)'] }))).toEqual({
+      capacity: 3,
+      capacityLabel: '3인',
+      notes: ['(로그아웃완료)'],
+      members: [
+        {
+          id: 'm1',
+          site: '스트림포켓',
+          name: '경원',
+          siteSpaced: true,
+          endDate: '2026-08-05',
+          startTime: '01:30',
+          days: 7,
+          suffix: null,
+        },
+      ],
+    })
+  })
+
+  it('자격증명을 복호화하지 않는다 (평문이 메모리에 뜨는 구간을 늘리지 않는다)', () => {
+    const memo = toAccountMemo(accountRow())
+    expect(memo).not.toHaveProperty('password')
+    expect(memo).not.toHaveProperty('otpSecret')
+    expect(memo).not.toHaveProperty('email')
+  })
+
+  it('파티원이 0명이면 빈 배열', () => {
+    expect(toAccountMemo(accountRow({ members: [] })).members).toEqual([])
+  })
+
+  it('멤버십 미개설이면 capacity·capacityLabel이 null로 나간다', () => {
+    expect(toAccountMemo(accountRow({ capacity: null, capacityLabel: null }))).toMatchObject({
+      capacity: null,
+      capacityLabel: null,
+    })
+  })
+})
+
+describe('loadAccountMemo — 계정 id로 메모 뷰 조회', () => {
+  it('계정을 찾으면 메모 뷰를 돌려준다', async () => {
+    repo.findDramaAccountById.mockResolvedValue(accountRow())
+    const memo = await loadAccountMemo('acc-1')
+    expect(memo?.capacityLabel).toBe('3인')
+    expect(memo?.members).toHaveLength(1)
+  })
+
+  it('계정이 없으면 null (링크를 읽은 직후 삭제된 경우 화면이 폴백으로 떨어진다)', async () => {
+    repo.findDramaAccountById.mockResolvedValue(null)
+    await expect(loadAccountMemo('gone')).resolves.toBeNull()
   })
 })

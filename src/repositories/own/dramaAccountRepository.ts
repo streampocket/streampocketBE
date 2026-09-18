@@ -23,6 +23,19 @@ export function findDramaAccountById(id: string) {
   return prisma.dramaAccount.findUnique({ where: { id }, include: WITH_MEMBERS })
 }
 
+/**
+ * 여러 계정의 파티원까지 한 번에 — 배정 후보 목록의 메모를 만들 때 쓴다.
+ *
+ * findDramaAccountById를 후보 수만큼 부르면 N쿼리가 되어 이 함수를 따로 둔다.
+ * WITH_MEMBERS(=MEMBER_ORDER)를 쓰므로 파티원 줄 순서가 드라마 계정 관리와 어긋날 수 없다.
+ */
+export function findDramaAccountsByIds(ids: readonly string[]) {
+  return prisma.dramaAccount.findMany({
+    where: { id: { in: [...ids] } },
+    include: WITH_MEMBERS,
+  })
+}
+
 // 자동 배정 후보 조회 — 빈자리 계산에 필요한 컬럼 + 관리자 화면에 보여줄 자격증명.
 // passwordEnc/otpSecretEnc를 함께 읽는 이유: 승인 전 미리보기가 아이디뿐 아니라
 // 비밀번호·OTP 시크릿까지 보여주므로, 계정을 두 번 조회하지 않기 위함이다.

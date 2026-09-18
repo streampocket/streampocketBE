@@ -380,7 +380,7 @@ export async function adminGetApplicationDetail(applicationId: string) {
 
 export async function adminApproveApplication(
   applicationId: string,
-  options: { autoAssign: boolean } = { autoAssign: false },
+  options: { autoAssign: boolean; dramaAccountId?: string } = { autoAssign: false },
 ) {
   const result = await prisma.$transaction(async (tx) => {
     const application = await tx.partyApplication.findUnique({
@@ -512,7 +512,7 @@ export async function adminApproveApplication(
   // 배정 실패가 이미 끝난 승인을 롤백하면 안 되고, 실패해도 수동으로 보정할 수 있다.
   let autoAssign: AutoAssignOutcome = { attempted: false, assigned: false, reason: null }
   if (options.autoAssign && !result.autoRejected && result.orderInfo) {
-    autoAssign = await runAutoAssign(applicationId, result.orderInfo)
+    autoAssign = await runAutoAssign(applicationId, result.orderInfo, options.dramaAccountId)
   }
 
   return {
@@ -536,9 +536,11 @@ export type AutoAssignOutcome = {
 async function runAutoAssign(
   applicationId: string,
   orderInfo: { partyName: string; receiverName: string },
+  /** 관리자가 승인 모달에서 고른 계정. 없으면 기존과 같은 자동 선택이다 */
+  dramaAccountId?: string,
 ): Promise<AutoAssignOutcome> {
   try {
-    const result = await assignAccountToApplication(applicationId)
+    const result = await assignAccountToApplication(applicationId, { accountId: dramaAccountId })
     if (!result.ok) {
       alertAutoAssignFailure({
         applicationId,

@@ -277,3 +277,46 @@ describe('파티명 → 플랫폼 매핑', () => {
     )
   })
 })
+
+// 배정 후보 목록(listAssignCandidates)은 저장소 정렬(dueAt asc, email asc)을 그대로 두고
+// isAssignable로 거른 뒤 **첫 번째를 추천(recommended)** 으로 표시한다.
+// 그 추천이 자동 배정이 고를 계정과 반드시 같아야 한다 — 어긋나면 관리자가 "추천"을 그대로
+// 두고 승인했는데 다른 계정에 들어가는 상황이 생긴다. 여기서 그 성질을 못 박는다.
+describe('후보 목록의 추천 = 자동 선택 결과', () => {
+  const input = { platforms: ['비글'], expiryDate: toDateOnly('2026-09-10'), now: NOW, partyType: 'shared' as const }
+
+  /** 저장소가 주는 순서(dueAt asc, email asc)를 흉내낸 후보들 */
+  const repoOrdered = [
+    account({ id: 'full', email: 'a-full@example.com', dueAt: toDateOnly('2026-09-12'), capacity: 1, members: [member('2026-09-30')] }),
+    account({ id: 'ok-early', email: 'b@example.com', dueAt: toDateOnly('2026-09-15') }),
+    account({ id: 'ok-same-due-a', email: 'c@example.com', dueAt: toDateOnly('2026-09-20') }),
+    account({ id: 'ok-same-due-b', email: 'd@example.com', dueAt: toDateOnly('2026-09-20') }),
+    account({ id: 'too-early-due', email: 'e@example.com', dueAt: toDateOnly('2026-09-09') }),
+  ]
+
+  const eligible = repoOrdered.filter((acc) => isAssignable(acc, input))
+
+  it('빈자리 없는 계정과 마감일이 이른 계정은 목록에서 빠진다', () => {
+    expect(eligible.map((acc) => acc.id)).toEqual(['ok-early', 'ok-same-due-a', 'ok-same-due-b'])
+  })
+
+  it('걸러낸 목록의 첫 번째가 pickAssignableAccount의 선택과 같다', () => {
+    expect(eligible[0]?.id).toBe(pickAssignableAccount(repoOrdered, input)?.id)
+  })
+
+  it('마감일이 같으면 이메일 오름차순이 먼저다 — 저장소 정렬과 선택 규칙이 일치한다', () => {
+    const sameDue = [
+      account({ id: 'later-email', email: 'z@example.com', dueAt: toDateOnly('2026-09-20') }),
+      account({ id: 'earlier-email', email: 'a@example.com', dueAt: toDateOnly('2026-09-20') }),
+    ]
+    // 저장소 정렬대로 넘기면 첫 번째가 곧 선택이다
+    const ordered = [...sameDue].sort((x, y) => x.email.localeCompare(y.email))
+    expect(ordered[0]?.id).toBe(pickAssignableAccount(sameDue, input)?.id)
+  })
+
+  it('조건에 맞는 후보가 없으면 선택도 없다 — 목록 0건과 no_account가 같은 판정이다', () => {
+    const none = [account({ id: 'x', dueAt: toDateOnly('2026-09-01') })]
+    expect(none.filter((acc) => isAssignable(acc, input))).toHaveLength(0)
+    expect(pickAssignableAccount(none, input)).toBeNull()
+  })
+})

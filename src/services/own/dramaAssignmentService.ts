@@ -15,6 +15,7 @@ import { resolveDramaPlatforms } from '../../constants/dramaPlatform'
 import { decryptSecret } from '../../lib/crypto'
 import {
   countFreeSlots,
+  isAssignable,
   matchAccountsBySecret,
   pickAssignableAccount,
 } from '../../utils/dramaAssignment'
@@ -24,6 +25,7 @@ import {
   findAccountsForSecretLookup,
   findAssignCandidates,
   findDramaAccountById,
+  findDramaAccountsByIds,
 } from '../../repositories/own/dramaAccountRepository'
 import { loadAccountMemo, toAccountMemo, type DramaAccountMemo } from './dramaAccountService'
 
@@ -37,6 +39,13 @@ export type AssignFailReason =
   | 'already_has_secret'
   | 'unmapped_party'
   | 'no_account'
+  /**
+   * 관리자가 지정한 계정이 배정 직전 조건을 잃었다 — 마지막 자리가 채워진 경우가 대표적이다.
+   * no_account와 구분하는 이유: 그쪽은 "조건에 맞는 계정이 아예 없다"이고 이쪽은
+   * "고른 그 계정만 안 된다"라 화면 문구와 관리자의 다음 행동이 다르다.
+   * 자동 선택으로 폴백하지 않는다 — 의도하지 않은 계정에 조용히 들어가는 것을 막는다.
+   */
+  | 'chosen_unavailable'
 
 // 관리자 화면에 계정 자격증명을 평문으로 내려준다.
 // 드라마 계정 관리(dramaAccountService.toView)와 같은 정책이며, 두 API 모두 authMiddleware
@@ -102,11 +111,22 @@ export function findBlockingReason(application: AssignGuardInput | null): Assign
   return null
 }
 
+/** 후보를 고를 수 있는 상태일 때의 조회 조건 — 미리보기와 후보 목록이 공유한다 */
+type PreviewContext = {
+  platforms: readonly string[]
+  expiresAt: Date
+  partyType: OwnProductType
+}
+
 /**
- * 배정 없이 후보만 확인한다 — 승인 모달이 토글을 켤 수 있는지 미리 판단하는 용도.
- * 확정 전(pending) 신청은 만료 시각이 아직 없으므로 "승인하면 언제 끝나는지"를 계산해 본다.
+ * 미리보기 단계의 가드 — `previewAssignment`와 `listAssignCandidates`가 **같은 규칙**을 쓰도록
+ * 한 곳에 모았다(배정 실행 쪽은 findBlockingReason이 같은 역할을 한다).
+ *
+ * 두 API가 갈라지면 목록은 "고를 수 있다"고 보여주는데 승인은 막히는 어긋남이 생긴다.
  */
-export async function previewAssignment(applicationId: string): Promise<AssignResult> {
+async function resolvePreviewContext(
+  applicationId: string,
+): Promise<{ ok: true; context: PreviewContext } | { ok: false; reason: AssignFailReason }> {
   const application = await prisma.partyApplication.findUnique({
     where: { id: applicationId },
     select: APPLICATION_FOR_ASSIGN,
@@ -123,11 +143,80 @@ export async function previewAssignment(applicationId: string): Promise<AssignRe
   const platforms = resolveDramaPlatforms(application.product.name)
   if (platforms.length === 0) return { ok: false, reason: 'unmapped_party' }
 
-  const expiresAt = assignmentExpiryOf(application)
-  const picked = await findAccountFor(prisma, platforms, expiresAt, application.product.partyType)
+  return {
+    ok: true,
+    context: {
+      platforms,
+      expiresAt: assignmentExpiryOf(application),
+      partyType: application.product.partyType,
+    },
+  }
+}
+
+/**
+ * 배정 없이 후보만 확인한다 — 승인 모달이 토글을 켤 수 있는지 미리 판단하는 용도.
+ * 확정 전(pending) 신청은 만료 시각이 아직 없으므로 "승인하면 언제 끝나는지"를 계산해 본다.
+ */
+export async function previewAssignment(applicationId: string): Promise<AssignResult> {
+  const resolved = await resolvePreviewContext(applicationId)
+  if (!resolved.ok) return resolved
+
+  const { platforms, expiresAt, partyType } = resolved.context
+  const picked = await findAccountFor(prisma, platforms, expiresAt, partyType)
   if (!picked) return { ok: false, reason: 'no_account' }
 
   return { ok: true, account: picked.view }
+}
+
+/** 관리자가 고를 수 있는 배정 후보 — 미리보기 계정과 같은 필드 + 판단에 필요한 메모 */
+export type AssignCandidate = AssignedAccountView & {
+  memo: DramaAccountMemo | null
+  /** 지금 자동 배정이 고를 1건 — 화면의 기본 선택이 된다 */
+  recommended: boolean
+}
+
+export type AssignCandidatesResult =
+  | { ok: true; candidates: AssignCandidate[] }
+  | { ok: false; reason: AssignFailReason }
+
+/**
+ * 조건에 맞는 배정 후보 **전건**.
+ *
+ * 자동 배정은 이 중 1건(pickAssignableAccount)만 쓰지만, 관리자가 다른 계정을 고르려면
+ * 선택지가 다 보여야 한다. 정렬은 저장소 기본값(dueAt asc, email asc)을 그대로 두어
+ * **자동 선택이 고를 계정이 항상 첫 번째**가 되게 한다 — 그래서 첫 항목이 recommended다.
+ *
+ * 메모(파티원 목록)를 함께 주는 이유: 관리자가 "누구와 같이 쓰게 되는지" 보고 고른다.
+ * 계정마다 따로 조회하지 않고 findDramaAccountsByIds로 한 번에 읽는다.
+ */
+export async function listAssignCandidates(applicationId: string): Promise<AssignCandidatesResult> {
+  const resolved = await resolvePreviewContext(applicationId)
+  if (!resolved.ok) return resolved
+
+  const { platforms, expiresAt, partyType } = resolved.context
+  const now = kstMomentOf(new Date())
+  const expiryDate = kstMomentOf(expiresAt).date
+  const rows = await findAssignCandidates(prisma, { platforms, minDueAt: expiryDate, partyType })
+  const eligible = rows.filter((account) =>
+    isAssignable(account, { platforms, expiryDate, now, partyType }),
+  )
+  if (eligible.length === 0) return { ok: false, reason: 'no_account' }
+
+  const memoByAccountId = new Map(
+    (await findDramaAccountsByIds(eligible.map((account) => account.id))).map((account) => [
+      account.id,
+      toAccountMemo(account),
+    ]),
+  )
+
+  return {
+    ok: true,
+    candidates: eligible.map((account, index) => ({
+      ...toAssignedView(account, now),
+      memo: memoByAccountId.get(account.id) ?? null,
+      recommended: index === 0,
+    })),
+  }
 }
 
 /**
@@ -159,6 +248,24 @@ export function assignmentExpiryOf(application: AssignmentExpiryInput): Date {
   )
 }
 
+type CandidateRow = Awaited<ReturnType<typeof findAssignCandidates>>[number]
+
+/**
+ * 후보 계정 → 관리자 화면용 뷰.
+ * 자동 선택·지정 선택·후보 목록 세 곳이 공유한다 — 따로 조립하면 화면끼리 필드가 어긋난다.
+ */
+function toAssignedView(account: CandidateRow, now: ReturnType<typeof kstMomentOf>): AssignedAccountView {
+  return {
+    id: account.id,
+    email: account.email,
+    password: decryptSecret(account.passwordEnc),
+    otpSecret: decryptSecret(account.otpSecretEnc),
+    platform: account.platform,
+    dueAt: account.dueAt ? toDateString(account.dueAt) : null,
+    freeSlots: countFreeSlots(account, now),
+  }
+}
+
 /** 조건에 맞는 계정 1건 선택 (읽기 전용) */
 async function findAccountFor(
   client: Prisma.TransactionClient | typeof prisma,
@@ -172,27 +279,46 @@ async function findAccountFor(
   const account = pickAssignableAccount(candidates, { platforms, expiryDate, now, partyType })
   if (!account) return null
 
-  return {
-    account,
-    view: {
-      id: account.id,
-      email: account.email,
-      password: decryptSecret(account.passwordEnc),
-      otpSecret: decryptSecret(account.otpSecretEnc),
-      platform: account.platform,
-      dueAt: account.dueAt ? toDateString(account.dueAt) : null,
-      freeSlots: countFreeSlots(account, now),
-    } satisfies AssignedAccountView,
-  }
+  return { account, view: toAssignedView(account, now) }
+}
+
+/**
+ * 관리자가 지정한 계정 1건 — **자동 선택과 같은 조건**으로 다시 검증한다.
+ *
+ * 후보 조회(findAssignCandidates)를 재사용하는 이유: 1차 조건(플랫폼·정원·마감일)을 따로 쓰면
+ * 자동 선택과 어긋날 수 있다. 여기서 통과하면 이후 잠금·재확인 경로는 자동 선택과 완전히 같다.
+ */
+async function findChosenAccountFor(
+  client: Prisma.TransactionClient | typeof prisma,
+  accountId: string,
+  platforms: readonly string[],
+  expiresAt: Date,
+  partyType: OwnProductType,
+) {
+  const now = kstMomentOf(new Date())
+  const expiryDate = kstMomentOf(expiresAt).date
+  const candidates = await findAssignCandidates(client, { platforms, minDueAt: expiryDate, partyType })
+  const account = candidates.find((candidate) => candidate.id === accountId)
+  if (!account || !isAssignable(account, { platforms, expiryDate, now, partyType })) return null
+
+  return { account, view: toAssignedView(account, now) }
 }
 
 /**
  * 계정을 배정한다 — 파티원 등록 + OTP 시크릿 복사 + 신청에 링크 저장을 한 트랜잭션으로 묶는다.
  * 셋 중 하나만 되면 "자리는 먹었는데 OTP는 없는" 상태가 생기므로 전부 함께 커밋되어야 한다.
+ *
+ * `accountId`를 주면 그 계정만 배정한다(관리자가 승인 모달에서 고른 경우). 조건을 잃었으면
+ * chosen_unavailable로 실패하고 **자동 선택으로 폴백하지 않는다** — 의도하지 않은 계정에
+ * 조용히 들어가는 것보다 실패를 알리는 쪽이 낫다는 판단이다.
+ * 주지 않으면 기존과 완전히 같은 자동 선택이다.
  */
-export async function assignAccountToApplication(applicationId: string): Promise<AssignResult> {
+export async function assignAccountToApplication(
+  applicationId: string,
+  options: { accountId?: string } = {},
+): Promise<AssignResult> {
   try {
-    return await runAssignTransaction(applicationId)
+    return await runAssignTransaction(applicationId, options.accountId)
   } catch (error) {
     // 같은 신청을 동시에 배정하면 PartyOtpCredential.applicationId unique 제약에 걸린다.
     // 데이터는 이미 안전하고(한 건만 남는다) 상대가 배정을 끝낸 상태이므로,
@@ -205,7 +331,7 @@ export async function assignAccountToApplication(applicationId: string): Promise
   }
 }
 
-function runAssignTransaction(applicationId: string): Promise<AssignResult> {
+function runAssignTransaction(applicationId: string, accountId?: string): Promise<AssignResult> {
   return prisma.$transaction(async (tx) => {
     const application = await tx.partyApplication.findUnique({
       where: { id: applicationId },
@@ -220,8 +346,11 @@ function runAssignTransaction(applicationId: string): Promise<AssignResult> {
     // 여기는 확정 건만 도달하므로(findBlockingReason이 not_confirmed로 거른다) 사실상 저장값이다.
     // 파티원 endDate도 이 값에서 나오므로, 실제 이용 종료일과 반드시 같아야 한다.
     const expiresAt = assignmentExpiryOf(application)
-    const picked = await findAccountFor(tx, platforms, expiresAt, application.product.partyType)
-    if (!picked) return { ok: false, reason: 'no_account' }
+    // 지정 배정은 그 계정만 본다 — 조건을 잃었으면 다른 계정으로 갈아타지 않고 실패한다.
+    const picked = accountId
+      ? await findChosenAccountFor(tx, accountId, platforms, expiresAt, application.product.partyType)
+      : await findAccountFor(tx, platforms, expiresAt, application.product.partyType)
+    if (!picked) return { ok: false, reason: accountId ? 'chosen_unavailable' : 'no_account' }
 
     // 고른 계정 행에 쓰기 잠금을 잡는다. 어느 계정을 잠글지는 후보를 고른 뒤에야 알 수 있어
     // "고른다 → 잠근다 → 다시 확인한다 → 쓴다" 순서가 된다.

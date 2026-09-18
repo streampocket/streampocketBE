@@ -11,6 +11,7 @@ import {
   adminCancelApplication,
   getApplicationHourlyStats,
 } from '../../services/own/partyApplicationService'
+import { listAssignCandidates } from '../../services/own/dramaAssignmentService'
 
 const idParamSchema = z.object({
   id: z.string().uuid(),
@@ -83,13 +84,27 @@ export async function adminGetApplicationDetailHandler(req: Request, res: Respon
 // 자동 배정 토글 — 보내지 않으면 배정 없이 승인만 한다(수동 처리)
 const approveBodySchema = z.object({
   autoAssign: z.boolean().default(false),
+  // 관리자가 후보 목록에서 고른 계정. 보내지 않으면 기존과 같은 자동 선택이다 —
+  // fe는 추천과 다른 계정을 고를 때만 담아 보내 기본 경로의 동작을 바꾸지 않는다.
+  dramaAccountId: z.string().uuid().optional(),
 })
 
 export async function adminApproveApplicationHandler(req: Request, res: Response): Promise<void> {
   const { id } = idParamSchema.parse(req.params)
-  const { autoAssign } = approveBodySchema.parse(req.body ?? {})
-  const result = await adminApproveApplication(id, { autoAssign })
+  const { autoAssign, dramaAccountId } = approveBodySchema.parse(req.body ?? {})
+  const result = await adminApproveApplication(id, { autoAssign, dramaAccountId })
   res.json(result)
+}
+
+// 배정 후보 목록 — 승인 모달이 "다른 계정 선택"을 열 때만 조회한다(자격증명 평문이 실린다)
+export async function adminGetAssignCandidatesHandler(req: Request, res: Response): Promise<void> {
+  const { id } = idParamSchema.parse(req.params)
+  const result = await listAssignCandidates(id)
+  if (!result.ok) {
+    res.status(409).json({ message: '배정 후보를 가져올 수 없습니다.', code: result.reason })
+    return
+  }
+  res.json({ data: result.candidates })
 }
 
 export async function adminRejectApplicationHandler(req: Request, res: Response): Promise<void> {

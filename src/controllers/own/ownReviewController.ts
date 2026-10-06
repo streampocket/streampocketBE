@@ -11,8 +11,19 @@ import {
   listReviewIdsForSitemap,
   updateReviewForUser,
 } from '../../services/own/ownReviewService'
+import { REVIEW_CONTENT_MIN_LENGTH, countReviewContentChars } from '../../utils/reviewContent'
 
 const idParamSchema = z.object({ id: z.string().uuid() })
+
+// 작성·수정 공통 — 성의 없는 짧은 리뷰를 막기 위해 공백 제외 최소 글자 수를 둔다.
+// 기존에 짧게 저장된 리뷰도 수정해서 저장하려면 이 기준을 넘어야 한다.
+const reviewContentSchema = z
+  .string()
+  .trim()
+  .max(2000)
+  .refine((text) => countReviewContentChars(text) >= REVIEW_CONTENT_MIN_LENGTH, {
+    message: `리뷰는 공백을 제외하고 ${REVIEW_CONTENT_MIN_LENGTH}자 이상 입력해 주세요.`,
+  })
 
 const listQuerySchema = z.object({
   productId: z.string().uuid().optional(),
@@ -24,13 +35,13 @@ const listQuerySchema = z.object({
 
 const createBodySchema = z.object({
   applicationId: z.string().uuid(),
-  content: z.string().trim().min(1).max(2000),
+  content: reviewContentSchema,
   rating: z.number().int().min(1).max(5),
   imageUrl: z.string().url().max(500).nullable().optional(),
 })
 
 const updateBodySchema = z.object({
-  content: z.string().trim().min(1).max(2000),
+  content: reviewContentSchema,
   rating: z.number().int().min(1).max(5),
   imageUrl: z.string().url().max(500).nullable().optional(),
 })

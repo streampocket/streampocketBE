@@ -37,7 +37,11 @@ paths:
               required: [applicationId, content, rating]
               properties:
                 applicationId: { type: string, format: uuid }
-                content: { type: string, minLength: 1, maxLength: 2000 }
+                content:
+                  type: string
+                  maxLength: 2000
+                  description: 공백(띄어쓰기·줄바꿈)을 제외하고 5자 이상. 미달 시 400
+                    "리뷰는 공백을 제외하고 5자 이상 입력해 주세요."
                 rating: { type: integer, minimum: 1, maximum: 5 }
                 imageUrl:
                   type: string
@@ -45,6 +49,7 @@ paths:
                   nullable: true
       responses:
         '201': { description: 리뷰 생성됨 }
+        '400': { description: 입력값 오류 (본문 공백 제외 5자 미만 등) }
         '401': { description: 인증 필요 }
         '403': { description: 본인 신청 아님 또는 확정 상태 아님 }
         '404': { description: 신청 내역 없음 }
@@ -107,7 +112,10 @@ paths:
               type: object
               required: [content, rating]
               properties:
-                content: { type: string, minLength: 1, maxLength: 2000 }
+                content:
+                  type: string
+                  maxLength: 2000
+                  description: 작성과 동일 — 공백 제외 5자 이상 (기존에 짧게 저장된 리뷰도 수정 시 적용)
                 rating: { type: integer, minimum: 1, maximum: 5 }
                 imageUrl:
                   type: string
@@ -115,6 +123,7 @@ paths:
                   nullable: true
       responses:
         '200': { description: 수정된 리뷰 }
+        '400': { description: 입력값 오류 (본문 공백 제외 5자 미만 등) }
         '401': { description: 인증 필요 }
         '403': { description: 작성자 아님 }
         '404': { description: 리뷰 없음 }

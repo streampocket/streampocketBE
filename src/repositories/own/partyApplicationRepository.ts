@@ -102,6 +102,9 @@ export function findApplicationsByUserId(userId: string) {
           imagePath: true,
           status: true,
           partyType: true,
+          // 재구매(기간 연장) 버튼 노출 판정 — 유지형(fixed)만 재구매 가능
+          durationMode: true,
+          deletedAt: true,
           category: { select: { id: true, name: true } },
         },
       },

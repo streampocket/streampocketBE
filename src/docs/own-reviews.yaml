@@ -34,9 +34,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: [applicationId, content, rating]
+              required: [content, rating]
+              description: 리뷰 대상은 applicationId(원 신청) 또는 renewalId(재구매) 중 **정확히 하나**
               properties:
-                applicationId: { type: string, format: uuid }
+                applicationId: { type: string, format: uuid, description: 원 신청 리뷰 }
+                renewalId: { type: string, format: uuid, description: 재구매 리뷰 — 재구매도 새로 산 것이라 리뷰·적립 대상 }
                 content:
                   type: string
                   maxLength: 2000

@@ -14,6 +14,18 @@ components:
         tier1Point: { type: integer, example: 100 }
         tier2Point: { type: integer, example: 200 }
         tier3Point: { type: integer, example: 300, description: tier2Max 초과 }
+    RenewalDiscount:
+      type: object
+      description: |
+        파티 재구매(기간 연장) 할인 이벤트 — **정액만**.
+        켜져 있고 오늘(KST)이 `startDate`~`endDate` 안이면 재구매 정가에서 `amount`원을 뺀다(정가 상한).
+        날짜를 비우면(null) 그쪽 경계가 없다 — 둘 다 비우면 켜 둔 동안 계속 적용.
+        할인액은 **재구매 요청 시점에 확정 저장**되므로, 설정을 바꿔도 이미 요청한 건은 그대로다.
+      properties:
+        enabled: { type: boolean, example: true }
+        amount: { type: integer, example: 1000, description: 할인 금액(원), 0 이상 }
+        startDate: { type: string, nullable: true, example: '2026-10-10', description: 'YYYY-MM-DD (KST), 당일 00:00부터' }
+        endDate: { type: string, nullable: true, example: '2026-10-12', description: 'YYYY-MM-DD (KST), 당일 23:59까지' }
 
 paths:
   /steam/admin/settings:
@@ -44,6 +56,8 @@ paths:
                         type: boolean
                         description: 파티 승인 모달의 계정 자동 배정 토글 기본값
                         example: false
+                      renewalDiscount:
+                        $ref: '#/components/schemas/RenewalDiscount'
     patch:
       summary: 시스템 설정 수정
       description: |
@@ -73,8 +87,10 @@ paths:
                     파티 승인 시 계정을 자동 배정할지 여부.
                     설정 화면이 아니라 **신청 승인 모달의 토글**이 단독으로 보낸다
                     (관리자가 마지막에 둔 상태를 다음 승인에도 유지하기 위함).
+                renewalDiscount:
+                  $ref: '#/components/schemas/RenewalDiscount'
       responses:
         '200':
           description: 수정된 시스템 설정
         '400':
-          description: 허용되지 않는 소요시간 · 경계 역전(tier1Max >= tier2Max) · 변경할 설정 없음
+          description: 허용되지 않는 소요시간 · 경계 역전(tier1Max >= tier2Max) · 할인 시작일 > 종료일 · 변경할 설정 없음

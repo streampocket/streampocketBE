@@ -37,3 +37,49 @@ paths:
           description: 미승인 / 기간 아님 / 시크릿 미등록
         '429':
           description: 발급 횟수(3회) 소진
+  /own/applications/{id}/renewal-quote:
+    get:
+      summary: 파티 재구매(기간 연장) 견적
+      description: |
+        마이페이지 재구매 확인 창용. `id`는 **원 신청 id**.
+        이용 중(confirmed) + **기간 유지형(fixed)** + 파티 미삭제 신청만 가능하다.
+        금액 = 파티 정가 − 재구매 할인(설정의 이벤트가 켜져 있고 기간 안일 때) + 수수료 300원.
+        `expiresAtIfApproved`는 지금 승인된다고 가정한 연장 후 만료 시각이다(실제 연장은 승인 시각에 다시 계산).
+      tags: [OwnApplications]
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: price / discount / fee / totalAmount / durationDays / currentExpiresAt / expiresAtIfApproved / hasPendingRenewal
+        '404':
+          description: 본인 신청 아님 또는 없음
+        '409':
+          description: 이용 중 아님 / 기간 차감형 / 삭제된 파티
+  /own/applications/{id}/renewals:
+    post:
+      summary: 파티 재구매(기간 연장) 요청
+      description: |
+        `id`는 **원 신청 id**. 일반 신청과 같은 알림톡(UJ_2053)·디스코드 알림이 나가고 신청관리에 "재구매"로 표시된다.
+        알림톡의 상품명에는 `(재구매)` 또는 `(재구매 N원 할인)`이 붙고, 금액 칸에는 할인 적용가가 들어간다.
+        대기 중인 재구매가 있으면 409(신청당 1건). 포인트는 할인된 금액에서 추가로 차감된다.
+      tags: [OwnApplications]
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                usePoint: { type: boolean, default: false, description: 금액은 서버가 min(잔액, 총액)으로 정한다 }
+      responses:
+        '201':
+          description: renewalId / price / discount / fee / totalAmount / usedPoint / payableAmount
+        '404':
+          description: 본인 신청 아님 또는 없음
+        '409':
+          description: 이용 중 아님 / 기간 차감형 / 삭제된 파티 / 이미 재구매 대기 중 / 포인트 부족

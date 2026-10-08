@@ -19,6 +19,7 @@ import {
 import { WITHDRAWN_USER_DISPLAY } from './userWithdrawalService'
 import { grantReviewReward, resolveReviewReward, revokeReviewReward } from './pointService'
 import { getReviewPointTiers } from '../systemSettingsService'
+import { findReviewableRenewals } from '../../repositories/own/partyRenewalRepository'
 
 // 완전 삭제(purge)된 회원의 리뷰는 익명 표시로 대체 — FE가 user.name을 직접 참조
 function withDisplayUser<T extends { user: object | null }>(review: T) {
@@ -60,18 +61,36 @@ export async function listReviewIdsForSitemap(): Promise<{ id: string; updatedAt
 }
 
 export async function getReviewableApplications(userId: string) {
-  const applications = await findReviewableApplications(userId)
+  const [applications, renewals] = await Promise.all([
+    findReviewableApplications(userId),
+    findReviewableRenewals(userId),
+  ])
 
   // 구간이 3개라 "리뷰 쓰면 300P"라고 뭉뚱그리면 100P 받는 사람에게는 틀린 말이 된다.
   // 신청마다 실제 지급될 금액을 서버가 계산해 내려준다 — 판정 규칙을 fe에 복제하지 않는다.
   const tiers = await getReviewPointTiers()
-  const data = applications.map((application) => ({
-    ...application,
-    rewardPoint: resolveReviewReward(
-      Math.max(0, application.totalAmount - application.usedPoint),
-      tiers,
-    ),
-  }))
+  const rewardOf = (totalAmount: number, usedPoint: number) =>
+    resolveReviewReward(Math.max(0, totalAmount - usedPoint), tiers)
+
+  // 재구매도 새로 산 것이라 리뷰·적립 대상이다. 같은 모양으로 맞추고 kind로 구분한다
+  // (리뷰 작성 시 fe가 kind에 따라 applicationId 또는 renewalId로 보낸다)
+  const data = [
+    ...applications.map((application) => ({
+      ...application,
+      kind: 'application' as const,
+      rewardPoint: rewardOf(application.totalAmount, application.usedPoint),
+    })),
+    ...renewals.map((renewal) => ({
+      kind: 'renewal' as const,
+      id: renewal.id,
+      startedAt: renewal.extendedFrom,
+      expiresAt: renewal.extendedTo,
+      totalAmount: renewal.totalAmount,
+      usedPoint: renewal.usedPoint,
+      product: renewal.application.product,
+      rewardPoint: rewardOf(renewal.totalAmount, renewal.usedPoint),
+    })),
+  ]
 
   return { data }
 }
@@ -85,27 +104,47 @@ export async function issueReviewImageUploadUrl(input: {
   return { data: result }
 }
 
-type CreateInput = {
-  applicationId: string
+// 리뷰 대상 — 원 신청 또는 재구매 중 하나 (재구매도 새로 산 것이라 리뷰·적립 대상이다)
+type ReviewTarget = { applicationId: string; renewalId?: undefined } | { renewalId: string; applicationId?: undefined }
+
+type CreateInput = ReviewTarget & {
   userId: string
   content: string
   rating: number
   imageUrl: string | null
 }
 
-export async function createReviewForUser(input: CreateInput) {
-  const application = await prisma.partyApplication.findUnique({
-    where: { id: input.applicationId },
-    // totalAmount·usedPoint는 적립 구간 판정용 — 기준이 실결제액(총액 − 사용 포인트)이다
-    select: {
-      id: true,
-      userId: true,
-      status: true,
-      productId: true,
-      totalAmount: true,
-      usedPoint: true,
-    },
+// 리뷰 대상의 소유자·상태·적립 기준 금액을 같은 모양으로 꺼낸다.
+// totalAmount·usedPoint는 적립 구간 판정용 — 기준이 실결제액(총액 − 사용 포인트)이다
+async function loadReviewTarget(target: ReviewTarget) {
+  if (target.renewalId) {
+    const renewal = await prisma.partyRenewal.findUnique({
+      where: { id: target.renewalId },
+      select: {
+        status: true,
+        totalAmount: true,
+        usedPoint: true,
+        application: { select: { userId: true, productId: true } },
+      },
+    })
+    return renewal
+      ? {
+          userId: renewal.application.userId,
+          status: renewal.status,
+          productId: renewal.application.productId,
+          totalAmount: renewal.totalAmount,
+          usedPoint: renewal.usedPoint,
+        }
+      : null
+  }
+  return prisma.partyApplication.findUnique({
+    where: { id: target.applicationId },
+    select: { userId: true, status: true, productId: true, totalAmount: true, usedPoint: true },
   })
+}
+
+export async function createReviewForUser(input: CreateInput) {
+  const application = await loadReviewTarget(input)
   if (!application) {
     throw Object.assign(new Error('파티 신청 내역을 찾을 수 없습니다.'), { statusCode: 404 })
   }
@@ -126,9 +165,13 @@ export async function createReviewForUser(input: CreateInput) {
     // 리뷰 저장과 적립을 한 트랜잭션으로 묶는다 — 리뷰만 저장되고 적립이 실패하면
     // 사용자에겐 실패로 보이는데 다시 쓰려 하면 409(이미 작성함)가 되어 손쓸 방법이 없다.
     const { review, granted } = await prisma.$transaction(async (tx) => {
+      const target: ReviewTarget =
+        input.renewalId !== undefined
+          ? { renewalId: input.renewalId }
+          : { applicationId: input.applicationId }
       const created = await createReview(
         {
-          applicationId: input.applicationId,
+          ...target,
           productId: application.productId,
           userId: input.userId,
           content: input.content,

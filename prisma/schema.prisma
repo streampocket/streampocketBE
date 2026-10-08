@@ -217,6 +217,9 @@ model SteamOrderItem {
   // 파티 승인 자동 생성 주문 → 원본 파티 신청 연결 (기능 도입 전 주문은 null).
   // 재신청→재승인 시 같은 신청에 주문이 여러 개 생길 수 있어 unique 아님
   partyApplicationId        String?             @map("party_application_id") @db.Uuid
+  // 재구매 승인으로 생긴 주문이면 그 재구매 건. partyApplicationId(원 신청)와 함께 채운다.
+  // 반품 시 이 값이 있으면 파티원을 제거하지 않고 그 재구매로 늘어난 기간만 되돌린다.
+  partyRenewalId            String?             @map("party_renewal_id") @db.Uuid
   completedAt               DateTime?           @map("completed_at") @db.Timestamptz(6)
   createdAt                 DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                 DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -224,6 +227,7 @@ model SteamOrderItem {
   game                      SteamGame?          @relation(fields: [gameId], references: [id], onDelete: SetNull)
   account                   SteamAccount?       @relation(fields: [accountId], references: [id], onDelete: SetNull)
   partyApplication          PartyApplication?   @relation(fields: [partyApplicationId], references: [id], onDelete: SetNull)
+  partyRenewal              PartyRenewal?       @relation(fields: [partyRenewalId], references: [id], onDelete: SetNull)
   deliveryLogs              DeliveryLog[]
   registrations             SteamRegistration[]
   expense                   Expense?
@@ -233,6 +237,7 @@ model SteamOrderItem {
   @@index([source, fulfillmentStatus, createdAt])
   @@index([store, fulfillmentStatus, createdAt])
   @@index([partyApplicationId])
+  @@index([partyRenewalId])
   @@map("steam_order_items")
 }
 
@@ -274,6 +279,8 @@ model DeliveryLog {
   id                 String            @id @default(uuid()) @db.Uuid
   orderItemId        String?           @map("order_item_id") @db.Uuid
   partyApplicationId String?           @map("party_application_id") @db.Uuid
+  // 재구매 신청 알림톡 — partyApplicationId는 비워 원 신청 상세의 발송 이력에 섞이지 않게 한다
+  partyRenewalId     String?           @map("party_renewal_id") @db.Uuid
   channel            DeliveryChannel   @map("channel")
   recipient          String            @map("recipient") @db.VarChar(100)
   templateCode       String?           @map("template_code") @db.VarChar(50)
@@ -285,9 +292,11 @@ model DeliveryLog {
   createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   orderItem          SteamOrderItem?   @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
   partyApplication   PartyApplication? @relation(fields: [partyApplicationId], references: [id], onDelete: Cascade)
+  partyRenewal       PartyRenewal?     @relation(fields: [partyRenewalId], references: [id], onDelete: Cascade)
 
   @@index([orderItemId, createdAt])
   @@index([partyApplicationId, createdAt])
+  @@index([partyRenewalId, createdAt])
   @@map("delivery_logs")
 }
 
@@ -318,22 +327,29 @@ model ReviewCode {
 }
 
 model SystemSettings {
-  id                     String   @id @default(uuid()) @db.Uuid
-  alimtalkUnitCost       Decimal  @default(6.5) @map("alimtalk_unit_cost") @db.Decimal(7, 1)
-  defaultDurationMinutes Int      @default(60) @map("default_duration_minutes")
+  id                       String    @id @default(uuid()) @db.Uuid
+  alimtalkUnitCost         Decimal   @default(6.5) @map("alimtalk_unit_cost") @db.Decimal(7, 1)
+  defaultDurationMinutes   Int       @default(60) @map("default_duration_minutes")
   // 리뷰 적립 포인트 — 실결제액(총액 − 사용 포인트) 기준 3구간 차등.
   // 구간 개수를 3으로 못 박아 표 편집기·겹침 검증 없이 숫자 5개만 관리한다.
   // tier1Max 이하 → tier1Point / tier2Max 이하 → tier2Point / 그 초과 → tier3Point
   // 저장 시 tier1Max < tier2Max를 강제한다 (뒤집히면 중간 구간이 영영 안 나간다).
-  reviewPointTier1Max    Int      @default(7000) @map("review_point_tier1_max")
-  reviewPointTier2Max    Int      @default(10000) @map("review_point_tier2_max")
-  reviewPointTier1Point  Int      @default(100) @map("review_point_tier1_point")
-  reviewPointTier2Point  Int      @default(200) @map("review_point_tier2_point")
-  reviewPointTier3Point  Int      @default(300) @map("review_point_tier3_point")
+  reviewPointTier1Max      Int       @default(7000) @map("review_point_tier1_max")
+  reviewPointTier2Max      Int       @default(10000) @map("review_point_tier2_max")
+  reviewPointTier1Point    Int       @default(100) @map("review_point_tier1_point")
+  reviewPointTier2Point    Int       @default(200) @map("review_point_tier2_point")
+  reviewPointTier3Point    Int       @default(300) @map("review_point_tier3_point")
   // 파티 신청 승인 시 "계정 자동 배정 + 알림톡 발송"을 수행할지 — 승인 모달 토글의 기본값.
   // 관리자가 마지막에 둔 상태를 유지하려고 전역으로 저장한다(승인 건마다 저장하지 않는다).
-  partyAutoAssignEnabled Boolean  @default(false) @map("party_auto_assign_enabled")
-  updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  partyAutoAssignEnabled   Boolean   @default(false) @map("party_auto_assign_enabled")
+  // 재구매 할인 이벤트 — 켜져 있고 오늘(KST)이 기간 안이면 재구매 정가에서 정액을 뺀다.
+  // 기간은 비워두면 그쪽으로 열린 것으로 본다(둘 다 비우면 켜 둔 동안 계속 적용).
+  // 할인액은 재구매 요청 시점에 PartyRenewal.discount로 확정 저장 — 나중에 설정을 바꿔도 이미 요청한 건은 그대로다.
+  renewalDiscountEnabled   Boolean   @default(false) @map("renewal_discount_enabled")
+  renewalDiscountAmount    Int       @default(0) @map("renewal_discount_amount")
+  renewalDiscountStartDate DateTime? @map("renewal_discount_start_date") @db.Date
+  renewalDiscountEndDate   DateTime? @map("renewal_discount_end_date") @db.Date
+  updatedAt                DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@map("system_settings")
 }
@@ -571,6 +587,7 @@ model PartyApplication {
   otpIssueLogs  PartyOtpIssueLog[]
   dramaAccount  DramaAccount?       @relation(fields: [dramaAccountId], references: [id], onDelete: SetNull)
   dramaMember   DramaMember?        @relation(fields: [dramaMemberId], references: [id], onDelete: SetNull)
+  renewals      PartyRenewal[]
 
   @@unique([productId, userId])
   @@index([userId, createdAt])
@@ -609,9 +626,47 @@ model PartyOtpIssueLog {
   @@map("party_otp_issue_logs")
 }
 
+// 파티 재구매(기간 연장) 요청 — 이용 중인 유지형 파티를 같은 자리·계정으로 이어 쓴다.
+// PartyApplication에 행을 더하지 않고 따로 두는 이유: 신청을 읽는 곳(파티원 목록·정원·만료 크론·
+// 리뷰 자격·OTP·배정 등)이 많아, 재구매 행이 섞이면 그곳마다 걸러내야 한다. 서비스(계정·OTP·파티원)는
+// 원 신청에 그대로 있고, 승인하면 원 신청의 expiresAt만 늘어난다.
+// 금액·할인·포인트는 요청 시점 스냅샷(PartyApplication과 같은 규칙: 실결제액 = totalAmount - usedPoint).
+// 포인트 이력(PointTransaction.applicationId)에는 이 행의 id를 넣어 원 신청 포인트와 섞이지 않게 한다.
+model PartyRenewal {
+  id            String                 @id @default(uuid()) @db.Uuid
+  applicationId String                 @map("application_id") @db.Uuid
+  // pending → confirmed(승인) / cancelled(거절·파티원 제거·반품). expired는 쓰지 않는다
+  status        PartyApplicationStatus @default(pending)
+  price         Int // 파티 정가
+  discount      Int                    @default(0) // 재구매 할인 이벤트 할인액
+  fee           Int
+  totalAmount   Int                    @map("total_amount") // price - discount + fee
+  usedPoint     Int                    @default(0) @map("used_point")
+  // 승인 시 늘어난 구간. 반품하면 원 신청 expiresAt에서 (extendedTo - extendedFrom)만큼 뺀다
+  extendedFrom  DateTime?              @map("extended_from") @db.Timestamptz(6)
+  extendedTo    DateTime?              @map("extended_to") @db.Timestamptz(6)
+  decidedAt     DateTime?              @map("decided_at") @db.Timestamptz(6)
+  // 승인 후 재구매 주문 반품으로 취소된 시각 (거절과 구분)
+  returnedAt    DateTime?              @map("returned_at") @db.Timestamptz(6)
+  createdAt     DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  application  PartyApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  deliveryLogs DeliveryLog[]
+  orderItems   SteamOrderItem[]
+  review       OwnReview?
+
+  @@index([applicationId, status])
+  @@index([status, createdAt])
+  @@map("party_renewals")
+}
+
 model OwnReview {
   id            String   @id @default(uuid()) @db.Uuid
-  applicationId String   @unique @map("application_id") @db.Uuid
+  // 원 신청 리뷰는 applicationId만, 재구매 리뷰는 renewalId만 채운다 (DB check 제약으로 정확히 하나).
+  // 둘 다 unique — Postgres unique는 NULL을 여러 개 허용하므로 "신청·재구매 1건당 리뷰 1개"가 유지된다
+  applicationId String?  @unique @map("application_id") @db.Uuid
+  renewalId     String?  @unique @map("renewal_id") @db.Uuid
   productId     String   @map("product_id") @db.Uuid
   // 탈퇴 회원 완전 삭제 시 리뷰는 익명(userId null)으로 보존 — 화면에는 "탈퇴한 회원" 표시
   userId        String?  @map("user_id") @db.Uuid
@@ -621,9 +676,10 @@ model OwnReview {
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  application PartyApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  product     OwnProduct       @relation(fields: [productId], references: [id])
-  user        User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  application PartyApplication? @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  renewal     PartyRenewal?     @relation(fields: [renewalId], references: [id], onDelete: Cascade)
+  product     OwnProduct        @relation(fields: [productId], references: [id])
+  user        User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([productId, createdAt])
   @@index([userId, createdAt])

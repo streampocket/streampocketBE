@@ -66,8 +66,11 @@ export function findReviewIdsForSitemap() {
   })
 }
 
-type CreateReviewInput = {
-  applicationId: string
+// 원 신청 리뷰는 applicationId만, 재구매 리뷰는 renewalId만 — DB check 제약이 "정확히 하나"를 강제한다
+type CreateReviewInput = (
+  | { applicationId: string; renewalId?: undefined }
+  | { renewalId: string; applicationId?: undefined }
+) & {
   productId: string
   userId: string
   content: string

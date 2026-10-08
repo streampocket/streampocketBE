@@ -6,11 +6,13 @@
  * 주문 반품은 호출자(steamOrderService.manualReturnOrder / partyApplicationService.adminCancelApplication)가 담당하며,
  * 이 코어는 파티 상태만 책임진다.
  */
-import type { PartyApplicationStatus } from '@prisma/client'
+import type { PartyApplicationStatus, Prisma } from '@prisma/client'
 import { prisma } from '../../lib/prisma'
 import { sendDiscordAlert } from '../../lib/discord'
 import { PARTY_TYPE_LABEL } from '../../constants/party'
 import { evaluatePartyReopen } from '../../utils/partyPricing'
+import { kstMomentOf } from '../../utils/kstDate'
+import { refundApplicationPoint } from './pointService'
 
 type ReleaseBaseInfo = {
   statusBefore: PartyApplicationStatus
@@ -176,6 +178,149 @@ export async function releasePartyMembership(
   }
 
   return result
+}
+
+// ── 재구매(기간 연장) — 연장 승인과 재구매 반품 되돌리기가 같이 쓴다 ─────────────────
+// 이 파일에 두는 이유: 재구매 반품은 주문 반품(steamOrderService.manualReturnOrder)에서 호출되는데,
+// 재구매 서비스는 승인 시 주문을 만들려고 주문 도메인을 import 한다. 되돌리기를 재구매 서비스에 두면
+// 주문 ↔ 재구매가 서로를 import 하게 된다. 이 파일은 주문 도메인을 import 하지 않는다(파일 상단 규칙).
+
+/**
+ * 원 신청의 만료 시각이 바뀌면 연결된 드라마 파티원 메모의 만료(날짜·시각)도 맞춘다.
+ * days(구매 일수)는 건드리지 않는다 — 메모의 "N일"은 파티 기간 표기이고, 늘어난 기간은 만료일로 드러난다.
+ * 파티원 행이 없으면(배정 전 신청·수동 삭제) 아무것도 하지 않고 false.
+ */
+export async function syncDramaMemberExpiry(
+  tx: Prisma.TransactionClient,
+  input: { dramaMemberId: string | null; dramaAccountId: string | null; expiresAt: Date },
+): Promise<boolean> {
+  if (!input.dramaMemberId) return false
+  const expiry = kstMomentOf(input.expiresAt)
+  // deleteMany와 같은 이유로 updateMany — 관리자가 메모를 통째 교체해 행이 없어졌을 수 있다
+  const updated = await tx.dramaMember.updateMany({
+    where: { id: input.dramaMemberId },
+    data: { endDate: expiry.date, startTime: expiry.hhmm },
+  })
+  if (updated.count > 0 && input.dramaAccountId) {
+    // 자식 행 변경은 계정 updatedAt을 올리지 않는다 — 열려 있던 메모 편집기가 이 변경을 덮어쓰지 않게
+    // 낙관적 잠금을 건다 (releasePartyMembership·배정과 같은 이유)
+    await tx.dramaAccount.updateMany({
+      where: { id: input.dramaAccountId },
+      data: { updatedAt: new Date() },
+    })
+  }
+  return updated.count > 0
+}
+
+export type RenewalRevertResult =
+  | { reverted: false; reason: 'not_found' | 'not_confirmed' }
+  | {
+      reverted: true
+      productName: string
+      userName: string | null
+      /** 되돌린 뒤 원 신청 만료 시각 */
+      expiresAtAfter: Date | null
+      refundedPoint: number
+      memberSynced: boolean
+    }
+
+/**
+ * 재구매 주문 반품 — 파티원은 그대로 두고 그 재구매로 늘어난 기간만 원 신청에서 뺀다.
+ *
+ * 빼기 방식인 이유: 재구매가 여러 번 쌓였을 때 "이 재구매 전 만료일"로 되돌리면 뒤에 승인된 재구매분까지
+ * 날아간다. (extendedTo − extendedFrom)만큼만 빼면 해당 건만 정확히 빠진다.
+ * 되돌린 만료가 이미 지났으면 다음 만료 크론이 정상 만료 처리한다.
+ * 원 신청 returnedAt(12시간 재신청 차단)은 건드리지 않는다 — 기존 이용은 정상이었다.
+ * 확정 상태가 아니면 아무것도 바꾸지 않는다(멱등 — 두 번 반품해도 두 번 빼지 않는다).
+ */
+export async function revertPartyRenewal(renewalId: string): Promise<RenewalRevertResult> {
+  const result = await prisma.$transaction<RenewalRevertResult>(async (tx) => {
+    const renewal = await tx.partyRenewal.findUnique({
+      where: { id: renewalId },
+      include: {
+        application: {
+          select: {
+            id: true,
+            userId: true,
+            expiresAt: true,
+            dramaMemberId: true,
+            dramaAccountId: true,
+            product: { select: { name: true } },
+            user: { select: { name: true } },
+          },
+        },
+      },
+    })
+    if (!renewal) return { reverted: false, reason: 'not_found' }
+
+    // 확정 건만 — 동시 반품 시 두 번째는 count 0으로 조용히 끝난다
+    const cancelled = await tx.partyRenewal.updateMany({
+      where: { id: renewalId, status: 'confirmed' },
+      data: { status: 'cancelled', returnedAt: new Date() },
+    })
+    if (cancelled.count === 0) return { reverted: false, reason: 'not_confirmed' }
+
+    const application = renewal.application
+    const extendedMs =
+      renewal.extendedFrom && renewal.extendedTo
+        ? renewal.extendedTo.getTime() - renewal.extendedFrom.getTime()
+        : 0
+    let expiresAtAfter = application.expiresAt
+    let memberSynced = false
+    if (application.expiresAt && extendedMs > 0) {
+      expiresAtAfter = new Date(application.expiresAt.getTime() - extendedMs)
+      await tx.partyApplication.update({
+        where: { id: application.id },
+        data: { expiresAt: expiresAtAfter },
+      })
+      memberSynced = await syncDramaMemberExpiry(tx, {
+        dramaMemberId: application.dramaMemberId,
+        dramaAccountId: application.dramaAccountId,
+        expiresAt: expiresAtAfter,
+      })
+    }
+
+    // 재구매에 쓴 포인트 반환 — 이력이 재구매 id로 남아 있어 원 신청 포인트와 섞이지 않는다
+    const refunded = application.userId
+      ? await refundApplicationPoint(tx, {
+          userId: application.userId,
+          applicationId: renewal.id,
+          reason: '재구매 반품으로 반환',
+        })
+      : { refunded: 0 }
+
+    return {
+      reverted: true,
+      productName: application.product.name,
+      userName: application.user?.name ?? null,
+      expiresAtAfter,
+      refundedPoint: refunded.refunded,
+      memberSynced,
+    }
+  })
+  return result
+}
+
+/** 재구매 반품 결과 → 반품 디스코드 알림에 붙일 한 줄 */
+export function describeRenewalRevert(result: RenewalRevertResult): string {
+  if (!result.reverted) {
+    return result.reason === 'not_found'
+      ? '└ ⚠️ 연결된 재구매를 찾을 수 없어 기간 변동 없음'
+      : '└ ⚠️ 재구매가 확정 상태가 아니어서 기간 변동 없음'
+  }
+  const member = result.userName ?? '탈퇴한 회원'
+  const until = result.expiresAtAfter
+    ? new Intl.DateTimeFormat('ko-KR', {
+        timeZone: 'Asia/Seoul',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).format(result.expiresAtAfter)
+    : '-'
+  const point = result.refundedPoint > 0 ? `, 포인트 ${result.refundedPoint.toLocaleString()}P 반환` : ''
+  return `└ 재구매 취소: ${member} — 파티원 유지, 만료 ${until}로 되돌림${point}`
 }
 
 /** 알림·응답 문구용 요약 — 반품 디스코드 메시지에 한 줄로 덧붙인다. */

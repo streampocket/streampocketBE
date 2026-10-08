@@ -716,8 +716,12 @@ export async function sendReviewGameAlimtalk(
   }
 }
 
-type SendPartyApplicationAlimtalkInput = {
-  partyApplicationId: string
+// 발송 이력을 어디에 남길지 — 일반 신청이면 신청 id, 재구매면 재구매 id만 (원 신청 이력에 섞이지 않게)
+type PartyApplyAlimtalkTarget =
+  | { partyApplicationId: string; partyRenewalId?: undefined }
+  | { partyRenewalId: string; partyApplicationId?: undefined }
+
+type SendPartyApplicationAlimtalkInput = PartyApplyAlimtalkTarget & {
   recipientPhoneNumber: string
   recipientName: string
   productName: string
@@ -767,6 +771,7 @@ export async function sendPartyApplicationAlimtalk(
 
   const deliveryLog = await createDeliveryLog({
     partyApplicationId: input.partyApplicationId,
+    partyRenewalId: input.partyRenewalId,
     channel: 'alimtalk',
     recipient: input.recipientPhoneNumber,
     templateCode: config.templateCodePartyApply,

@@ -1,4 +1,5 @@
 import { getSystemSettingsRow, upsertSystemSettings } from '../repositories/systemSettingsRepository'
+import { formatDbDate, type RenewalDiscountSettings } from '../utils/partyRenewal'
 
 // 진행중 전환 시 적용하는 전역 기본 소요시간(분) — 선택 가능한 값 목록
 export const ALLOWED_DURATION_MINUTES: readonly number[] = [20, 40, 60, 90, 120]
@@ -27,17 +28,51 @@ export type ReviewPointTiers = {
   tier3Point: number
 }
 
+/** 재구매 할인 이벤트 — 화면·API용. 날짜는 KST 달력 날짜 'YYYY-MM-DD', 비우면 null */
+export type RenewalDiscountView = {
+  enabled: boolean
+  amount: number
+  startDate: string | null
+  endDate: string | null
+}
+
 type SystemSettingsResult = {
   defaultDurationMinutes: number
   reviewPointTiers: ReviewPointTiers
   /** 파티 승인 시 계정 자동 배정 (승인 모달 토글의 기본값) */
   partyAutoAssignEnabled: boolean
+  renewalDiscount: RenewalDiscountView
+}
+
+const DEFAULT_RENEWAL_DISCOUNT: RenewalDiscountSettings = {
+  enabled: false,
+  amount: 0,
+  startDate: null,
+  endDate: null,
+}
+
+/** 할인 계산에서만 쓰는 좁은 조회 — 날짜는 DB Date 그대로 (resolveRenewalDiscount 입력 형태) */
+export async function getRenewalDiscountSettings(): Promise<RenewalDiscountSettings> {
+  const row = await getSystemSettingsRow()
+  if (!row) return DEFAULT_RENEWAL_DISCOUNT
+  return {
+    enabled: row.renewalDiscountEnabled,
+    amount: row.renewalDiscountAmount,
+    startDate: row.renewalDiscountStartDate,
+    endDate: row.renewalDiscountEndDate,
+  }
 }
 
 export async function getSystemSettings(): Promise<SystemSettingsResult> {
   const row = await getSystemSettingsRow()
   return {
     partyAutoAssignEnabled: row?.partyAutoAssignEnabled ?? false,
+    renewalDiscount: {
+      enabled: row?.renewalDiscountEnabled ?? false,
+      amount: row?.renewalDiscountAmount ?? 0,
+      startDate: row?.renewalDiscountStartDate ? formatDbDate(row.renewalDiscountStartDate) : null,
+      endDate: row?.renewalDiscountEndDate ? formatDbDate(row.renewalDiscountEndDate) : null,
+    },
     defaultDurationMinutes: row?.defaultDurationMinutes ?? DEFAULT_DURATION_MINUTES,
     reviewPointTiers: row
       ? {
@@ -63,6 +98,7 @@ export async function updateSystemSettings(input: {
   defaultDurationMinutes?: number
   reviewPointTiers?: ReviewPointTiers
   partyAutoAssignEnabled?: boolean
+  renewalDiscount?: RenewalDiscountView
 }): Promise<SystemSettingsResult> {
   if (input.reviewPointTiers) {
     const tiers = input.reviewPointTiers
@@ -85,6 +121,21 @@ export async function updateSystemSettings(input: {
 
   if (input.partyAutoAssignEnabled !== undefined) {
     await upsertSystemSettings({ partyAutoAssignEnabled: input.partyAutoAssignEnabled })
+  }
+
+  if (input.renewalDiscount) {
+    const discount = input.renewalDiscount
+    // 'YYYY-MM-DD'는 사전순 = 날짜순. 뒤집히면 할인이 영영 적용되지 않는다
+    if (discount.startDate && discount.endDate && discount.startDate > discount.endDate) {
+      throw badRequest('할인 시작일은 종료일보다 늦을 수 없습니다.')
+    }
+    await upsertSystemSettings({
+      renewalDiscountEnabled: discount.enabled,
+      renewalDiscountAmount: discount.amount,
+      // @db.Date는 달력 날짜만 저장한다 — UTC 자정 Date로 넘겨야 날짜가 밀리지 않는다
+      renewalDiscountStartDate: discount.startDate ? new Date(`${discount.startDate}T00:00:00.000Z`) : null,
+      renewalDiscountEndDate: discount.endDate ? new Date(`${discount.endDate}T00:00:00.000Z`) : null,
+    })
   }
 
   return getSystemSettings()

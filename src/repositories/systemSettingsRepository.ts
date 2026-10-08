@@ -13,6 +13,10 @@ type SystemSettingsUpdate = {
   reviewPointTier2Point?: number
   reviewPointTier3Point?: number
   partyAutoAssignEnabled?: boolean
+  renewalDiscountEnabled?: boolean
+  renewalDiscountAmount?: number
+  renewalDiscountStartDate?: Date | null
+  renewalDiscountEndDate?: Date | null
 }
 
 export async function upsertSystemSettings(data: SystemSettingsUpdate): Promise<SystemSettings> {

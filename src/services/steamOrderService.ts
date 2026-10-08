@@ -19,7 +19,10 @@ import {
 import {
   releasePartyMembership,
   describeMembershipRelease,
+  revertPartyRenewal,
+  describeRenewalRevert,
   type MembershipReleaseResult,
+  type RenewalRevertResult,
 } from './own/partyMembershipService'
 import { findExpenseBySteamOrderItemId } from '../repositories/expenseRepository'
 import { findAccountById, markAccountAsSent } from '../repositories/steamAccountRepository'
@@ -137,12 +140,14 @@ export async function createManualOrder(input: CreateManualOrderInput) {
   return order
 }
 
-// 파티 승인 자동 주문 생성 입력 — 상품명은 "{파티명} ({N}일)" 형식으로 조합
+// 파티 승인 자동 주문 생성 입력 — 상품명은 "{파티명} ({N}일)" / 재구매면 "{파티명} ({N}일 재구매)"
 type CreatePartyOrderInput = {
   applicationId: string
   partyName: string
   durationDays: number
   receiverName: string
+  /** 재구매 승인으로 생기는 주문이면 그 재구매 건 (반품 시 기간만 되돌리는 근거) */
+  partyRenewalId?: string
 }
 
 // 파티 승인 자동 주문 생성 — 상품주문번호 자동생성(PARTY_), 상태=완료·순수익=0원(수정 가능), Discord [파티주문] 알림
@@ -151,12 +156,13 @@ export async function createPartyOrder(input: CreatePartyOrderInput) {
   const order = await createPartyOrderItem({
     productOrderId,
     naverOrderId: productOrderId,
-    productName: `${input.partyName} (${input.durationDays}일)`,
+    productName: `${input.partyName} (${input.durationDays}일${input.partyRenewalId ? ' 재구매' : ''})`,
     receiverName: input.receiverName,
     netProfit: 0,
     fulfillmentStatus: 'completed',
     paidAt: new Date(),
     partyApplicationId: input.applicationId,
+    partyRenewalId: input.partyRenewalId,
   })
 
   await sendDiscordAlert(
@@ -743,8 +749,10 @@ export type PartyMemberReleaseOutcome =
   | { released: false; reason: 'failed' }
 
 export type ManualReturnResult = {
-  /** 파티 주문일 때만 채워진다. 비파티 주문은 null */
+  /** 일반 파티 주문일 때만 채워진다. 비파티·재구매 주문은 null */
   partyMember: PartyMemberReleaseOutcome | null
+  /** 재구매 주문일 때만 채워진다 — 파티원은 그대로 두고 그 재구매 기간만 되돌린 결과 */
+  renewal: RenewalRevertResult | { reverted: false; reason: 'failed' } | null
 }
 
 // 반품 디스코드 알림에 덧붙일 파티원 제거 요약 한 줄
@@ -779,6 +787,29 @@ export async function manualReturnOrder(id: string): Promise<ManualReturnResult>
   }
 
   let partyMember: ManualReturnResult['partyMember'] = null
+  let renewal: ManualReturnResult['renewal'] = null
+
+  // 재구매 주문 — 파티원을 제거하면 기존 이용까지 끊긴다. 그 재구매로 늘어난 기간만 되돌린다.
+  // (파티원 전체 제거는 파티관리/신청관리의 파티원 제거가 원 주문·재구매 주문을 함께 반품한다)
+  if (order.source === 'party' && order.partyRenewalId) {
+    try {
+      renewal = await revertPartyRenewal(order.partyRenewalId)
+    } catch (error) {
+      // 되돌리기 실패가 주문 반품을 막지 않는다 (반품 보장 원칙)
+      renewal = { reverted: false, reason: 'failed' }
+      const reason = error instanceof Error ? error.message : String(error)
+      sendDiscordAlert(
+        'error',
+        `⚠️ 재구매 주문 반품 중 기간 되돌리기 실패\n주문: ${order.productOrderId}\n재구매: ${order.partyRenewalId}\n사유: ${reason}\n주문은 반품되었습니다. 원 신청 만료일을 직접 확인하세요.`,
+      ).catch(() => {})
+    }
+    const note =
+      renewal.reverted || renewal.reason !== 'failed'
+        ? describeRenewalRevert(renewal)
+        : '└ ⚠️ 재구매 기간 되돌리기 실패 — 원 신청 만료일 수동 확인 필요'
+    await markOrderReturned(order, { note })
+    return { partyMember, renewal }
+  }
 
   if (order.source === 'party') {
     if (!order.partyApplicationId) {
@@ -801,5 +832,5 @@ export async function manualReturnOrder(id: string): Promise<ManualReturnResult>
 
   await markOrderReturned(order, { note: buildPartyMemberNote(partyMember) })
 
-  return { partyMember }
+  return { partyMember, renewal }
 }

@@ -38,6 +38,12 @@ import {
   resolveApplicationCredentials,
 } from './dramaAssignmentService'
 import { loadAccountMemo } from './dramaAccountService'
+import {
+  cancelRenewals,
+  findOpenRenewalsByApplication,
+  findPendingRenewalsByApplicationIds,
+  findRenewalsForAdmin,
+} from '../../repositories/own/partyRenewalRepository'
 
 export async function applyToParty(productId: string, userId: string, usePoint = false) {
   const product = await findOwnProductById(productId)
@@ -291,12 +297,53 @@ type AdminListInput = {
   pageSize: number
 }
 
+/**
+ * 신청관리 목록 — 일반 신청과 재구매를 한 목록에 섞어 최신순으로 보여준다.
+ *
+ * 두 표를 따로 조회해 병합한다: 각각 "앞에서 page×pageSize건"을 같은 조건으로 가져오면 합친 목록의
+ * 해당 페이지는 반드시 그 안에 있다. 관리자 화면 규모(페이지 20건)에서는 충분하고, SQL UNION은 Prisma 밖
+ * 원시 쿼리라 타입·유지보수 비용이 커서 쓰지 않는다.
+ * 재구매 항목은 일반 신청과 같은 모양으로 맞추고 kind로 구분한다 — 기간 칸에는 연장 구간을 싣는다.
+ */
 export async function adminGetApplications(input: AdminListInput) {
-  const { items, total } = await findApplicationsForAdmin(input)
+  const take = input.page * input.pageSize
+  const [applications, renewals] = await Promise.all([
+    findApplicationsForAdmin({ ...input, page: 1, pageSize: take }),
+    findRenewalsForAdmin({ status: input.status, search: input.search, take }),
+  ])
+
+  const merged = [
+    ...applications.items.map((item) => ({
+      ...item,
+      kind: 'application' as const,
+      discount: 0,
+      // 완전 삭제(purge)된 회원의 신청은 익명 표시로 대체 — FE가 user.name/phone을 직접 참조
+      user: item.user ?? WITHDRAWN_USER_DISPLAY,
+    })),
+    ...renewals.items.map((renewal) => ({
+      kind: 'renewal' as const,
+      id: renewal.id,
+      applicationId: renewal.applicationId,
+      status: renewal.status,
+      price: renewal.price,
+      discount: renewal.discount,
+      fee: renewal.fee,
+      totalAmount: renewal.totalAmount,
+      usedPoint: renewal.usedPoint,
+      startedAt: renewal.extendedFrom,
+      expiresAt: renewal.extendedTo,
+      createdAt: renewal.createdAt,
+      user: renewal.application.user ?? WITHDRAWN_USER_DISPLAY,
+      product: renewal.application.product,
+    })),
+  ]
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .slice((input.page - 1) * input.pageSize, take)
+
+  const total = applications.total + renewals.total
   return {
     data: {
-      // 완전 삭제(purge)된 회원의 신청은 익명 표시로 대체 — FE가 user.name/phone을 직접 참조
-      items: items.map((item) => ({ ...item, user: item.user ?? WITHDRAWN_USER_DISPLAY })),
+      items: merged,
       total,
       page: input.page,
       pageSize: input.pageSize,
@@ -630,6 +677,26 @@ export async function adminCancelApplication(applicationId: string) {
     })
   }
 
+  // 이 신청에 걸린 재구매도 함께 정리한다 — 대기 건은 더 승인될 일이 없고, 확정 건은 이용이 끝났다.
+  // 포인트는 재구매 id로 이력이 따로 남아 있어 원 신청 반환과 별개로 돌려준다.
+  // (재구매 주문은 원 신청 id도 갖고 있어 아래 주문 반품 루프가 함께 반품한다)
+  const openRenewals = await findOpenRenewalsByApplication(prisma, applicationId)
+  if (openRenewals.length > 0) {
+    await cancelRenewals(
+      prisma,
+      openRenewals.map((renewal) => renewal.id),
+    )
+    if (cancelled?.userId) {
+      for (const renewal of openRenewals) {
+        await refundApplicationPoint(prisma, {
+          userId: cancelled.userId,
+          applicationId: renewal.id,
+          reason: '파티원 제거로 재구매분 반환',
+        })
+      }
+    }
+  }
+
   // 재신청→재승인으로 한 신청에 주문이 여러 건일 수 있어 미반품 주문을 모두 반품한다.
   const orders = await findOrdersByPartyApplicationId(applicationId, { excludeReturned: true })
   let orderReturned = 0
@@ -667,12 +734,31 @@ export async function adminCancelApplication(applicationId: string) {
 
 export async function getMyApplications(userId: string) {
   const applications = await findApplicationsByUserId(userId)
+  // 카드마다 "재구매 대기중" 표시 — 대기 재구매는 신청당 최대 1건이다
+  const pendingRenewals = await findPendingRenewalsByApplicationIds(applications.map((a) => a.id))
+  const pendingByApplication = new Map(pendingRenewals.map((r) => [r.applicationId, r]))
+
   return {
-    data: applications.map(({ otpCredential, ...rest }) => ({
-      ...rest,
-      otpRegistered: otpCredential != null,
-      otpIssueCount: otpCredential?.issueCount ?? 0,
-    })),
+    data: applications.map(({ otpCredential, ...rest }) => {
+      const pending = pendingByApplication.get(rest.id)
+      return {
+        ...rest,
+        otpRegistered: otpCredential != null,
+        otpIssueCount: otpCredential?.issueCount ?? 0,
+        // 재구매 버튼 노출 판정은 서버가 한다 — 이용 중 + 유지형 + 파티 미삭제 (요청 API와 같은 조건)
+        renewable:
+          rest.status === 'confirmed' &&
+          rest.product.durationMode === 'fixed' &&
+          rest.product.deletedAt === null,
+        pendingRenewal: pending
+          ? {
+              id: pending.id,
+              payableAmount: pending.totalAmount - pending.usedPoint,
+              createdAt: pending.createdAt,
+            }
+          : null,
+      }
+    }),
   }
 }
 

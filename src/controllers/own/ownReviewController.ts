@@ -33,12 +33,18 @@ const listQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(50).default(12),
 })
 
-const createBodySchema = z.object({
-  applicationId: z.string().uuid(),
-  content: reviewContentSchema,
-  rating: z.number().int().min(1).max(5),
-  imageUrl: z.string().url().max(500).nullable().optional(),
-})
+// 리뷰 대상은 원 신청(applicationId) 또는 재구매(renewalId) 중 정확히 하나
+const createBodySchema = z
+  .object({
+    applicationId: z.string().uuid().optional(),
+    renewalId: z.string().uuid().optional(),
+    content: reviewContentSchema,
+    rating: z.number().int().min(1).max(5),
+    imageUrl: z.string().url().max(500).nullable().optional(),
+  })
+  .refine((body) => (body.applicationId === undefined) !== (body.renewalId === undefined), {
+    message: '리뷰 대상 파티를 선택해 주세요.',
+  })
 
 const updateBodySchema = z.object({
   content: reviewContentSchema,
@@ -103,9 +109,13 @@ export async function issueReviewImageUploadUrlHandler(
 export async function createReviewHandler(req: Request, res: Response): Promise<void> {
   const userId = req.user!.id
   const body = createBodySchema.parse(req.body)
+  // refine이 정확히 하나를 보장한다 — 타입을 좁히기 위해 다시 분기
+  const target = body.renewalId
+    ? { renewalId: body.renewalId }
+    : { applicationId: body.applicationId ?? '' }
   const result = await createReviewForUser({
     userId,
-    applicationId: body.applicationId,
+    ...target,
     content: body.content,
     rating: body.rating,
     imageUrl: body.imageUrl ?? null,

@@ -279,7 +279,7 @@ export async function createManualOrderItem(
 
 // 파티 승인 자동 주문 생성 — 수동주문과 동일하게 순수익을 3개 금액 필드에 동일 저장(수수료 없음), source='party'
 export async function createPartyOrderItem(
-  data: CreateManualOrderItemInput & { partyApplicationId: string },
+  data: CreateManualOrderItemInput & { partyApplicationId: string; partyRenewalId?: string },
 ): Promise<SteamOrderItem> {
   return prisma.steamOrderItem.create({
     data: {
@@ -294,6 +294,8 @@ export async function createPartyOrderItem(
       paidAt: data.paidAt,
       source: 'party',
       partyApplicationId: data.partyApplicationId,
+      // 재구매 주문이면 그 재구매 건 — 반품 시 파티원 제거 대신 그 기간만 되돌리는 근거
+      partyRenewalId: data.partyRenewalId ?? null,
       // 파티 주문도 스토어 무귀속 — 수동주문과 동일하게 "전체" 매출에만 포함.
       store: null,
     },

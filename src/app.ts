@@ -31,6 +31,7 @@ import { ownReviewsRouter } from './routes/own/reviews'
 import { adminOwnCategoriesRouter } from './routes/admin/ownCategories'
 import { adminOwnProductsRouter } from './routes/admin/ownProducts'
 import { adminOwnApplicationsRouter } from './routes/admin/ownApplications'
+import { adminOwnRenewalsRouter } from './routes/admin/ownRenewals'
 import { adminOwnUsersRouter } from './routes/admin/ownUsers'
 import { adminOwnReviewsRouter } from './routes/admin/ownReviews'
 import { adminOwnRuleTemplatesRouter } from './routes/admin/ownRuleTemplates'
@@ -109,6 +110,7 @@ app.use('/own/reviews', ownReviewsRouter)
 app.use('/own/admin/categories', adminOwnCategoriesRouter)
 app.use('/own/admin/products', adminOwnProductsRouter)
 app.use('/own/admin/applications', adminOwnApplicationsRouter)
+app.use('/own/admin/renewals', adminOwnRenewalsRouter)
 app.use('/own/admin/users', adminOwnUsersRouter)
 app.use('/own/admin/reviews', adminOwnReviewsRouter)
 app.use('/own/admin/rule-templates', adminOwnRuleTemplatesRouter)

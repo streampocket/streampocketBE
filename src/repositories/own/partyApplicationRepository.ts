@@ -223,7 +223,12 @@ export async function findApplicationsForAdmin(input: AdminListInput) {
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      // 확정 탭은 승인 순(최신 승인이 위) — 승인 시 startedAt에 승인 시각이 저장된다.
+      // 그 외 탭은 신청일 순. 승인 시각이 없는 옛 데이터는 맨 뒤로 보낸다.
+      orderBy:
+        input.status === 'confirmed'
+          ? [{ startedAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }]
+          : { createdAt: 'desc' },
       skip: (input.page - 1) * input.pageSize,
       take: input.pageSize,
     }),

@@ -312,33 +312,52 @@ export async function adminGetApplications(input: AdminListInput) {
     findRenewalsForAdmin({ status: input.status, search: input.search, take }),
   ])
 
+  // 정렬 기준 시각 — 확정 탭은 승인 시각(신청 startedAt / 재구매 decidedAt), 그 외 탭은 신청일.
+  // 리포지토리 정렬과 같은 기준이어야 페이지 경계가 맞는다. 응답에는 싣지 않는다.
+  const byApproval = input.status === 'confirmed'
+  const sortAt = (approvedAt: Date | null, createdAt: Date) =>
+    byApproval && approvedAt ? approvedAt : createdAt
+
   const merged = [
     ...applications.items.map((item) => ({
-      ...item,
-      kind: 'application' as const,
-      discount: 0,
-      // 완전 삭제(purge)된 회원의 신청은 익명 표시로 대체 — FE가 user.name/phone을 직접 참조
-      user: item.user ?? WITHDRAWN_USER_DISPLAY,
+      sortAt: sortAt(item.startedAt, item.createdAt),
+      hasApproval: item.startedAt !== null,
+      item: {
+        ...item,
+        kind: 'application' as const,
+        discount: 0,
+        // 완전 삭제(purge)된 회원의 신청은 익명 표시로 대체 — FE가 user.name/phone을 직접 참조
+        user: item.user ?? WITHDRAWN_USER_DISPLAY,
+      },
     })),
     ...renewals.items.map((renewal) => ({
-      kind: 'renewal' as const,
-      id: renewal.id,
-      applicationId: renewal.applicationId,
-      status: renewal.status,
-      price: renewal.price,
-      discount: renewal.discount,
-      fee: renewal.fee,
-      totalAmount: renewal.totalAmount,
-      usedPoint: renewal.usedPoint,
-      startedAt: renewal.extendedFrom,
-      expiresAt: renewal.extendedTo,
-      createdAt: renewal.createdAt,
-      user: renewal.application.user ?? WITHDRAWN_USER_DISPLAY,
-      product: renewal.application.product,
+      sortAt: sortAt(renewal.decidedAt, renewal.createdAt),
+      hasApproval: renewal.decidedAt !== null,
+      item: {
+        kind: 'renewal' as const,
+        id: renewal.id,
+        applicationId: renewal.applicationId,
+        status: renewal.status,
+        price: renewal.price,
+        discount: renewal.discount,
+        fee: renewal.fee,
+        totalAmount: renewal.totalAmount,
+        usedPoint: renewal.usedPoint,
+        startedAt: renewal.extendedFrom,
+        expiresAt: renewal.extendedTo,
+        createdAt: renewal.createdAt,
+        user: renewal.application.user ?? WITHDRAWN_USER_DISPLAY,
+        product: renewal.application.product,
+      },
     })),
   ]
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .sort((a, b) => {
+      // 확정 탭: 승인 시각 없는 옛 데이터는 맨 뒤 (리포지토리의 nulls last와 동일)
+      if (byApproval && a.hasApproval !== b.hasApproval) return a.hasApproval ? -1 : 1
+      return b.sortAt.getTime() - a.sortAt.getTime()
+    })
     .slice((input.page - 1) * input.pageSize, take)
+    .map((entry) => entry.item)
 
   const total = applications.total + renewals.total
   return {

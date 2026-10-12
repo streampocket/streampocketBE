@@ -101,7 +101,11 @@ export async function findRenewalsForAdmin(input: AdminListInput) {
     prisma.partyRenewal.findMany({
       where,
       include: RENEWAL_ADMIN_INCLUDE,
-      orderBy: { createdAt: 'desc' },
+      // 확정 탭은 승인 순 — 재구매의 승인 시각은 decidedAt (startedAt 역할의 extendedFrom은 미래일 수 있어 쓰지 않는다)
+      orderBy:
+        input.status === 'confirmed'
+          ? [{ decidedAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }]
+          : { createdAt: 'desc' },
       take: input.take,
     }),
     prisma.partyRenewal.count({ where }),

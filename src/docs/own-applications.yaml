@@ -7,7 +7,7 @@ paths:
         - bearerAuth: []
       responses:
         '200':
-          description: 신청 목록 (파티 정보 + otpRegistered/otpIssueCount 포함)
+          description: 신청 목록 (파티 정보 + otpRegistered/otpIssueCount/otpResetRequestedAt 포함)
         '401':
           description: 인증 필요
   /own/applications/{id}/otp:
@@ -37,6 +37,27 @@ paths:
           description: 미승인 / 기간 아님 / 시크릿 미등록
         '429':
           description: 발급 횟수(3회) 소진
+  /own/applications/{id}/otp/reset-request:
+    post:
+      summary: 파티 OTP 재발급 요청 (관리자 디스코드 알림)
+      description: |
+        발급 횟수(3회)를 모두 쓴 구매자가 마이페이지에서 누른다. 횟수를 직접 되돌리지 않고
+        관리자에게 디스코드(파티 채널)로 알린다 — 초기화는 관리자가 주문관리 OTP 탭에서 한다.
+        처리(관리자 횟수 초기화 또는 재구매 승인) 전까지 한 번만 받는다. 동시 요청에도 한 건만 기록된다.
+      tags: [OwnApplications]
+      security:
+        - bearerAuth: []
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: resetRequestedAt
+        '401':
+          description: 인증 필요
+        '404':
+          description: 본인 신청 아님 또는 없음
+        '409':
+          description: 미승인 / 기간 아님 / 시크릿 미등록 / 남은 횟수 있음 / 이미 요청함
   /own/applications/{id}/renewal-quote:
     get:
       summary: 파티 재구매(기간 연장) 견적

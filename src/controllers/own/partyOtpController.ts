@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { Request, Response } from 'express'
 import {
   issuePartyOtp,
+  requestPartyOtpReset,
   adminGetPartyOtpInfo,
   adminSetPartyOtpSecret,
   adminResetPartyOtpCount,
@@ -24,6 +25,14 @@ export async function issuePartyOtpHandler(req: Request, res: Response): Promise
   const { id } = idParamSchema.parse(req.params)
   const userId = req.user!.id
   const result = await issuePartyOtp(id, userId)
+  res.json(result)
+}
+
+// 발급 횟수 소진 후 재발급 요청 (관리자 디스코드 알림)
+export async function requestPartyOtpResetHandler(req: Request, res: Response): Promise<void> {
+  const { id } = idParamSchema.parse(req.params)
+  const userId = req.user!.id
+  const result = await requestPartyOtpReset(id, userId)
   res.json(result)
 }
 

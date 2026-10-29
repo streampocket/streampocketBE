@@ -1,8 +1,14 @@
 import { prisma } from '../../lib/prisma'
 import { encryptSecret, decryptSecret } from '../../lib/crypto'
 import { normalizeSecret, isValidSecret, generateIssueCode, TOTP_PERIOD } from '../../lib/totp'
-import { PARTY_OTP_MAX_ISSUES, PARTY_OTP_VIEW_MINUTES } from '../../constants/party'
-import { findOrderById } from '../../repositories/steamOrderRepository'
+import { PARTY_OTP_MAX_ISSUES, PARTY_OTP_VIEW_MINUTES, PARTY_TYPE_LABEL } from '../../constants/party'
+import { sendDiscordAlert } from '../../lib/discord'
+import { formatKstDateTime } from '../../utils/kst'
+import { findOrderById, findOrdersByPartyApplicationId } from '../../repositories/steamOrderRepository'
+import {
+  findApplicationForOtpResetRequest,
+  markOtpResetRequested,
+} from '../../repositories/own/partyOtpRepository'
 import {
   assignAccountToApplication,
   previewAssignment,
@@ -12,6 +18,8 @@ import {
 } from './dramaAssignmentService'
 
 const VIEW_MS = PARTY_OTP_VIEW_MINUTES * 60 * 1000
+// 횟수 소진 안내 — 마이페이지의 "OTP 재발급 요청" 버튼으로 안내한다
+const OTP_EXHAUSTED_MESSAGE = '발급 횟수를 모두 사용했습니다. 재발급 요청 버튼을 이용해 주세요.'
 
 // 유저 OTP 발급/재발급 (단일 진입점)
 // 발급·재발급 모두 횟수 1회 차감 + 로그 기록 (총 3회 한도). 발급된 코드는 FE에서 10분간 표시 유지
@@ -38,7 +46,7 @@ export async function issuePartyOtp(applicationId: string, userId: string) {
     throw Object.assign(new Error('OTP가 아직 준비되지 않았습니다. 관리자에게 문의 주세요.'), { statusCode: 409 })
   }
   if (application.otpCredential.issueCount >= PARTY_OTP_MAX_ISSUES) {
-    throw Object.assign(new Error('발급 횟수를 모두 사용했습니다. 관리자에게 문의 주세요.'), { statusCode: 429 })
+    throw Object.assign(new Error(OTP_EXHAUSTED_MESSAGE), { statusCode: 429 })
   }
 
   // 복호화·코드 생성 검증을 횟수 차감보다 먼저 수행 — 시크릿 문제로 횟수만 소진되는 사고 방지
@@ -53,7 +61,7 @@ export async function issuePartyOtp(applicationId: string, userId: string) {
       data: { issueCount: { increment: 1 } },
     })
     if (updated.count === 0) {
-      throw Object.assign(new Error('발급 횟수를 모두 사용했습니다. 관리자에게 문의 주세요.'), { statusCode: 429 })
+      throw Object.assign(new Error(OTP_EXHAUSTED_MESSAGE), { statusCode: 429 })
     }
     const log = await tx.partyOtpIssueLog.create({
       data: { applicationId },
@@ -79,6 +87,61 @@ export async function issuePartyOtp(applicationId: string, userId: string) {
   }
 }
 
+// 유저 OTP 재발급 요청 — 횟수를 다 쓴 구매자가 마이페이지에서 누른다.
+// 횟수를 직접 되돌리지 않고 관리자에게 디스코드로 알린다(초기화는 관리자가 주문관리 OTP 탭에서).
+// 처리(횟수 초기화) 전까지는 한 번만 받는다 — 알림 도배 방지.
+export async function requestPartyOtpReset(applicationId: string, userId: string) {
+  const application = await findApplicationForOtpResetRequest(applicationId, userId)
+  if (!application) {
+    throw Object.assign(new Error('신청 내역을 찾을 수 없습니다.'), { statusCode: 404 })
+  }
+  if (application.status !== 'confirmed') {
+    throw Object.assign(new Error('승인 완료된 신청만 재발급을 요청할 수 있습니다.'), { statusCode: 409 })
+  }
+  const now = new Date()
+  if (!application.expiresAt || application.expiresAt <= now) {
+    throw Object.assign(new Error('파티 이용 기간이 아닙니다.'), { statusCode: 409 })
+  }
+  if (!application.otpCredential) {
+    throw Object.assign(new Error('OTP가 아직 준비되지 않았습니다. 관리자에게 문의 주세요.'), { statusCode: 409 })
+  }
+  if (application.otpCredential.issueCount < PARTY_OTP_MAX_ISSUES) {
+    throw Object.assign(new Error('아직 남은 발급 횟수가 있습니다.'), { statusCode: 409 })
+  }
+  if (application.otpCredential.resetRequestedAt) {
+    throw Object.assign(new Error('이미 재발급을 요청했습니다. 관리자 확인 후 다시 발급할 수 있어요.'), {
+      statusCode: 409,
+    })
+  }
+
+  // 위 판정과 기록 사이에 다른 요청이 끼어도 where 조건으로 한 건만 기록된다
+  const marked = await markOtpResetRequested(applicationId, PARTY_OTP_MAX_ISSUES, now)
+  if (marked.count === 0) {
+    throw Object.assign(new Error('이미 재발급을 요청했습니다. 관리자 확인 후 다시 발급할 수 있어요.'), {
+      statusCode: 409,
+    })
+  }
+
+  // 관리자가 주문관리에서 바로 찾도록 원 신청 주문번호를 싣는다 (재구매 주문 제외)
+  const orders = await findOrdersByPartyApplicationId(applicationId, { excludeReturned: true })
+  const orderNumbers = orders
+    .filter((order) => order.partyRenewalId === null)
+    .map((order) => order.productOrderId)
+  const message = [
+    `**OTP 재발급 요청:** [${PARTY_TYPE_LABEL[application.product.partyType]}] "${application.product.name}"`,
+    `신청자: ${application.user?.name ?? '(알 수 없음)'} / ${application.user?.phone ?? '-'}`,
+    `주문번호: ${orderNumbers.length > 0 ? orderNumbers.join(', ') : '(연결된 주문 없음)'}`,
+    `이용 만료: ${formatKstDateTime(application.expiresAt).slice(0, 16)} (KST)`,
+    `→ 주문관리 > 해당 주문 > OTP 탭에서 '횟수 초기화'를 눌러 주세요.`,
+  ].join('\n')
+  // 알림 실패해도 요청 기록은 유지 — 관리자는 주문관리 OTP 탭에서도 요청 시각을 볼 수 있다
+  sendDiscordAlert('partyApply', message).catch((err) => {
+    console.error('[partyOtp] 재발급 요청 Discord 알림 실패:', err)
+  })
+
+  return { data: { resetRequestedAt: now } }
+}
+
 // 주문 → 연결된 파티 신청 해석 (관리자 API 공통)
 async function resolvePartyApplicationId(orderId: string): Promise<string | null> {
   const order = await findOrderById(orderId)
@@ -102,7 +165,7 @@ export async function adminGetPartyOtpInfo(orderId: string) {
   const [credential, logs, assignment] = await Promise.all([
     prisma.partyOtpCredential.findUnique({
       where: { applicationId },
-      select: { issueCount: true, updatedAt: true },
+      select: { issueCount: true, updatedAt: true, resetRequestedAt: true },
     }),
     prisma.partyOtpIssueLog.findMany({
       where: { applicationId },
@@ -120,6 +183,8 @@ export async function adminGetPartyOtpInfo(orderId: string) {
       secretUpdatedAt: credential?.updatedAt ?? null,
       issueCount: credential?.issueCount ?? 0,
       maxIssues: PARTY_OTP_MAX_ISSUES,
+      // 구매자가 마이페이지에서 재발급을 요청한 시각 (횟수 초기화 시 null로 돌아감)
+      resetRequestedAt: credential?.resetRequestedAt ?? null,
       logs,
       autoAssign: assignment,
     },
@@ -225,7 +290,7 @@ export async function adminSetPartyOtpSecret(orderId: string, rawSecret: string)
   return { data: { secretRegistered: true } }
 }
 
-// 관리자 — 발급 횟수 초기화 (로그는 보존)
+// 관리자 — 발급 횟수 초기화 (로그는 보존). 대기 중인 구매자 재발급 요청도 처리된 것으로 비운다
 export async function adminResetPartyOtpCount(orderId: string) {
   const applicationId = await resolvePartyApplicationId(orderId)
   if (!applicationId) {
@@ -240,7 +305,7 @@ export async function adminResetPartyOtpCount(orderId: string) {
   }
   await prisma.partyOtpCredential.update({
     where: { applicationId },
-    data: { issueCount: 0 },
+    data: { issueCount: 0, resetRequestedAt: null },
   })
   return { data: { issueCount: 0 } }
 }

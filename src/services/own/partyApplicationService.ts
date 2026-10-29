@@ -764,6 +764,8 @@ export async function getMyApplications(userId: string) {
         ...rest,
         otpRegistered: otpCredential != null,
         otpIssueCount: otpCredential?.issueCount ?? 0,
+        // 횟수 소진 후 재발급 요청을 이미 보냈는지 — 화면이 버튼 대신 "요청 완료"를 보여준다
+        otpResetRequestedAt: otpCredential?.resetRequestedAt ?? null,
         // 재구매 버튼 노출 판정은 서버가 한다 — 이용 중 + 유지형 + 파티 미삭제 (요청 API와 같은 조건)
         renewable:
           rest.status === 'confirmed' &&

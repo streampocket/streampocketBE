@@ -1,6 +1,9 @@
 import { Router } from 'express'
 import { getMyApplicationsHandler } from '../../controllers/own/partyApplicationController'
-import { issuePartyOtpHandler } from '../../controllers/own/partyOtpController'
+import {
+  issuePartyOtpHandler,
+  requestPartyOtpResetHandler,
+} from '../../controllers/own/partyOtpController'
 import {
   getRenewalQuoteHandler,
   requestRenewalHandler,
@@ -13,6 +16,8 @@ export const ownApplicationsRouter = Router()
 ownApplicationsRouter.use(userAuthMiddleware)
 ownApplicationsRouter.get('/my', asyncHandler(getMyApplicationsHandler))
 ownApplicationsRouter.post('/:id/otp', asyncHandler(issuePartyOtpHandler))
+// 발급 횟수 소진 후 재발급 요청 — 처리(관리자 횟수 초기화) 전까지 1번만
+ownApplicationsRouter.post('/:id/otp/reset-request', asyncHandler(requestPartyOtpResetHandler))
 // 재구매(기간 연장) — :id는 원 신청 id
 ownApplicationsRouter.get('/:id/renewal-quote', asyncHandler(getRenewalQuoteHandler))
 ownApplicationsRouter.post('/:id/renewals', asyncHandler(requestRenewalHandler))

@@ -440,7 +440,8 @@ paths:
       responses:
         '200':
           description: >-
-            linked / secretRegistered / secretUpdatedAt / issueCount / maxIssues / logs /
+            linked / secretRegistered / secretUpdatedAt / issueCount / maxIssues /
+            resetRequestedAt(구매자 재발급 요청 시각, 횟수 초기화 시 null) / logs /
             autoAssign({ assigned, accountEmail, eligible, reason, credentials }) — 계정 자동 배정 상태.
             eligible=false면 지금 자동배정을 실행할 수 없고 reason이 사유 코드를 담는다.
 

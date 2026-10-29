@@ -280,10 +280,11 @@ export async function adminApproveRenewal(renewalId: string) {
       where: { id: application.product.id, status: 'expired' },
       data: { status: 'closed' },
     })
-    // 새 기간을 산 것이므로 OTP 발급 횟수를 처음(3회)으로 — 시크릿(계정)은 그대로
+    // 새 기간을 산 것이므로 OTP 발급 횟수를 처음(3회)으로 — 시크릿(계정)은 그대로.
+    // 횟수가 돌아왔으니 대기 중인 재발급 요청도 처리된 것으로 비운다
     await tx.partyOtpCredential.updateMany({
       where: { applicationId: application.id },
-      data: { issueCount: 0 },
+      data: { issueCount: 0, resetRequestedAt: null },
     })
     const memberSynced = await syncDramaMemberExpiry(tx, {
       dramaMemberId: application.dramaMemberId,

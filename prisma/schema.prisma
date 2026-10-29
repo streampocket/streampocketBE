@@ -606,6 +606,9 @@ model PartyOtpCredential {
   applicationId String   @unique @map("application_id") @db.Uuid
   secretEnc     String   @map("secret_enc") @db.Text
   issueCount    Int      @default(0) @map("issue_count")
+  // 구매자가 횟수 소진 후 "재발급 요청"을 누른 시각 — 처리 전까지 재요청 차단(1번만 알림).
+  // 횟수를 0으로 되돌리는 곳(관리자 횟수 초기화·재구매 승인)에서 함께 null로 비운다.
+  resetRequestedAt DateTime? @map("reset_requested_at") @db.Timestamptz(6)
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 

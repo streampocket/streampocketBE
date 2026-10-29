@@ -109,7 +109,7 @@ export function findApplicationsByUserId(userId: string) {
         },
       },
       // 시크릿 암호문(secretEnc)은 절대 select 금지 — 유저 응답에 그대로 실리는 경로
-      otpCredential: { select: { issueCount: true } },
+      otpCredential: { select: { issueCount: true, resetRequestedAt: true } },
       // ⚠️ dramaAccount 관계도 절대 include 금지 — passwordEnc·otpSecretEnc 암호문이
       // 구매자 응답에 통째로 실린다. 관리자 화면에만 복호화해 내려주는 값이다
       // (dramaAssignmentService.resolveApplicationCredentials).

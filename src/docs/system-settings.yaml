@@ -30,7 +30,7 @@ components:
 paths:
   /steam/admin/settings:
     get:
-      summary: 시스템 설정 조회
+      summary: 시스템 설정 조회 — 사장 전용 (직원 403)
       description: 전역 기본 소요시간·리뷰 적립 포인트 구간을 조회한다.
       tags: [SystemSettings]
       security:
@@ -59,7 +59,7 @@ paths:
                       renewalDiscount:
                         $ref: '#/components/schemas/RenewalDiscount'
     patch:
-      summary: 시스템 설정 수정
+      summary: 시스템 설정 수정 — 사장 전용 (직원 403)
       description: |
         기본 소요시간(허용 값 20·40·60·90·120분)과 리뷰 적립 구간을 수정한다.
         **두 설정은 화면이 달라 각각 단독으로 보낼 수 있다** — 둘 다 생략하면 400.
@@ -94,3 +94,28 @@ paths:
           description: 수정된 시스템 설정
         '400':
           description: 허용되지 않는 소요시간 · 경계 역전(tier1Max >= tier2Max) · 할인 시작일 > 종료일 · 변경할 설정 없음
+        '403':
+          description: 사장 계정이 아님 (설정 변경은 사장 전용)
+  /steam/admin/settings/party-auto-assign:
+    get:
+      summary: 신청 승인 자동 배정 여부 (읽기 전용)
+      description: |
+        신청 관리 페이지 권한이 있는 직원도 사장이 정한 자동 배정 설정대로 승인하도록 이 값만 연다.
+        변경은 PATCH /steam/admin/settings (사장 전용).
+      tags: [SystemSettings]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      partyAutoAssignEnabled: { type: boolean }
+        '403':
+          description: 신청 관리 권한 없음

@@ -5,12 +5,12 @@ import {
   updateOwnCategoryHandler,
   deleteOwnCategoryHandler,
 } from '../../controllers/own/ownCategoryController'
-import { authMiddleware } from '../../middlewares/auth'
+import { authMiddleware, requirePermission } from '../../middlewares/auth'
 import { asyncHandler } from '../../utils/asyncHandler'
 
 export const adminOwnCategoriesRouter = Router()
 
-adminOwnCategoriesRouter.use(authMiddleware)
+adminOwnCategoriesRouter.use(authMiddleware, requirePermission('parties'))
 
 adminOwnCategoriesRouter.get('/', asyncHandler(getOwnCategoriesHandler))
 adminOwnCategoriesRouter.post('/', asyncHandler(createOwnCategoryHandler))

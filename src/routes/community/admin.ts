@@ -6,12 +6,12 @@ import {
   adminListPostsHandler,
   adminUpdatePostHandler,
 } from '../../controllers/community/adminCommunityPostController'
-import { authMiddleware } from '../../middlewares/auth'
+import { authMiddleware, requirePermission } from '../../middlewares/auth'
 import { asyncHandler } from '../../utils/asyncHandler'
 
 export const adminCommunityPostsRouter = Router()
 
-adminCommunityPostsRouter.use(authMiddleware)
+adminCommunityPostsRouter.use(authMiddleware, requirePermission('community'))
 
 adminCommunityPostsRouter.get('/posts', asyncHandler(adminListPostsHandler))
 adminCommunityPostsRouter.post(

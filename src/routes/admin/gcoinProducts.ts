@@ -7,12 +7,12 @@ import {
   adminDeleteGcoinProductHandler,
   adminIssueGcoinImageUploadUrlHandler,
 } from '../../controllers/gcoin/gcoinProductController'
-import { authMiddleware } from '../../middlewares/auth'
+import { authMiddleware, requirePermission } from '../../middlewares/auth'
 import { asyncHandler } from '../../utils/asyncHandler'
 
 export const adminGcoinProductsRouter = Router()
 
-adminGcoinProductsRouter.use(authMiddleware)
+adminGcoinProductsRouter.use(authMiddleware, requirePermission('gcoinProducts'))
 
 adminGcoinProductsRouter.post('/', asyncHandler(adminCreateGcoinProductHandler))
 adminGcoinProductsRouter.get('/', asyncHandler(adminGetGcoinProductsHandler))

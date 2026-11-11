@@ -29,17 +29,23 @@ import {
   adminAutoAssignPartyAccountHandler,
   adminSyncPartyOtpSecretHandler,
 } from '../../controllers/own/partyOtpController'
-import { authMiddleware } from '../../middlewares/auth'
+import { authMiddleware, requireOwner, requirePermission } from '../../middlewares/auth'
 import { asyncHandler } from '../../utils/asyncHandler'
 
 export const adminOrdersRouter = Router()
 
 adminOrdersRouter.use(authMiddleware)
 
-adminOrdersRouter.get('/', asyncHandler(getOrdersHandler))
+// ↓ 아래 router.use(requirePermission)보다 먼저 등록한 경로는 별도 권한 — 순서를 바꾸지 말 것
+// 주문 목록은 매출(비용 등록 주문 선택)·대시보드(최근 주문)도 사용
+adminOrdersRouter.get('/', requirePermission('orders', 'revenue', 'dashboard'), asyncHandler(getOrdersHandler))
+// 주문 삭제는 사장 전용
+adminOrdersRouter.delete('/:id', requireOwner, asyncHandler(deleteManualOrderHandler))
+
+adminOrdersRouter.use(requirePermission('orders'))
+
 adminOrdersRouter.get('/export', asyncHandler(exportOrdersHandler))
 adminOrdersRouter.post('/manual', asyncHandler(createManualOrderHandler))
-adminOrdersRouter.delete('/:id', asyncHandler(deleteManualOrderHandler))
 adminOrdersRouter.get('/:id', asyncHandler(getOrderDetailHandler))
 adminOrdersRouter.post('/:id/retry', asyncHandler(retryOrderHandler))
 adminOrdersRouter.post('/:id/in-progress', asyncHandler(markInProgressHandler))

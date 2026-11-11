@@ -1,0 +1,183 @@
+components:
+  schemas:
+    AdminPermission:
+      type: string
+      description: 직원 페이지 권한 키 (src/constants/adminPermissions.ts)
+      enum:
+        [
+          dashboard,
+          orders,
+          products,
+          accounts,
+          reviewCodes,
+          revenue,
+          users,
+          parties,
+          drama,
+          applications,
+          reviews,
+          otp,
+          community,
+          gcoinProducts,
+          gcoinOrders,
+          visits,
+          alimtalk,
+        ]
+    StaffAccount:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminPermission'
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+paths:
+  /admin/staff:
+    get:
+      summary: 직원(알바) 계정 목록 — 사장 전용
+      tags: [AdminStaff]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 직원 계정 목록 (사장 계정은 포함하지 않음)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StaffAccount'
+        '403':
+          description: 사장 계정이 아님
+    post:
+      summary: 직원 계정 생성 — 사장 전용
+      tags: [AdminStaff]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, permissions]
+              properties:
+                email:
+                  type: string
+                  description: 소문자로 저장
+                password:
+                  type: string
+                  minLength: 8
+                  maxLength: 72
+                permissions:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/AdminPermission'
+      responses:
+        '201':
+          description: 생성됨
+        '400':
+          description: 검증 실패 (알 수 없는 권한 키 등)
+        '403':
+          description: 사장 계정이 아님
+        '409':
+          description: 이미 사용 중인 이메일
+  /admin/staff/{id}:
+    patch:
+      summary: 직원 권한·활성 여부 수정 — 사장 전용 (다음 요청부터 즉시 반영)
+      tags: [AdminStaff]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: 둘 중 하나 이상
+              properties:
+                permissions:
+                  type: array
+                  description: 전체 교체
+                  items:
+                    $ref: '#/components/schemas/AdminPermission'
+                isActive:
+                  type: boolean
+      responses:
+        '200':
+          description: 수정됨
+        '403':
+          description: 사장 계정이 아님
+        '404':
+          description: 직원 계정 없음 (사장 계정 id도 404 — 수정 불가)
+    delete:
+      summary: 직원 계정 삭제 — 사장 전용
+      description: 직원이 쓴 공지글은 남고 작성자만 비워진다.
+      tags: [AdminStaff]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: 삭제됨
+        '403':
+          description: 사장 계정이 아님
+        '404':
+          description: 직원 계정 없음 (사장 계정 id도 404 — 삭제 불가)
+  /admin/staff/{id}/password:
+    post:
+      summary: 직원 비밀번호 재설정 — 사장 전용
+      tags: [AdminStaff]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password:
+                  type: string
+                  minLength: 8
+                  maxLength: 72
+      responses:
+        '204':
+          description: 변경됨 (기존 로그인은 토큰 만료까지 유지 — 즉시 막으려면 비활성화)
+        '403':
+          description: 사장 계정이 아님
+        '404':
+          description: 직원 계정 없음

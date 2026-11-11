@@ -6,12 +6,12 @@ import {
   updateManualRevenueHandler,
   deleteManualRevenueHandler,
 } from '../../controllers/manualRevenueController'
-import { authMiddleware } from '../../middlewares/auth'
+import { authMiddleware, requirePermission } from '../../middlewares/auth'
 import { asyncHandler } from '../../utils/asyncHandler'
 
 export const adminManualRevenuesRouter = Router()
 
-adminManualRevenuesRouter.use(authMiddleware)
+adminManualRevenuesRouter.use(authMiddleware, requirePermission('revenue'))
 
 adminManualRevenuesRouter.get('/', asyncHandler(getManualRevenuesHandler))
 adminManualRevenuesRouter.get('/summary', asyncHandler(getManualRevenueSummaryHandler))

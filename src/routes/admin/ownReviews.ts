@@ -3,11 +3,11 @@ import {
   adminDeleteReviewHandler,
   adminListReviewsHandler,
 } from '../../controllers/own/ownReviewController'
-import { authMiddleware } from '../../middlewares/auth'
+import { authMiddleware, requirePermission } from '../../middlewares/auth'
 import { asyncHandler } from '../../utils/asyncHandler'
 
 export const adminOwnReviewsRouter = Router()
 
-adminOwnReviewsRouter.use(authMiddleware)
+adminOwnReviewsRouter.use(authMiddleware, requirePermission('reviews'))
 adminOwnReviewsRouter.get('/', asyncHandler(adminListReviewsHandler))
 adminOwnReviewsRouter.delete('/:id', asyncHandler(adminDeleteReviewHandler))

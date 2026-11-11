@@ -8,13 +8,13 @@ import {
   importDramaMemoHandler,
   updateDramaAccountTextHandler,
 } from '../../controllers/own/dramaAccountController'
-import { authMiddleware } from '../../middlewares/auth'
+import { authMiddleware, requirePermission } from '../../middlewares/auth'
 import { asyncHandler } from '../../utils/asyncHandler'
 
 export const adminDramaAccountsRouter = Router()
 
 // 계정 아이디·비밀번호·OTP 시크릿을 평문으로 내려주므로 전 경로가 관리자 전용이다
-adminDramaAccountsRouter.use(authMiddleware)
+adminDramaAccountsRouter.use(authMiddleware, requirePermission('drama'))
 
 adminDramaAccountsRouter.get('/', asyncHandler(getDramaAccountsHandler))
 

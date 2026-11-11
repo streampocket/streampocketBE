@@ -5,12 +5,12 @@ import {
   updateOwnRuleTemplateHandler,
   deleteOwnRuleTemplateHandler,
 } from '../../controllers/own/ownRuleTemplateController'
-import { authMiddleware } from '../../middlewares/auth'
+import { authMiddleware, requirePermission } from '../../middlewares/auth'
 import { asyncHandler } from '../../utils/asyncHandler'
 
 export const adminOwnRuleTemplatesRouter = Router()
 
-adminOwnRuleTemplatesRouter.use(authMiddleware)
+adminOwnRuleTemplatesRouter.use(authMiddleware, requirePermission('parties'))
 
 adminOwnRuleTemplatesRouter.get('/', asyncHandler(getOwnRuleTemplatesHandler))
 adminOwnRuleTemplatesRouter.post('/', asyncHandler(createOwnRuleTemplateHandler))

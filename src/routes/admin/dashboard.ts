@@ -6,12 +6,12 @@ import {
   saveDailyMemoHandler,
   getDashboardExtrasHandler,
 } from '../../controllers/steamDashboardController'
-import { authMiddleware } from '../../middlewares/auth'
+import { authMiddleware, requirePermission } from '../../middlewares/auth'
 import { asyncHandler } from '../../utils/asyncHandler'
 
 export const adminDashboardRouter = Router()
 
-adminDashboardRouter.use(authMiddleware)
+adminDashboardRouter.use(authMiddleware, requirePermission('dashboard'))
 
 adminDashboardRouter.get('/stats', asyncHandler(getDashboardStatsHandler))
 adminDashboardRouter.get('/revenue-calendar', asyncHandler(getRevenueCalendarHandler))

@@ -48,6 +48,7 @@ import { gcoinVisitsRouter } from './routes/gcoin/visits'
 import { ownVisitsRouter } from './routes/own/visits'
 import { ownErrorsRouter } from './routes/own/errors'
 import { adminVisitsRouter } from './routes/admin/visits'
+import { adminStaffRouter } from './routes/admin/staff'
 
 const app = express()
 
@@ -133,6 +134,7 @@ app.use('/gcoin/visits', gcoinVisitsRouter)
 
 // ───────────────────────── 방문자 통계 (관리자 공통 — gcoin/ottall) ─────────────────────────
 app.use('/admin/visits', adminVisitsRouter)
+app.use('/admin/staff', adminStaffRouter)
 
 // ───────────────────────── Health ─────────────────────────
 app.get('/health', (_req, res) => {

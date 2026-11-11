@@ -65,3 +65,9 @@ export async function updateSystemSettingsHandler(req: Request, res: Response): 
   const settings = await updateSystemSettings(body)
   res.json({ data: settings })
 }
+
+// 신청 승인 모달의 자동 배정 여부만 — 직원도 사장이 정한 값대로 승인하도록 읽기 전용으로 연다
+export async function getPartyAutoAssignSettingHandler(_req: Request, res: Response): Promise<void> {
+  const { partyAutoAssignEnabled } = await getSystemSettings()
+  res.json({ data: { partyAutoAssignEnabled } })
+}

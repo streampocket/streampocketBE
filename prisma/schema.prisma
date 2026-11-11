@@ -91,11 +91,22 @@ enum SteamRegistrationMatchStatus {
   manual_matched // 관리자 수동연결
 }
 
+// 관리자 역할 — owner(사장): 전체 권한, staff(직원): permissions에 있는 페이지만
+enum AdminRole {
+  owner
+  staff
+}
+
 model Admin {
-  id        String   @id @default(uuid()) @db.Uuid
-  email     String   @unique @db.VarChar(320)
-  password  String
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id          String    @id @default(uuid()) @db.Uuid
+  email       String    @unique @db.VarChar(320)
+  password    String
+  role        AdminRole @default(owner)
+  // 직원이 볼 수 있는 페이지 권한 키 목록 (src/constants/adminPermissions.ts). owner는 무시
+  permissions String[]  @default([])
+  // false면 로그인·API 모두 차단 (요청마다 조회하므로 즉시 반영)
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   communityPosts CommunityPost[]
 

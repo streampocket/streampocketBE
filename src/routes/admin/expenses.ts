@@ -6,12 +6,12 @@ import {
   updateExpenseHandler,
   deleteExpenseHandler,
 } from '../../controllers/expenseController'
-import { authMiddleware } from '../../middlewares/auth'
+import { authMiddleware, requirePermission } from '../../middlewares/auth'
 import { asyncHandler } from '../../utils/asyncHandler'
 
 export const adminExpensesRouter = Router()
 
-adminExpensesRouter.use(authMiddleware)
+adminExpensesRouter.use(authMiddleware, requirePermission('revenue'))
 
 adminExpensesRouter.get('/', asyncHandler(getExpensesHandler))
 adminExpensesRouter.get('/summary', asyncHandler(getExpenseSummaryHandler))

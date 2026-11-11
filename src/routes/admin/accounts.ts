@@ -7,12 +7,12 @@ import {
   updateAccountHandler,
   deleteAccountHandler,
 } from '../../controllers/steamAccountController'
-import { authMiddleware } from '../../middlewares/auth'
+import { authMiddleware, requirePermission } from '../../middlewares/auth'
 import { asyncHandler } from '../../utils/asyncHandler'
 
 export const adminAccountsRouter = Router()
 
-adminAccountsRouter.use(authMiddleware)
+adminAccountsRouter.use(authMiddleware, requirePermission('accounts'))
 
 adminAccountsRouter.get('/', asyncHandler(getAccountsHandler))
 adminAccountsRouter.get('/export', asyncHandler(exportAccountsHandler))

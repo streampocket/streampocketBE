@@ -101,7 +101,7 @@ paths:
         '404':
           description: 주문 없음
     delete:
-      summary: 수동 주문 삭제
+      summary: 수동 주문 삭제 — 사장 전용 (직원 403)
       description: >-
         `source='manual'`인 주문만 삭제할 수 있다(네이버 자동 주문은 400 차단).
         삭제는 hard delete이며, 연결된 `DeliveryLog`는 Cascade로 함께 제거된다.

@@ -7,12 +7,12 @@ import {
   updateReviewCodeHandler,
   updateReviewCodeStatusHandler,
 } from '../../controllers/reviewCodeController'
-import { authMiddleware } from '../../middlewares/auth'
+import { authMiddleware, requirePermission } from '../../middlewares/auth'
 import { asyncHandler } from '../../utils/asyncHandler'
 
 export const adminReviewCodesRouter = Router()
 
-adminReviewCodesRouter.use(authMiddleware)
+adminReviewCodesRouter.use(authMiddleware, requirePermission('reviewCodes'))
 
 adminReviewCodesRouter.get('/', asyncHandler(getReviewCodesHandler))
 adminReviewCodesRouter.post('/', asyncHandler(createReviewCodeHandler))

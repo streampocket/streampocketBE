@@ -530,6 +530,19 @@ model OwnRuleTemplate {
   @@map("own_rule_templates")
 }
 
+// 고객 안내 양식 — 관리자 "안내 양식" 페이지에서 양식별로 복사해 카톡 등으로 보내는 문구
+// 파티 규칙 템플릿과 용도가 달라(파티 생성 폼 드롭다운에 섞이면 안 됨) 테이블을 분리한다
+model OwnMessageTemplate {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique @db.VarChar(100)
+  content   String   @db.Text
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("own_message_templates")
+}
+
 model OwnProduct {
   id              String            @id @default(uuid()) @db.Uuid
   name            String            @db.VarChar(255)

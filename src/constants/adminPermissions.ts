@@ -19,6 +19,7 @@ export const ADMIN_PERMISSION_KEYS = [
   'gcoinOrders',
   'visits',
   'alimtalk',
+  'messageTemplates',
 ] as const // 단언 사유: 배열 요소를 리터럴 유니온 타입으로 고정하기 위한 const assertion
 
 export type AdminPermission = (typeof ADMIN_PERMISSION_KEYS)[number]

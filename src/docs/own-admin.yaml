@@ -159,6 +159,122 @@ paths:
         '404':
           description: 템플릿을 찾을 수 없음
 
+  # ───────────────────────── 안내 양식 (고객 안내 문구 저장·복사) ─────────────────────────
+  /own/admin/message-templates:
+    get:
+      summary: 안내 양식 목록 조회
+      description: 권한 `messageTemplates` 필요 (사장은 항상 허용). sortOrder 오름차순.
+      tags: [OwnAdminMessageTemplates]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 안내 양식 목록
+        '403':
+          description: 권한 없음
+    post:
+      summary: 안내 양식 생성 (목록 맨 아래에 추가)
+      tags: [OwnAdminMessageTemplates]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, content]
+              properties:
+                name:
+                  type: string
+                  maxLength: 100
+                content:
+                  type: string
+                  maxLength: 5000
+                  description: 줄바꿈·공백을 그대로 저장 (공백만 있는 값은 거부)
+      responses:
+        '201':
+          description: 생성 성공
+        '409':
+          description: 이미 존재하는 양식 이름
+
+  /own/admin/message-templates/reorder:
+    patch:
+      summary: 안내 양식 순서 변경
+      description: 전체 양식 id를 원하는 순서로 보낸다. 서버의 양식 목록과 id 집합이 다르면(그사이 추가·삭제) 409.
+      tags: [OwnAdminMessageTemplates]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '200':
+          description: 변경 후 전체 목록
+        '409':
+          description: 양식 목록이 바뀜 (새로고침 필요)
+
+  /own/admin/message-templates/{id}:
+    patch:
+      summary: 안내 양식 수정
+      tags: [OwnAdminMessageTemplates]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  maxLength: 100
+                content:
+                  type: string
+                  maxLength: 5000
+      responses:
+        '200':
+          description: 수정 성공
+        '404':
+          description: 양식을 찾을 수 없음
+        '409':
+          description: 이미 존재하는 양식 이름
+    delete:
+      summary: 안내 양식 삭제
+      tags: [OwnAdminMessageTemplates]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: 삭제 성공
+        '404':
+          description: 양식을 찾을 수 없음
+
   # ───────────────────────── 파티 관리 ─────────────────────────
   /own/admin/products:
     get:

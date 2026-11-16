@@ -4,11 +4,17 @@ import { normalizeSecret, isValidSecret, generateIssueCode, TOTP_PERIOD } from '
 import { PARTY_OTP_MAX_ISSUES, PARTY_OTP_VIEW_MINUTES, PARTY_TYPE_LABEL } from '../../constants/party'
 import { sendDiscordAlert } from '../../lib/discord'
 import { formatKstDateTime } from '../../utils/kst'
-import { findOrderById, findOrdersByPartyApplicationId } from '../../repositories/steamOrderRepository'
+import {
+  findOrderById,
+  findOrdersByPartyApplicationId,
+  findOriginalPartyOrdersByApplicationIds,
+} from '../../repositories/steamOrderRepository'
 import {
   findApplicationForOtpResetRequest,
+  findPendingOtpResetRequests,
   markOtpResetRequested,
 } from '../../repositories/own/partyOtpRepository'
+import { buildOtpResetRequestItems } from '../../utils/otpResetRequests'
 import {
   assignAccountToApplication,
   previewAssignment,
@@ -140,6 +146,16 @@ export async function requestPartyOtpReset(applicationId: string, userId: string
   })
 
   return { data: { resetRequestedAt: now } }
+}
+
+// 관리자 — 아직 처리하지 않은 재발급 요청 목록 (상단 종 알림). 초기화는 응답의 orderId로 기존 초기화 API를 쓴다
+export async function adminListPendingOtpResetRequests() {
+  const credentials = await findPendingOtpResetRequests(new Date())
+  const orders =
+    credentials.length > 0
+      ? await findOriginalPartyOrdersByApplicationIds(credentials.map((c) => c.applicationId))
+      : []
+  return { data: buildOtpResetRequestItems(credentials, orders) }
 }
 
 // 주문 → 연결된 파티 신청 해석 (관리자 API 공통)

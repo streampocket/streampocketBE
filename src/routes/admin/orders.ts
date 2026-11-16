@@ -28,6 +28,7 @@ import {
   adminResetPartyOtpCountHandler,
   adminAutoAssignPartyAccountHandler,
   adminSyncPartyOtpSecretHandler,
+  adminListOtpResetRequestsHandler,
 } from '../../controllers/own/partyOtpController'
 import { authMiddleware, requireOwner, requirePermission } from '../../middlewares/auth'
 import { asyncHandler } from '../../utils/asyncHandler'
@@ -46,7 +47,9 @@ adminOrdersRouter.use(requirePermission('orders'))
 
 adminOrdersRouter.get('/export', asyncHandler(exportOrdersHandler))
 adminOrdersRouter.post('/manual', asyncHandler(createManualOrderHandler))
-adminOrdersRouter.get('/:id', asyncHandler(getOrderDetailHandler))
+// OTP 재발급 미처리 요청 (상단 종) — '/:id'보다 먼저: 뒤에 두면 'otp-reset-requests'가 주문 id로 잡힌다
+adminOrdersRouter.get('/otp-reset-requests', asyncHandler(adminListOtpResetRequestsHandler))
+adminOrdersRouter.get('/:id',asyncHandler(getOrderDetailHandler))
 adminOrdersRouter.post('/:id/retry', asyncHandler(retryOrderHandler))
 adminOrdersRouter.post('/:id/in-progress', asyncHandler(markInProgressHandler))
 adminOrdersRouter.post('/:id/sync-naver-status', asyncHandler(syncNaverStatusHandler))

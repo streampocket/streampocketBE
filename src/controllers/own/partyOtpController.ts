@@ -8,6 +8,7 @@ import {
   adminResetPartyOtpCount,
   adminAutoAssignPartyAccount,
   adminSyncPartyOtpSecret,
+  adminListPendingOtpResetRequests,
 } from '../../services/own/partyOtpService'
 
 const idParamSchema = z.object({
@@ -37,6 +38,12 @@ export async function requestPartyOtpResetHandler(req: Request, res: Response): 
 }
 
 // ─────────────── 관리자용 (주문 id 기준) ───────────────
+
+// 미처리 재발급 요청 목록 (관리자 상단 종 알림 — 30초 폴링)
+export async function adminListOtpResetRequestsHandler(_req: Request, res: Response): Promise<void> {
+  const result = await adminListPendingOtpResetRequests()
+  res.json(result)
+}
 
 export async function adminGetPartyOtpInfoHandler(req: Request, res: Response): Promise<void> {
   const { id } = idParamSchema.parse(req.params)

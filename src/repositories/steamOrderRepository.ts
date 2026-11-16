@@ -381,6 +381,19 @@ export async function findOrdersByPartyApplicationId(
   })
 }
 
+// 여러 파티 신청의 원 신청 주문을 한 번에 — 반품·재구매 주문 제외 (OTP 재발급 요청 알림 목록용, N+1 방지)
+export function findOriginalPartyOrdersByApplicationIds(partyApplicationIds: string[]) {
+  return prisma.steamOrderItem.findMany({
+    where: {
+      partyApplicationId: { in: partyApplicationIds },
+      partyRenewalId: null,
+      fulfillmentStatus: { not: 'returned' },
+    },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true, productOrderId: true, partyApplicationId: true },
+  })
+}
+
 // 조건부 반품 — 이미 returned면 아무것도 하지 않고 false 반환(멱등).
 // 동시 요청에도 단일 SQL로 한 번만 전이되므로 중복 알림·중복 매출 차감이 없다.
 export async function markOrderReturnedById(id: string): Promise<boolean> {
